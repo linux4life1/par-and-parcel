@@ -1,0 +1,74 @@
+name: Set up Godot
+description: Download the official Godot binary (and, if asked, the export templates), verify the checksums, and put `godot` on the PATH.
+inputs:
+  version:
+    description: Godot version, like 4.7.2
+    required: true
+  templates:
+    description: Also install the export templates (about 1.3 GB, cached)
+    required: false
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Cache Godot
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ~/godot-dl
+        key: godot-${{ inputs.version }}-${{ runner.os }}-templates-${{ inputs.templates }}
+    - name: Download Godot
+      if: steps.cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        V="${{ inputs.version }}-stable"
+        mkdir -p ~/godot-dl && cd ~/godot-dl
+        curl -sSL -o SHA512-SUMS.txt "https://github.com/godotengine/godot/releases/download/$V/SHA512-SUMS.txt"
+        case "${{ runner.os }}" in
+          Linux) F="Godot_v${V}_linux.x86_64.zip" ;;
+          macOS) F="Godot_v${V}_macos.universal.zip" ;;
+          Windows) F="Godot_v${V}_win64.exe.zip" ;;
+          *) echo "unsupported runner"; exit 1 ;;
+        esac
+        curl -sSL -o "$F" "https://github.com/godotengine/godot/releases/download/$V/$F"
+        grep " $F\$" SHA512-SUMS.txt | sha512sum -c -
+        if [ "${{ inputs.templates }}" = "true" ]; then
+          T="Godot_v${V}_export_templates.tpz"
+          curl -sSL -o "$T" "https://github.com/godotengine/godot/releases/download/$V/$T"
+          grep " $T\$" SHA512-SUMS.txt | sha512sum -c -
+        fi
+    - name: Install Godot
+      shell: bash
+      run: |
+        set -euo pipefail
+        V="${{ inputs.version }}-stable"
+        cd ~/godot-dl
+        mkdir -p ~/godot-bin
+        case "${{ runner.os }}" in
+          Linux)
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq libfontconfig1 libxcursor1 libxinerama1 libxrandr2 libxi6 libpulse0 libudev1 libgl1 libdbus-1-3 libxkbcommon0 libwayland-client0 >/dev/null
+            sudo apt-get install -y -qq libasound2t64 >/dev/null 2>&1 || sudo apt-get install -y -qq libasound2 >/dev/null
+            unzip -o -q "Godot_v${V}_linux.x86_64.zip" -d ~/godot-bin
+            chmod +x ~/godot-bin/Godot_v${V}_linux.x86_64
+            ln -sf ~/godot-bin/Godot_v${V}_linux.x86_64 ~/godot-bin/godot
+            TDIR="$HOME/.local/share/godot/export_templates/${{ inputs.version }}.stable" ;;
+          macOS)
+            unzip -o -q "Godot_v${V}_macos.universal.zip" -d ~/godot-bin
+            ln -sf ~/godot-bin/Godot.app/Contents/MacOS/Godot ~/godot-bin/godot
+            TDIR="$HOME/Library/Application Support/Godot/export_templates/${{ inputs.version }}.stable" ;;
+          Windows)
+            unzip -o -q "Godot_v${V}_win64.exe.zip" -d ~/godot-bin
+            cp ~/godot-bin/Godot_v${V}_win64_console.exe ~/godot-bin/godot.exe
+            TDIR="$APPDATA/Godot/export_templates/${{ inputs.version }}.stable" ;;
+        esac
+        echo "$HOME/godot-bin" >> "$GITHUB_PATH"
+        if [ "${{ inputs.templates }}" = "true" ]; then
+          mkdir -p "$TDIR"
+          rm -rf ~/godot-dl/tpl && mkdir -p ~/godot-dl/tpl
+          unzip -o -q "Godot_v${V}_export_templates.tpz" -d ~/godot-dl/tpl
+          cp -R ~/godot-dl/tpl/templates/. "$TDIR"/
+          rm -rf ~/godot-dl/tpl
+        fi
+        ~/godot-bin/godot --version

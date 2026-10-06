@@ -1,0 +1,44 @@
+name: CI
+# Every push and pull request: every script parses, every headless test
+# passes, every data file is valid JSON. Same scripts as on a desk.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+env:
+  GODOT_VERSION: "4.7.2"
+jobs:
+  test:
+    name: Lint and headless tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Data files are valid JSON
+        run: python3 -c 'import json,glob; [json.load(open(f)) for f in glob.glob("data/*.json")]; print("data ok")'
+      - uses: ./.github/actions/godot
+        with:
+          version: ${{ env.GODOT_VERSION }}
+      - name: Lint
+        run: |
+          mkdir -p "$RUNNER_TEMP/pp" && export TMPDIR="$RUNNER_TEMP/pp"
+          LINT_LIMIT=120 ./lint.sh | tee lint.txt
+          grep -q "LINT OK" lint.txt
+      - name: Headless tests
+        run: |
+          export TMPDIR="$RUNNER_TEMP/pp"
+          LIMIT=1500 ./check.sh full | tee check.txt
+          tail -1 check.txt | grep -E "^[0-9]+ checks, 0 failed$"
+      - name: Keep the logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-logs
+          path: |
+            lint.txt
+            check.txt
+          if-no-files-found: ignore

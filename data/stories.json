@@ -1,0 +1,220 @@
+{
+	"_about": "Long stories that play out over weeks, told by real returning golfers. A story casts its roles ('from': 'new' makes a named regular who joins the club; 'member' borrows a member who fits) and walks a chain of stages. A stage waits for its 'when' (visit, round, hole, days, request, tournament, month; 'if' and 'now' fire at once), then posts its 'say' lines to the feed, puts a 'bubble' over a character, shows a 'toast', applies an 'effect' (mood, tip, money, members, home, celebrity, match, flag, buzz, rating_bias) and moves to 'next', or ends ('end': happy, sad or quiet). 'chapter' is the sentence the Stories panel shows while a stage waits; 'request' is what the club could do to move it on, with 'deadline' days and the 'else' stage when time runs out. Text takes {a} {b} (names), {a_first}, {course}, {hole}, {event}, {stake}.",
+	"stories": [
+		{
+			"id": "romance", "title": "Love on the Links", "weight": 1.2, "min_holes": 2, "min_members": 0, "stall": 150,
+			"blurb": "Two strangers, one tee time.",
+			"roles": {
+				"a": {"from": "new", "name": "Dot Harrow", "handle": "DotHarrow", "skill": 0.45, "wealth": 0.5, "persona": "easygoing"},
+				"b": {"from": "new", "name": "Ray Tolliver", "handle": "RayT", "skill": 0.3, "wealth": 0.4, "persona": "easygoing"}
+			},
+			"together": ["a", "b"],
+			"stages": [
+				{"id": "meet", "when": {"type": "visit", "role": "a"}, "chapter": "Dot Harrow and Ray Tolliver, strangers, have been put in the same group.",
+					"say": [{"by": "a", "text": "Got paired with a stranger who talks to his ball. He calls it Gerald."},
+						{"by": "b", "text": "Played with a woman who hums on the backswing. Didn't miss a putt."}],
+					"next": "again"},
+				{"id": "again", "when": {"type": "visit", "role": "a"}, "chapter": "They keep booking the same tee time and calling it a coincidence.",
+					"say": [{"by": "a", "text": "Same tee time as the ball-talker. Coincidence. Definitely a coincidence."}],
+					"bubble": {"role": "b", "text": "Don't say anything stupid."},
+					"effect": {"mood": [{"role": "a", "value": 3}, {"role": "b", "value": 3}]},
+					"next": "bench"},
+				{"id": "bench", "when": {"type": "request"}, "request": {"needs": ["bench_near_water"], "text": "a bench within a chip of the water"}, "deadline": 120, "else": "fizzle",
+					"chapter": "After their rounds they walk down to the water and stand about awkwardly. A bench there would help.",
+					"say": [{"by": "a", "text": "Someone put a bench by the water. We sat on it for an hour and talked about nothing. It was great."}],
+					"toast": {"text": "Dot and Ray have found the bench by the water. Something is happening.", "kind": "good"},
+					"effect": {"mood": [{"role": "a", "value": 6}, {"role": "b", "value": 6}]},
+					"next": "proposal"},
+				{"id": "proposal", "when": {"type": "round", "role": "b"}, "chapter": "Ray has been practising a speech. On the course, to his ball.",
+					"say": [{"by": "b", "text": "Asked her on the last green. She said 'you'll have to fix that slice first'. Then she said yes."}],
+					"toast": {"text": "Ray proposed to Dot on the last green, and she said yes.", "kind": "good"},
+					"effect": {"mood": [{"role": "a", "value": 10}, {"role": "b", "value": 10}], "buzz": 6},
+					"next": "wedding"},
+				{"id": "wedding", "when": {"type": "days", "n": 14}, "chapter": "The wedding is booked for the clubhouse.",
+					"say": [{"by": "a", "text": "Married on a golf course. My mother is furious. Best day of my life.", "likes": 900}],
+					"toast": {"text": "Dot and Ray married at the clubhouse. The party paid $1,500 for the room and three of the guests joined the club.", "kind": "good"},
+					"effect": {"money": 1500, "members": 3},
+					"end": "happy", "ending": "Dot and Ray married at the clubhouse. Gerald was best man."},
+				{"id": "fizzle", "when": {"type": "now"}, "say": [{"by": "a", "text": "Nice course. Nothing to sit on, though."}],
+					"end": "quiet", "ending": "Dot and Ray drifted apart. There was nowhere to sit."}
+			]
+		},
+		{
+			"id": "grudge", "title": "The Grudge", "weight": 1.0, "min_holes": 3, "min_members": 2, "stall": 150,
+			"blurb": "Two regulars who cannot stand each other.",
+			"roles": {
+				"a": {"from": "member", "skill_min": 0.3, "fallback": {"name": "Marco Vialli", "handle": "MarcoV", "skill": 0.5, "wealth": 0.6, "persona": "perfectionist"}},
+				"b": {"from": "member", "skill_min": 0.3, "fallback": {"name": "Terry Nunn", "handle": "TerryNunn", "skill": 0.45, "wealth": 0.5, "persona": "perfectionist"}}
+			},
+			"stages": [
+				{"id": "start", "when": {"type": "visit", "role": "a"}, "chapter": "{a} and {b} disagree about handicaps, and everything else.",
+					"say": [{"by": "a", "text": "{b_first} says he's a 12 handicap. {b_first} is not a 12 handicap."},
+						{"by": "b", "text": "{a_first} counts his own putts. Loosely."}],
+					"next": "needle"},
+				{"id": "needle", "when": {"type": "hole", "role": "b", "rel": -1}, "deadline": 110, "else": "truce", "chapter": "{b} is waiting for a birdie to rub in.",
+					"say": [{"by": "b", "text": "Birdie on {hole}. {a_first}, if you're reading this, and you are: birdie."}],
+					"bubble": {"role": "a", "text": "Oh, come ON."},
+					"next": "wager"},
+				{"id": "wager", "when": {"type": "visit", "role": "a"}, "chapter": "{a} has had enough. There is talk of money.",
+					"say": [{"by": "a", "text": "Fine. Money match. Here. Next weekend. Bring cash."}],
+					"toast": {"text": "{a} and {b} have agreed a grudge match on your course, and {a_first} wants the owner in it too, for a stake of his own.", "kind": "info"},
+					"effect": {"match": {"role": "a", "stake": 400}},
+					"next": "verdict"},
+				{"id": "verdict", "when": {"type": "days", "n": 5}, "chapter": "The match is on. The whole club is watching.", "next": "which"},
+				{"id": "which", "when": {"type": "if", "need": "won_match", "then": "humbled", "else": "crowed"}},
+				{"id": "humbled", "when": {"type": "now"},
+					"say": [{"by": "a", "text": "Lost to {b_first} AND the owner. Selling my clubs. Keeping the hat."}],
+					"effect": {"buzz": 8, "members": 1},
+					"end": "happy", "ending": "{a} lost the grudge match to {b} and the owner, and took it badly. The bar did well."},
+				{"id": "crowed", "when": {"type": "now"},
+					"say": [{"by": "b", "text": "{a_first} lost. To me. I have it on video. The video is 40 minutes long and I will send it to anyone."}],
+					"effect": {"buzz": 8, "members": 1},
+					"end": "happy", "ending": "{b} won the grudge match and has a 40 minute video to prove it."},
+				{"id": "truce", "when": {"type": "now"}, "say": [{"by": "a", "text": "{b_first} and I have agreed to never speak of handicaps again. Starting now."}],
+					"end": "quiet", "ending": "{a} and {b} declared a truce. Nobody believes it."}
+			]
+		},
+		{
+			"id": "comeback", "title": "The Comeback", "weight": 1.0, "min_holes": 2, "min_members": 0, "stall": 150,
+			"blurb": "A tour pro who stopped, trying to start again.",
+			"roles": {"a": {"from": "new", "name": "Hal Brennan", "handle": "HalBrennan", "skill": 0.72, "wealth": 0.3, "persona": "hothead"}},
+			"stages": [
+				{"id": "start", "when": {"type": "visit", "role": "a"}, "chapter": "Hal Brennan, who once played the tour, is trying to find his swing again.",
+					"say": [{"by": "a", "text": "Haven't picked up a club in four years. The grip felt like shaking hands with a stranger."}],
+					"next": "round1"},
+				{"id": "round1", "when": {"type": "round", "role": "a"}, "chapter": "Hal is playing badly and blaming nobody but himself.", "next": "mood1"},
+				{"id": "mood1", "when": {"type": "if", "need": "role_happy:a:50", "then": "warm", "else": "cold"}},
+				{"id": "cold", "when": {"type": "now"}, "say": [{"by": "a", "text": "Shot a million. Course is fine. I'm the problem."}], "next": "round2"},
+				{"id": "round2", "when": {"type": "round", "role": "a"}, "chapter": "Hal keeps coming back. That is something.", "next": "warm"},
+				{"id": "warm", "when": {"type": "now"}, "say": [{"by": "a", "text": "Found something on the range today. The old move. Don't tell anyone."}],
+					"bubble": {"role": "a", "text": "There it is."}, "next": "birdie"},
+				{"id": "birdie", "when": {"type": "hole", "role": "a", "rel": -1}, "deadline": 120, "else": "fade", "chapter": "Hal is one good hole away from believing it.",
+					"say": [{"by": "a", "text": "Birdie. First one since the Buick Open. I'm not crying, you're crying."}],
+					"toast": {"text": "Hal Brennan just made his first birdie in four years, on your course.", "kind": "good"},
+					"effect": {"mood": [{"role": "a", "value": 8}]},
+					"next": "offer"},
+				{"id": "offer", "when": {"type": "round", "role": "a"}, "chapter": "Hal wants a word with the owner.",
+					"say": [{"by": "a", "text": "Spoke to the owner. If they'll have me, I'll teach here. Cheap. I owe this place."}],
+					"toast": {"text": "Hal Brennan has offered to be your club pro for a fraction of the usual wage. Hire a club pro from Staff and he's yours.", "kind": "good"},
+					"effect": {"flag": "cheap_pro"},
+					"end": "happy", "ending": "Hal Brennan found his swing here and offered to teach for next to nothing."},
+				{"id": "fade", "when": {"type": "now"}, "say": [{"by": "a", "text": "Gave it a go. Some things stay in the past."}],
+					"end": "sad", "ending": "Hal Brennan never found the birdie he needed, and went back to selling insurance."}
+			]
+		},
+		{
+			"id": "heiress", "title": "The View", "weight": 0.9, "min_holes": 2, "min_members": 0, "stall": 160,
+			"blurb": "She wants a house. The house wants a view.",
+			"roles": {"a": {"from": "new", "name": "Celestine Vaux", "handle": "CelestineV", "skill": 0.3, "wealth": 1.0, "persona": "critic"}},
+			"choose_hole": "least_scenic",
+			"stages": [
+				{"id": "start", "when": {"type": "visit", "role": "a"}, "chapter": "Celestine Vaux is house-hunting and has her eye on hole {hole}. The view from it wants work.",
+					"say": [{"by": "a", "text": "Drove out to look at the land. The land is fine. The view from {hole} wants work."}],
+					"next": "view"},
+				{"id": "view", "when": {"type": "request"}, "request": {"needs": ["scenery_hole:0.5", "homesite"], "text": "something to look at along hole {hole} (trees, flowers, water) and a home site for sale"}, "deadline": 130, "else": "tuscany",
+					"chapter": "Celestine comes back every week to look at hole {hole} and sigh.",
+					"say": [{"by": "a", "text": "Someone planted the view. I'll take the house. Have my people call your people. You have people?"}],
+					"effect": {"home": "a", "money": 2000, "members": 2, "mood": [{"role": "a", "value": 8}]},
+					"toast": {"text": "Celestine Vaux bought a home on hole {hole}, and two of her friends joined the club to be near her.", "kind": "good"},
+					"end": "happy", "ending": "Celestine Vaux bought a house on hole {hole} once there was something to look at."},
+				{"id": "tuscany", "when": {"type": "now"}, "say": [{"by": "a", "text": "Bought in Tuscany instead. Nice talking to you."}],
+					"end": "quiet", "ending": "Celestine Vaux bought in Tuscany. The view there was ready."}
+			]
+		},
+		{
+			"id": "prodigy", "title": "The Prodigy", "weight": 1.0, "min_holes": 3, "min_members": 0, "stall": 200,
+			"blurb": "Fourteen years old and already better than you.",
+			"roles": {"a": {"from": "new", "name": "Jun Okafor", "handle": "JunO", "skill": 0.86, "wealth": 0.2, "persona": "easygoing"}},
+			"stages": [
+				{"id": "start", "when": {"type": "visit", "role": "a"}, "chapter": "A fourteen-year-old called Jun Okafor is beating everyone on your course.",
+					"say": [{"by": "a", "text": "Mum dropped me off. Said be back by six. Shot two under by five."}],
+					"next": "birdie"},
+				{"id": "birdie", "when": {"type": "hole", "role": "a", "rel": -1}, "chapter": "Jun is collecting birdies and missing homework.",
+					"say": [{"by": "a", "text": "Birdie on {hole}. Again. Teacher says I should focus on fractions. This IS fractions."}],
+					"next": "tourney"},
+				{"id": "tourney", "when": {"type": "tournament"}, "deadline": 170, "else": "drift", "chapter": "Jun wants a tournament to enter. Host one (Tournaments) and the kid will be in it.",
+					"say": [{"by": "a", "text": "Third in the {event}. Against adults. With a borrowed putter.", "likes": 1200}],
+					"toast": {"text": "Jun Okafor, fourteen, finished third in the {event}. People are talking.", "kind": "good"},
+					"effect": {"buzz": 10},
+					"next": "fame"},
+				{"id": "fame", "when": {"type": "days", "n": 45}, "chapter": "Jun has gone quiet. Rumour says a sponsor called.",
+					"say": [{"by": "a", "text": "Signed. First purchase: a putter that isn't borrowed. Second: a round at {course}, where it started.", "likes": 20000}],
+					"toast": {"text": "Jun Okafor has turned professional and is coming back to play the course where it started. Cameras are following.", "kind": "good"},
+					"effect": {"celebrity": true, "members": 3, "buzz": 15},
+					"end": "happy", "ending": "Jun Okafor turned pro and came home to play, with half the golf press in tow."},
+				{"id": "drift", "when": {"type": "now"}, "say": [{"by": "a", "text": "No tournaments here. The club down the road has one every month. Just saying."}],
+					"end": "quiet", "ending": "Jun Okafor went looking for a tournament somewhere else."}
+			]
+		},
+		{
+			"id": "critic", "title": "The Critic", "weight": 0.9, "min_holes": 3, "min_members": 0, "stall": 150,
+			"blurb": "Two visits, one review, and a lot riding on the sandwiches.",
+			"roles": {"a": {"from": "new", "name": "Margaret Pell", "handle": "MPellGolfWeekly", "skill": 0.5, "wealth": 0.6, "persona": "critic"}},
+			"stages": [
+				{"id": "start", "when": {"type": "visit", "role": "a"}, "chapter": "Margaret Pell of Golf Weekly is on the course under her own name, which is not how incognito works. Her next visit decides the review.",
+					"say": [{"by": "a", "text": "Reviewing a course today. Incognito. Please nobody read this."}],
+					"next": "second"},
+				{"id": "second", "when": {"type": "round", "role": "a", "count": 2}, "chapter": "Margaret has one more round before she files. Everything counts.", "next": "verdict"},
+				{"id": "verdict", "when": {"type": "if", "need": "role_happy:a:64", "then": "rave", "else": "pan"}},
+				{"id": "rave", "when": {"type": "now"},
+					"say": [{"by": "a", "text": "Review's in. 'Honest, funny, unexpectedly good.' I meant the course. Mostly.", "likes": 3000}],
+					"toast": {"text": "Golf Weekly's review is glowing. The course rating gets a lift for the next three months.", "kind": "good"},
+					"effect": {"rating_bias": {"value": 6, "days": 84}, "buzz": 12},
+					"end": "happy", "ending": "Margaret Pell's review called the course 'unexpectedly good'. It stuck."},
+				{"id": "pan", "when": {"type": "now"},
+					"say": [{"by": "a", "text": "Review's in. I used the word 'adequate' four times. The editor cut two.", "likes": 3000}],
+					"toast": {"text": "Golf Weekly's review was lukewarm. The course rating takes a knock for two months.", "kind": "bad"},
+					"effect": {"rating_bias": {"value": -5, "days": 56}, "buzz": -8},
+					"end": "sad", "ending": "Margaret Pell called the course 'adequate'. Twice, in print."}
+			]
+		},
+		{
+			"id": "quiet", "title": "The Quiet Hole", "weight": 1.0, "min_holes": 2, "min_members": 0, "stall": 160,
+			"blurb": "A retired couple who want one hole to themselves.",
+			"roles": {
+				"a": {"from": "new", "name": "Walter Pargeter", "handle": "WPargeter", "skill": 0.35, "wealth": 0.7, "persona": "easygoing"},
+				"b": {"from": "new", "name": "June Pargeter", "handle": "JunePargeter", "skill": 0.4, "wealth": 0.7, "persona": "easygoing"}
+			},
+			"together": ["a", "b"], "choose_hole": "random",
+			"stages": [
+				{"id": "start", "when": {"type": "visit", "role": "a"}, "chapter": "The Pargeters want one quiet hole: hole {hole}, with a bench on it and no cart path near it.",
+					"say": [{"by": "a", "text": "June and I like a quiet hole. One bench. No carts rattling past. Is that so much?"}],
+					"next": "hush"},
+				{"id": "hush", "when": {"type": "request"}, "request": {"needs": ["bench_on_hole", "no_path_on_hole"], "text": "a bench beside hole {hole} and no cart path within three tiles of it"}, "deadline": 130, "else": "bowls",
+					"chapter": "The Pargeters play hole {hole} and look for somewhere to sit.",
+					"say": [{"by": "a", "text": "Sat on the bench on {hole} for an hour. June saw a heron. I saw June see a heron."}],
+					"effect": {"mood": [{"role": "a", "value": 8}, {"role": "b", "value": 8}]},
+					"next": "cheque"},
+				{"id": "cheque", "when": {"type": "round", "role": "b"}, "chapter": "June has been talking to Walter about the clubhouse roof.",
+					"say": [{"by": "b", "text": "Walter wrote the club a cheque. I let him think it was his idea."}],
+					"toast": {"text": "The Pargeters donated $2,500 to the clubhouse fund.", "kind": "good"},
+					"effect": {"money": 2500},
+					"end": "happy", "ending": "The Pargeters got their quiet hole and gave the club $2,500."},
+				{"id": "bowls", "when": {"type": "now"}, "say": [{"by": "a", "text": "We tried. We'll be at the bowls club."}],
+					"end": "quiet", "ending": "The Pargeters gave up on a quiet hole and took up bowls."}
+			]
+		},
+		{
+			"id": "influencer", "title": "Content", "weight": 0.9, "min_holes": 3, "min_members": 0, "stall": 120,
+			"blurb": "2.3 million followers are about to see your course.",
+			"roles": {"a": {"from": "new", "name": "Brix Dalloway", "handle": "BrixDalloway", "skill": 0.4, "wealth": 0.7, "persona": "socialite"}},
+			"stages": [
+				{"id": "start", "when": {"type": "visit", "role": "a"}, "chapter": "Brix Dalloway, 2.3 million followers, is filming her round. How it goes decides what she posts.",
+					"say": [{"by": "a", "text": "On a golf course today for CONTENT. 2.3 million of you are about to learn what a 'par' is.", "likes": 41000}],
+					"next": "round"},
+				{"id": "round", "when": {"type": "round", "role": "a"}, "chapter": "The cameras are rolling. Keep her fed, watered and out of the water.", "next": "cut"},
+				{"id": "cut", "when": {"type": "if", "need": "role_happy:a:62", "then": "glow", "else": "roast"}},
+				{"id": "glow", "when": {"type": "now"},
+					"say": [{"by": "a", "text": "Okay the golf course is actually fire? Posting the whole thing. Go.", "likes": 180000}],
+					"toast": {"text": "Brix Dalloway's video of your course is everywhere. Expect a crowd.", "kind": "good"},
+					"effect": {"buzz": 25, "members": 4},
+					"end": "happy", "ending": "Brix Dalloway's video sent a crowd your way."},
+				{"id": "roast", "when": {"type": "now"},
+					"say": [{"by": "a", "text": "Rating this golf course: the sandwich was dry and I lost eleven balls. 2 out of 10.", "likes": 120000}],
+					"toast": {"text": "Brix Dalloway gave the course 2 out of 10 to 2.3 million people.", "kind": "bad"},
+					"effect": {"buzz": -15},
+					"end": "sad", "ending": "Brix Dalloway gave the course 2 out of 10. The sandwich was dry."}
+			]
+		}
+	]
+}

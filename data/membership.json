@@ -1,0 +1,24 @@
+{
+  "tiers": [
+    {"id": "basic", "name": "Basic", "dues": 5, "discount": 0.0, "color": "9aa5a0", "visits": 0, "rating": 0, "holes": 0},
+    {"id": "advanced", "name": "Advanced", "dues": 10, "discount": 0.05, "color": "7fb6d9", "visits": 1, "rating": 0, "holes": 0},
+    {"id": "bronze", "name": "Bronze", "dues": 18, "discount": 0.10, "color": "c98a4b", "visits": 2, "rating": 0, "holes": 0},
+    {"id": "silver", "name": "Silver", "dues": 30, "discount": 0.15, "color": "c9d1d6", "visits": 2, "rating": 50, "holes": 0},
+    {"id": "gold", "name": "Gold", "dues": 50, "discount": 0.20, "color": "f2c94c", "visits": 3, "rating": 62, "holes": 6},
+    {"id": "platinum", "name": "Platinum", "dues": 90, "discount": 0.30, "color": "e6e9f2", "visits": 3, "rating": 75, "holes": 9}
+  ],
+  "factors": [
+    {"id": "challenge", "name": "A proper test of golf", "hint": "wants holes that test their game without beating them up"},
+    {"id": "scenery", "name": "Beautiful surroundings", "hint": "wants prettier holes to look at"},
+    {"id": "pace", "name": "A brisk pace of play", "hint": "is tired of waiting behind slow groups"},
+    {"id": "condition", "name": "Immaculate turf", "hint": "wants the course in better condition"},
+    {"id": "comfort", "name": "Food, drink and comfort", "hint": "wants somewhere to eat, drink and sit down out on the course"},
+    {"id": "walk", "name": "An easy walk", "hint": "finds the course a tiring walk; paths, carts and benches would help"},
+    {"id": "prestige", "name": "Prestige", "hint": "wants to belong to a club people have heard of"},
+    {"id": "variety", "name": "Variety", "hint": "wants more holes, and more kinds of hole"},
+    {"id": "safety", "name": "Peace and safety", "hint": "would like a round where nothing lands on them"},
+    {"id": "social", "name": "Good company", "hint": "wants a memorable day out with their playing partners"},
+    {"id": "practice", "name": "Practice facilities", "hint": "wants a driving range and a putting green"},
+    {"id": "thrills", "name": "Thrills", "hint": "wants danger, drama and a story to tell afterwards"}
+  ]
+}

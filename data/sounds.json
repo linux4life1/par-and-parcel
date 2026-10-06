@@ -1,0 +1,553 @@
+{
+  "_about": "Every sound effect: the files that can play for it (one is picked at random), how loud in decibels, how much the pitch varies from one play to the next, and the shortest gap in seconds between two plays. Optional: delay (seconds before it is heard, for a reaction that follows something), voice (people; only a few are ever heard at once), far (the camera distance in metres beyond which it is not played at all), and then (another sound that follows this one: its id, and the chance from 0 to 1). Files are Ogg Vorbis in assets/sounds, made by tools/make_sounds.py.",
+  "sounds": {
+    "drive": {
+      "files": [
+        "drive_1",
+        "drive_2",
+        "drive_3"
+      ],
+      "db": 4,
+      "pitch": 0.05,
+      "gap": 0.05
+    },
+    "iron": {
+      "files": [
+        "iron_1",
+        "iron_2",
+        "iron_3"
+      ],
+      "db": 3,
+      "pitch": 0.06,
+      "gap": 0.05
+    },
+    "chip": {
+      "files": [
+        "chip_1",
+        "chip_2",
+        "chip_3"
+      ],
+      "db": 1,
+      "pitch": 0.06,
+      "gap": 0.05
+    },
+    "putt": {
+      "files": [
+        "putt_1",
+        "putt_2",
+        "putt_3"
+      ],
+      "db": 1,
+      "pitch": 0.05,
+      "gap": 0.05
+    },
+    "burp": {
+      "files": ["burp_1", "burp_2", "burp_3"],
+      "db": -9,
+      "pitch": 0.08,
+      "gap": 0.4
+    },
+    "flush": {
+      "files": ["flush"],
+      "db": -10,
+      "pitch": 0.03,
+      "gap": 1.0
+    },
+    "slurp": {
+      "files": ["slurp_1", "slurp_2"],
+      "db": -12,
+      "pitch": 0.06,
+      "gap": 0.3
+    },
+    "strike_sand": {
+      "files": [
+        "strike_sand_1",
+        "strike_sand_2"
+      ],
+      "db": 3,
+      "pitch": 0.06,
+      "gap": 0.05
+    },
+    "strike_rough": {
+      "files": [
+        "strike_rough_1",
+        "strike_rough_2"
+      ],
+      "db": -3,
+      "pitch": 0.08,
+      "gap": 0.05
+    },
+    "land_soft": {
+      "files": [
+        "land_soft_1",
+        "land_soft_2"
+      ],
+      "db": -4,
+      "pitch": 0.12,
+      "gap": 0.04
+    },
+    "land_sand": {
+      "files": [
+        "land_sand_1",
+        "land_sand_2"
+      ],
+      "db": -4,
+      "pitch": 0.1,
+      "gap": 0.04
+    },
+    "land_hard": {
+      "files": [
+        "land_hard_1",
+        "land_hard_2"
+      ],
+      "db": -3,
+      "pitch": 0.1,
+      "gap": 0.04
+    },
+    "splash": {
+      "files": [
+        "splash"
+      ],
+      "db": 0,
+      "pitch": 0.1,
+      "gap": 0.1,
+      "then": {
+        "id": "groan",
+        "chance": 0.7
+      }
+    },
+    "sizzle": {
+      "files": [
+        "sizzle"
+      ],
+      "db": 1,
+      "pitch": 0.1,
+      "gap": 0.1,
+      "then": {
+        "id": "groan",
+        "chance": 0.7
+      }
+    },
+    "cup": {
+      "files": [
+        "cup"
+      ],
+      "db": 4,
+      "pitch": 0.04,
+      "gap": 0.1
+    },
+    "leaves": {
+      "files": [
+        "leaves"
+      ],
+      "db": -7,
+      "pitch": 0.15,
+      "gap": 0.1
+    },
+    "oob": {
+      "files": [
+        "oob"
+      ],
+      "db": -8,
+      "pitch": 0.0,
+      "gap": 0.5,
+      "then": {
+        "id": "groan",
+        "chance": 0.6
+      }
+    },
+    "gust": {
+      "files": [
+        "gust"
+      ],
+      "db": -10,
+      "pitch": 0.1,
+      "gap": 2.0
+    },
+    "hit_wood": {
+      "files": [
+        "hit_wood"
+      ],
+      "db": -3,
+      "pitch": 0.12,
+      "gap": 0.05
+    },
+    "hit_timber": {
+      "files": [
+        "hit_timber"
+      ],
+      "db": -4,
+      "pitch": 0.12,
+      "gap": 0.05
+    },
+    "hit_stone": {
+      "files": [
+        "hit_stone"
+      ],
+      "db": -3,
+      "pitch": 0.12,
+      "gap": 0.05
+    },
+    "hit_metal": {
+      "files": [
+        "hit_metal"
+      ],
+      "db": -6,
+      "pitch": 0.08,
+      "gap": 0.05
+    },
+    "hit_wall": {
+      "files": [
+        "hit_wall"
+      ],
+      "db": -4,
+      "pitch": 0.1,
+      "gap": 0.05
+    },
+    "hit_roof": {
+      "files": [
+        "hit_roof"
+      ],
+      "db": -5,
+      "pitch": 0.1,
+      "gap": 0.05
+    },
+    "hit_cactus": {
+      "files": [
+        "hit_cactus"
+      ],
+      "db": -6,
+      "pitch": 0.1,
+      "gap": 0.05
+    },
+    "bonk": {
+      "files": [
+        "bonk"
+      ],
+      "db": -2,
+      "pitch": 0.1,
+      "gap": 0.1,
+      "then": {
+        "id": "boo",
+        "chance": 1.0
+      }
+    },
+    "glass": {
+      "files": [
+        "glass"
+      ],
+      "db": -3,
+      "pitch": 0.08,
+      "gap": 0.3
+    },
+    "clap": {
+      "files": [
+        "clap"
+      ],
+      "db": -8,
+      "pitch": 0.05,
+      "gap": 1.2
+    },
+    "cheer": {
+      "files": [
+        "cheer_1",
+        "cheer_2",
+        "cheer_3"
+      ],
+      "db": -4,
+      "pitch": 0.04,
+      "gap": 2.0,
+      "delay": 0.35,
+      "voice": true
+    },
+    "ovation": {
+      "files": [
+        "ovation"
+      ],
+      "db": -5,
+      "pitch": 0.03,
+      "gap": 2.0,
+      "delay": 0.2
+    },
+    "groan": {
+      "files": [
+        "groan_1",
+        "groan_2",
+        "groan_3"
+      ],
+      "db": -5,
+      "pitch": 0.05,
+      "gap": 1.5,
+      "delay": 0.45,
+      "voice": true
+    },
+    "boo": {
+      "files": [
+        "boo_1",
+        "boo_2"
+      ],
+      "db": -5,
+      "pitch": 0.04,
+      "gap": 3.0,
+      "delay": 0.55,
+      "voice": true
+    },
+    "chat": {
+      "files": [
+        "chat_a_1",
+        "chat_a_2",
+        "chat_a_3",
+        "chat_a_4",
+        "chat_a_5",
+        "chat_a_6",
+        "chat_b_1",
+        "chat_b_2",
+        "chat_b_3",
+        "chat_b_4",
+        "chat_b_5",
+        "chat_b_6",
+        "chat_c_1",
+        "chat_c_2",
+        "chat_c_3",
+        "chat_c_4",
+        "chat_c_5",
+        "chat_c_6",
+        "chat_d_1",
+        "chat_d_2",
+        "chat_d_3",
+        "chat_d_4",
+        "chat_d_5",
+        "chat_d_6",
+        "chat_e_1",
+        "chat_e_2",
+        "chat_e_3",
+        "chat_e_4",
+        "chat_e_5",
+        "chat_e_6"
+      ],
+      "db": -6,
+      "pitch": 0.03,
+      "gap": 0.3,
+      "voice": true,
+      "far": 1000
+    },
+    "coin": {
+      "files": [
+        "coin"
+      ],
+      "db": -16,
+      "pitch": 0.06,
+      "gap": 0.35
+    },
+    "cash": {
+      "files": [
+        "cash"
+      ],
+      "db": -10,
+      "pitch": 0.0,
+      "gap": 1.0
+    },
+    "click": {
+      "files": [
+        "click"
+      ],
+      "db": -15,
+      "pitch": 0.04,
+      "gap": 0.03
+    },
+    "open": {
+      "files": [
+        "open"
+      ],
+      "db": -19,
+      "pitch": 0.0,
+      "gap": 0.08
+    },
+    "error": {
+      "files": [
+        "error"
+      ],
+      "db": -13,
+      "pitch": 0.0,
+      "gap": 0.4
+    },
+    "alert": {
+      "files": [
+        "alert"
+      ],
+      "db": -14,
+      "pitch": 0.0,
+      "gap": 1.5
+    },
+    "pop": {
+      "files": [
+        "pop"
+      ],
+      "db": -20,
+      "pitch": 0.08,
+      "gap": 0.2
+    },
+    "chime": {
+      "files": [
+        "chime"
+      ],
+      "db": -13,
+      "pitch": 0.0,
+      "gap": 1.5
+    },
+    "medal": {
+      "files": [
+        "medal"
+      ],
+      "db": -10,
+      "pitch": 0.0,
+      "gap": 1.0
+    },
+    "place": {
+      "files": [
+        "place"
+      ],
+      "db": -10,
+      "pitch": 0.1,
+      "gap": 0.06
+    },
+    "paint": {
+      "files": [
+        "paint"
+      ],
+      "db": -19,
+      "pitch": 0.15,
+      "gap": 0.07
+    },
+    "dig": {
+      "files": [
+        "dig"
+      ],
+      "db": -14,
+      "pitch": 0.15,
+      "gap": 0.12
+    },
+    "remove": {
+      "files": [
+        "remove"
+      ],
+      "db": -12,
+      "pitch": 0.12,
+      "gap": 0.08
+    },
+    "thunder": {
+      "files": [
+        "thunder"
+      ],
+      "db": -3,
+      "pitch": 0.12,
+      "gap": 1.0
+    },
+    "boom": {
+      "files": [
+        "boom"
+      ],
+      "db": 0,
+      "pitch": 0.05,
+      "gap": 2.0
+    },
+    "bomb": {
+      "files": [
+        "bomb"
+      ],
+      "db": -2,
+      "pitch": 0.15,
+      "gap": 0.15
+    },
+    "lamp_on": {
+      "files": [
+        "lamp_on"
+      ],
+      "db": -12,
+      "pitch": 0.0,
+      "gap": 5.0
+    }
+  },
+  "chatter": {
+    "_about": "Golfers talking among themselves. Nobody says a real word. Each voice has six lines: two remarks, a question, an exclamation, a murmur and a laugh. A golfer keeps the same voice all day (high voices go with the long-haired figures). every is the shortest and longest wait in seconds before the next conversation near the camera, reply the chance that somebody answers, and quiet how long one group leaves between conversations.",
+    "voices": {
+      "a": [
+        "chat_a_1",
+        "chat_a_2",
+        "chat_a_3",
+        "chat_a_4",
+        "chat_a_5",
+        "chat_a_6"
+      ],
+      "b": [
+        "chat_b_1",
+        "chat_b_2",
+        "chat_b_3",
+        "chat_b_4",
+        "chat_b_5",
+        "chat_b_6"
+      ],
+      "c": [
+        "chat_c_1",
+        "chat_c_2",
+        "chat_c_3",
+        "chat_c_4",
+        "chat_c_5",
+        "chat_c_6"
+      ],
+      "d": [
+        "chat_d_1",
+        "chat_d_2",
+        "chat_d_3",
+        "chat_d_4",
+        "chat_d_5",
+        "chat_d_6"
+      ],
+      "e": [
+        "chat_e_1",
+        "chat_e_2",
+        "chat_e_3",
+        "chat_e_4",
+        "chat_e_5",
+        "chat_e_6"
+      ]
+    },
+    "low": [
+      "a",
+      "c",
+      "e"
+    ],
+    "high": [
+      "b",
+      "d"
+    ],
+    "every": [
+      5.0,
+      13.0
+    ],
+    "reply": 0.65,
+    "quiet": 14.0
+  },
+  "ambience": {
+    "birds": {
+      "file": "amb_birds",
+      "db": -10
+    },
+    "crickets": {
+      "file": "amb_crickets",
+      "db": -3
+    },
+    "wind": {
+      "file": "amb_wind",
+      "db": -15
+    },
+    "rain": {
+      "file": "amb_rain",
+      "db": -7
+    },
+    "lava": {
+      "file": "amb_lava",
+      "db": -8
+    }
+  }
+}

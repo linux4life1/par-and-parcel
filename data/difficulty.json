@@ -1,0 +1,16 @@
+{
+	"_about": "The difficulty slider. Each level multiplies: 'fee' what a golfer pays for a hole, 'mood_bad' how hard a bad moment hits their mood, 'mood_good' how much a good one lifts it, 'weeds' and 'pests' how fast they appear and spread, 'wear' how fast play wears the turf, 'wages' what staff cost. 'default' is the level a new game starts on.",
+	"default": 2,
+	"levels": [
+		{"id": "relaxed", "name": "Relaxed", "blurb": "Generous golfers, slow weeds. For building in peace.",
+			"fee": 1.25, "mood_bad": 0.7, "mood_good": 1.15, "weeds": 0.5, "pests": 0.5, "wear": 0.8, "wages": 0.85},
+		{"id": "easy", "name": "Easy", "blurb": "A little forgiveness everywhere.",
+			"fee": 1.12, "mood_bad": 0.85, "mood_good": 1.07, "weeds": 0.75, "pests": 0.75, "wear": 0.9, "wages": 0.93},
+		{"id": "normal", "name": "Normal", "blurb": "The game as it was balanced.",
+			"fee": 1.0, "mood_bad": 1.0, "mood_good": 1.0, "weeds": 1.0, "pests": 1.0, "wear": 1.0, "wages": 1.0},
+		{"id": "hard", "name": "Hard", "blurb": "Golfers pay less and grumble sooner. Weeds do not wait.",
+			"fee": 0.88, "mood_bad": 1.2, "mood_good": 0.93, "weeds": 1.45, "pests": 1.4, "wear": 1.15, "wages": 1.1},
+		{"id": "brutal", "name": "Brutal", "blurb": "Tight wallets, short tempers, and a course that wants to be a meadow.",
+			"fee": 0.75, "mood_bad": 1.45, "mood_good": 0.85, "weeds": 2.1, "pests": 2.0, "wear": 1.3, "wages": 1.25}
+	]
+}

@@ -1,0 +1,44 @@
+{
+  "roles": [
+    {
+      "id": "greenkeeper",
+      "name": "Greenkeeper",
+      "wage": 110,
+      "speed": 5.0,
+      "color": "3fa34d",
+      "blurb": "Mows, repairs worn turf and pulls weeds. Greens come first."
+    },
+    {
+      "id": "exterminator",
+      "name": "Exterminator",
+      "wage": 130,
+      "speed": 4.5,
+      "color": "e0a030",
+      "blurb": "Hunts down gophers and grubs before they spread."
+    },
+    {
+      "id": "marshal",
+      "name": "Marshal",
+      "wage": 90,
+      "speed": 6.0,
+      "color": "d04a3a",
+      "blurb": "Keeps play moving, calms waiting golfers and stops reckless shots."
+    },
+    {
+      "id": "beverage",
+      "name": "Drinks cart",
+      "wage": 100,
+      "speed": 7.5,
+      "color": "f2c230",
+      "blurb": "Drives the course selling cold drinks and snacks to whoever looks thirstiest."
+    },
+    {
+      "id": "club_pro",
+      "name": "Club pro",
+      "wage": 150,
+      "speed": 3.5,
+      "color": "f5f5f5",
+      "blurb": "Greets golfers at the clubhouse and hands out tips. Everyone starts their round happier and hits it a little straighter."
+    }
+  ]
+}

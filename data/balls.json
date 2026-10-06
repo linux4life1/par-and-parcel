@@ -1,0 +1,22 @@
+{
+  "balls": [
+    {"id": "standard", "name": "Range Rock", "price": 0, "color": "ffffff",
+     "blurb": "Plain white and unlimited. No tricks."},
+    {"id": "rocket", "name": "Rocket Core", "price": 30, "color": "ff7a3d", "speed": 1.06, "spin": 0.6,
+     "blurb": "6% more ball speed. Hits the green like a skipping stone."},
+    {"id": "feather", "name": "Featherlite Spin", "price": 30, "color": "f4e36b", "speed": 0.98, "spin": 1.7, "roll": 0.85,
+     "blurb": "Bites hard and stops fast on greens."},
+    {"id": "skipper", "name": "Skipper", "price": 40, "color": "4fc3f7", "skips": 2,
+     "blurb": "Skips across water twice before it sinks. Keep it low."},
+    {"id": "mudder", "name": "Mudder", "price": 35, "color": "a1887f", "wet": 0.25,
+     "blurb": "Shrugs off soggy ground. Bounces and rolls as if the course were dry."},
+    {"id": "windcutter", "name": "Windcutter", "price": 40, "color": "b39ddb", "wind": 0.45,
+     "blurb": "Dimples tuned to ignore more than half of the wind."},
+    {"id": "gyro", "name": "Gyro Straight", "price": 35, "color": "80cbc4", "curve": 0.3,
+     "blurb": "Barely hooks or slices, however ugly the swing."},
+    {"id": "sandshark", "name": "Sand Shark", "price": 30, "color": "ffd180", "sand": 1.35,
+     "blurb": "Pops out of bunkers as if they were fairway."},
+    {"id": "magnet", "name": "Cup Magnet", "price": 60, "color": "ef5350", "cup": 1.9,
+     "blurb": "The hole plays nearly twice as wide."}
+  ]
+}

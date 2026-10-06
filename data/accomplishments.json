@@ -1,0 +1,238 @@
+{
+  "accomplishments": [
+    {
+      "id": "first_hole",
+      "name": "Ground breaking",
+      "desc": "Open a hole you laid out yourself",
+      "type": "built",
+      "value": 1
+    },
+    {
+      "id": "nine",
+      "name": "Out and back",
+      "desc": "Have 9 holes open",
+      "type": "holes",
+      "value": 9
+    },
+    {
+      "id": "eighteen",
+      "name": "Championship course",
+      "desc": "Have 18 holes open",
+      "type": "holes",
+      "value": 18
+    },
+    {
+      "id": "challenge",
+      "name": "A real challenge",
+      "desc": "Build a Challenge hole (length and accuracy)",
+      "type": "kind",
+      "value": 3
+    },
+    {
+      "id": "heroic",
+      "name": "Heroics",
+      "desc": "Build a Heroic hole (length and imagination)",
+      "type": "kind",
+      "value": 5
+    },
+    {
+      "id": "strategic",
+      "name": "Thinking golfer's hole",
+      "desc": "Build a Strategic hole (accuracy and imagination)",
+      "type": "kind",
+      "value": 6
+    },
+    {
+      "id": "classic",
+      "name": "Instant classic",
+      "desc": "Build a Classic hole that tests everything",
+      "type": "kind",
+      "value": 7
+    },
+    {
+      "id": "top100",
+      "name": "In the magazines",
+      "desc": "Have a hole named in the Top 100",
+      "type": "award",
+      "value": "top100"
+    },
+    {
+      "id": "top18",
+      "name": "Dream Eighteen",
+      "desc": "Have a hole named in the Dream Eighteen",
+      "type": "award",
+      "value": "top18"
+    },
+    {
+      "id": "rating60",
+      "name": "Worth the drive",
+      "desc": "Reach a course rating of 60",
+      "type": "rating",
+      "value": 60
+    },
+    {
+      "id": "rating80",
+      "name": "Destination golf",
+      "desc": "Reach a course rating of 80",
+      "type": "rating",
+      "value": 80
+    },
+    {
+      "id": "rating90",
+      "name": "Grand Slam venue",
+      "desc": "Reach a course rating of 90",
+      "type": "rating",
+      "value": 90
+    },
+    {
+      "id": "first_event",
+      "name": "Tournament host",
+      "desc": "Host your first tournament",
+      "type": "hosted_any",
+      "value": 1
+    },
+    {
+      "id": "state_open",
+      "name": "On television",
+      "desc": "Host a State Open",
+      "type": "hosted",
+      "value": "state"
+    },
+    {
+      "id": "major",
+      "name": "The big one",
+      "desc": "Host The Grand Masters Cup",
+      "type": "hosted",
+      "value": "major"
+    },
+    {
+      "id": "owner_wins",
+      "name": "Home advantage",
+      "desc": "Win a tournament on your own course",
+      "type": "stat",
+      "stat": "player_wins",
+      "value": 1
+    },
+    {
+      "id": "match",
+      "name": "Money player",
+      "desc": "Win a money match against a visiting pro",
+      "type": "stat",
+      "stat": "matches_won",
+      "value": 1
+    },
+    {
+      "id": "members10",
+      "name": "Regulars",
+      "desc": "Sign up 10 club members",
+      "type": "members",
+      "value": 10
+    },
+    {
+      "id": "members50",
+      "name": "Waiting list",
+      "desc": "Sign up 50 club members",
+      "type": "members",
+      "value": 50
+    },
+    {
+      "id": "gold",
+      "name": "Gold standard",
+      "desc": "Have a member reach Gold",
+      "type": "tier",
+      "value": 4
+    },
+    {
+      "id": "platinum",
+      "name": "Platinum service",
+      "desc": "Have a member reach Platinum",
+      "type": "tier",
+      "value": 5
+    },
+    {
+      "id": "home",
+      "name": "Location, location",
+      "desc": "Sell a home site",
+      "type": "stat",
+      "stat": "homes",
+      "value": 1
+    },
+    {
+      "id": "celebrity_home",
+      "name": "Famous neighbours",
+      "desc": "Sell a home to a celebrity",
+      "type": "stat",
+      "stat": "celebrity_homes",
+      "value": 1
+    },
+    {
+      "id": "stories",
+      "name": "Happy endings",
+      "desc": "See 10 golfer stories through to a happy ending",
+      "type": "stat",
+      "stat": "stories",
+      "value": 10
+    },
+    {
+      "id": "rounds",
+      "name": "Busy tee sheet",
+      "desc": "Host 1,000 rounds of golf",
+      "type": "stat",
+      "stat": "rounds",
+      "value": 1000
+    },
+    {
+      "id": "fore",
+      "name": "Fore!",
+      "desc": "See 25 people hit by golf balls",
+      "type": "stat",
+      "stat": "hits",
+      "value": 25
+    },
+    {
+      "id": "eruption",
+      "name": "Lava happens",
+      "desc": "Stay open through an eruption",
+      "type": "stat",
+      "stat": "eruptions",
+      "value": 1
+    },
+    {
+      "id": "bank",
+      "name": "In the black",
+      "desc": "Have $100,000 in the bank",
+      "type": "money",
+      "value": 100000
+    },
+    {
+      "id": "rank5",
+      "name": "Top five",
+      "desc": "Finish a year ranked in the top 5 courses",
+      "type": "rank",
+      "value": 5
+    },
+    {
+      "id": "rank1",
+      "name": "Best in the world",
+      "desc": "Finish a year ranked number 1",
+      "type": "rank",
+      "value": 1
+    },
+    {
+      "id": "night_owl",
+      "name": "Night owl",
+      "desc": "Have 100 holes played under the lights",
+      "type": "stat",
+      "stat": "night_holes",
+      "value": 100
+    },
+    {
+      "id": "pinball",
+      "name": "Pinball wizard",
+      "desc": "See 50 golf balls ricochet off things",
+      "type": "stat",
+      "stat": "ricochets",
+      "value": 50
+    }
+  ]
+}

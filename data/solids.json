@@ -1,0 +1,127 @@
+{
+  "_about": "What a golf ball can hit. Shapes are listed per kind of object (the same names the models use). Positions are metres from where the object stands; heights are metres above the ground there. post = upright cylinder, rock = ball, box = block, roof = gabled roof over a block, leaves = foliage a ball can pass through.",
+  "materials": {
+    "wood":   {"bounce": 0.45, "keep": 0.72, "scatter": 0.30, "word": "Thwack!"},
+    "timber": {"bounce": 0.40, "keep": 0.70, "scatter": 0.12, "word": "Knock!"},
+    "stone":  {"bounce": 0.62, "keep": 0.80, "scatter": 0.40, "word": "Crack!"},
+    "metal":  {"bounce": 0.55, "keep": 0.85, "scatter": 0.08, "word": "Clang!"},
+    "wall":   {"bounce": 0.42, "keep": 0.75, "scatter": 0.06, "word": "Thud!"},
+    "roof":   {"bounce": 0.36, "keep": 0.70, "scatter": 0.15, "word": "Clatter!"},
+    "cactus": {"bounce": 0.18, "keep": 0.35, "scatter": 0.20, "word": "Thup."},
+    "leaves":  {"thick": 0.16, "drag": 0.05},
+    "needles": {"thick": 0.21, "drag": 0.07},
+    "fronds":  {"thick": 0.06, "drag": 0.03},
+    "bush":    {"thick": 0.95, "drag": 0.50},
+    "scrub":   {"thick": 0.50, "drag": 0.30}
+  },
+  "kinds": {
+    "oak": [
+      {"k": "post", "r": 0.38, "y1": 3.0, "m": "wood"},
+      {"k": "leaves", "y0": 3.0, "y1": 8.6, "r": 3.5, "m": "leaves"}
+    ],
+    "birch": [
+      {"k": "post", "r": 0.17, "y1": 6.6, "m": "wood"},
+      {"k": "leaves", "y0": 3.4, "y1": 8.6, "r": 1.9, "m": "leaves"}
+    ],
+    "scots": [
+      {"k": "post", "r": 0.30, "y1": 7.4, "m": "wood"},
+      {"k": "leaves", "y0": 6.6, "y1": 9.2, "r": 3.0, "m": "needles"}
+    ],
+    "pine": [
+      {"k": "post", "r": 0.26, "y1": 2.0, "m": "wood"},
+      {"k": "leaves", "y0": 1.4, "y1": 10.6, "r": 2.7, "r1": 0.3, "m": "needles"}
+    ],
+    "palm": [
+      {"k": "post", "r": 0.30, "y1": 7.2, "m": "wood"},
+      {"k": "leaves", "y0": 5.6, "y1": 8.4, "r": 3.2, "m": "fronds"}
+    ],
+    "deadtree": [
+      {"k": "post", "r": 0.34, "y1": 5.4, "m": "wood"}
+    ],
+    "cactus": [
+      {"k": "post", "r": 0.46, "y1": 5.2, "m": "cactus"},
+      {"k": "post", "x": 1.33, "r": 0.27, "y0": 2.4, "y1": 4.3, "m": "cactus"},
+      {"k": "post", "x": -1.13, "z": 0.1, "r": 0.24, "y0": 1.7, "y1": 3.3, "m": "cactus"}
+    ],
+    "bush":  [{"k": "leaves", "y0": 0.0, "y1": 1.5, "r": 1.35, "m": "bush"}],
+    "gorse": [{"k": "leaves", "y0": 0.0, "y1": 1.5, "r": 1.35, "m": "bush"}],
+    "fern":  [{"k": "leaves", "y0": 0.0, "y1": 1.2, "r": 1.3, "m": "scrub"}],
+    "scrub": [{"k": "leaves", "y0": 0.0, "y1": 1.0, "r": 1.2, "m": "scrub"}],
+    "boulder":       [{"k": "rock", "y": 0.45, "r": 1.3, "m": "stone"}, {"k": "rock", "x": 1.25, "z": 0.7, "y": 0.25, "r": 0.7, "m": "stone"}],
+    "boulder_red":   [{"k": "rock", "y": 0.45, "r": 1.3, "m": "stone"}, {"k": "rock", "x": 1.25, "z": 0.7, "y": 0.25, "r": 0.7, "m": "stone"}],
+    "boulder_black": [{"k": "rock", "y": 0.45, "r": 1.3, "m": "stone"}, {"k": "rock", "x": 1.25, "z": 0.7, "y": 0.25, "r": 0.7, "m": "stone"}],
+    "o4": [{"k": "post", "r": 2.3, "y1": 0.36, "m": "stone"}],
+    "o5": [{"k": "box", "hx": 1.1, "hz": 0.35, "y1": 0.95, "m": "timber"}],
+    "o6": [
+      {"k": "box", "hx": 1.45, "hz": 1.45, "y1": 2.65, "m": "wall"},
+      {"k": "box", "hx": 1.2, "hz": 1.2, "y0": 2.6, "y1": 3.5, "m": "roof"}
+    ],
+    "o7": [{"k": "box", "hx": 2.0, "hz": 1.6, "y1": 3.05, "m": "wall"}],
+    "o8": [
+      {"k": "box", "hx": 8.0, "hz": 4.5, "y1": 5.35, "m": "wall"},
+      {"k": "roof", "hx": 9.2, "hz": 5.6, "y0": 5.35, "y1": 9.15, "m": "roof"},
+      {"k": "box", "z": -6.4, "hx": 6.8, "hz": 2.1, "y0": 3.6, "y1": 4.1, "m": "roof"}
+    ],
+    "o9": [
+      {"k": "box", "z": 0.4, "hx": 2.3, "hz": 1.8, "y1": 2.8, "m": "wall"},
+      {"k": "roof", "z": 0.4, "hx": 2.8, "hz": 2.4, "y0": 2.8, "y1": 4.3, "m": "roof"}
+    ],
+    "o10": [{"k": "post", "r": 0.17, "y1": 2.0, "m": "metal"}],
+    "o13": [
+      {"k": "box", "hx": 3.5, "hz": 2.5, "y1": 3.25, "m": "timber"},
+      {"k": "roof", "hx": 3.9, "hz": 2.9, "y0": 3.25, "y1": 5.15, "m": "roof"}
+    ],
+    "o15": [
+      {"k": "box", "z": 1.2, "hx": 4.2, "hz": 1.7, "y0": 2.6, "y1": 3.0, "m": "roof"},
+      {"k": "box", "z": 2.7, "hx": 4.1, "hz": 0.12, "y1": 2.8, "m": "timber"},
+      {"k": "post", "x": -4.0, "z": -0.3, "r": 0.12, "y1": 2.8, "m": "timber"},
+      {"k": "post", "x": -1.35, "z": -0.3, "r": 0.12, "y1": 2.8, "m": "timber"},
+      {"k": "post", "x": 1.35, "z": -0.3, "r": 0.12, "y1": 2.8, "m": "timber"},
+      {"k": "post", "x": 4.0, "z": -0.3, "r": 0.12, "y1": 2.8, "m": "timber"}
+    ],
+    "o16": [
+      {"k": "post", "r": 2.35, "y1": 0.55, "m": "stone"},
+      {"k": "post", "r": 0.3, "y1": 3.3, "m": "stone"}
+    ],
+    "o18": [
+      {"k": "box", "hx": 2.2, "hz": 2.0, "y1": 3.1, "m": "wall"},
+      {"k": "roof", "hx": 2.6, "hz": 2.45, "y0": 3.1, "y1": 5.1, "m": "roof"}
+    ],
+    "o21": [
+      {"k": "box", "hx": 5.0, "hz": 3.5, "y1": 10.1, "m": "wall"},
+      {"k": "roof", "hx": 5.6, "hz": 4.1, "y0": 10.1, "y1": 12.7, "m": "roof"}
+    ],
+    "o22": [
+      {"k": "box", "z": 1.6, "hx": 1.5, "hz": 1.2, "y1": 2.9, "m": "wall"},
+      {"k": "post", "x": -0.2, "z": -4.0, "r": 0.07, "y1": 4.8, "m": "metal"}
+    ],
+    "o23": [
+      {"k": "box", "x": -0.5, "z": -6.2, "hx": 0.55, "hz": 2.7, "y0": 0.7, "y1": 1.8, "m": "metal"},
+      {"k": "box", "x": -0.5, "z": -5.4, "hx": 4.2, "hz": 0.65, "y0": 1.68, "y1": 1.82, "m": "metal"},
+      {"k": "post", "x": 5.0, "z": 10.0, "r": 0.07, "y1": 4.2, "m": "metal"}
+    ],
+    "o24": [{"k": "post", "r": 0.2, "y1": 14.0, "m": "metal"}],
+    "o25": [{"k": "post", "r": 0.1, "y1": 3.5, "m": "metal"}],
+    "windmill": [
+      {"k": "post", "r": 2.0, "y1": 8.4, "m": "wall"},
+      {"k": "post", "r": 1.2, "y0": 8.4, "y1": 10.2, "m": "roof"}
+    ],
+    "stones": [
+      {"k": "post", "x": 3.33, "z": 0.68, "r": 0.55, "y1": 2.6, "m": "stone"},
+      {"k": "post", "x": 1.88, "z": 2.83, "r": 0.55, "y1": 2.6, "m": "stone"},
+      {"k": "post", "x": -0.68, "z": 3.33, "r": 0.55, "y1": 2.6, "m": "stone"},
+      {"k": "post", "x": -2.83, "z": 1.88, "r": 0.55, "y1": 2.6, "m": "stone"},
+      {"k": "post", "x": -3.33, "z": -0.68, "r": 0.55, "y1": 2.6, "m": "stone"},
+      {"k": "post", "x": -1.88, "z": -2.83, "r": 0.55, "y1": 2.6, "m": "stone"},
+      {"k": "post", "x": 0.68, "z": -3.33, "r": 0.55, "y1": 2.6, "m": "stone"},
+      {"k": "post", "x": 2.83, "z": -1.88, "r": 0.55, "y1": 2.6, "m": "stone"},
+      {"k": "rock", "x": 0.2, "z": 0.1, "y": 0.2, "r": 0.8, "m": "stone"}
+    ],
+    "arch": [
+      {"k": "post", "x": -3.0, "r": 1.2, "y1": 4.9, "m": "stone"},
+      {"k": "post", "x": 3.1, "z": 0.1, "r": 1.05, "y1": 4.4, "m": "stone"},
+      {"k": "box", "hx": 4.6, "hz": 1.2, "y0": 4.5, "y1": 6.2, "m": "stone"}
+    ],
+    "tiki": [{"k": "post", "r": 1.0, "y1": 5.9, "m": "timber"}]
+  }
+}

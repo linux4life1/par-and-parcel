@@ -1,0 +1,73 @@
+{
+  "_about": "Background music. Every track is CC0 (public domain) from OpenGameArt, in Ogg Vorbis. Five play from the file their composer published, unaltered. Sunset Plains (published as WAV) and Another August (published only as MP3) were encoded to Ogg Vorbis once by tools/fetch_music.py, which downloads everything. gain_db evens out how loud they are (measured to -20 LUFS, not applied to the files). The day list plays in daylight and the night list after dark.",
+  "level_db": -2,
+  "tracks": [
+    {
+      "id": "bluebonnet",
+      "file": "bluebonnet.ogg",
+      "title": "Bluebonnet",
+      "by": "Kistol",
+      "gain_db": -0.2,
+      "page": "https://opengameart.org/content/bluebonnet"
+    },
+    {
+      "id": "forget_me_not",
+      "file": "forget_me_not.ogg",
+      "title": "Forget Me Not",
+      "by": "Kistol",
+      "gain_db": 2.4,
+      "page": "https://opengameart.org/content/forget-me-not"
+    },
+    {
+      "id": "sunset_plains",
+      "file": "sunset_plains.ogg",
+      "title": "Sunset Plains",
+      "by": "Yoiyami",
+      "gain_db": -3.9,
+      "page": "https://opengameart.org/content/sunset-plains"
+    },
+    {
+      "id": "morning_sky",
+      "file": "morning_sky.ogg",
+      "title": "Morning Sky",
+      "by": "Centurion_of_war",
+      "gain_db": -1.6,
+      "page": "https://opengameart.org/content/morning-sky"
+    },
+    {
+      "id": "catmint",
+      "file": "catmint.ogg",
+      "title": "Catmint",
+      "by": "Kistol",
+      "gain_db": -1.0,
+      "page": "https://opengameart.org/content/catmint"
+    },
+    {
+      "id": "daisy",
+      "file": "daisy.ogg",
+      "title": "Daisy",
+      "by": "Kistol",
+      "gain_db": 1.2,
+      "page": "https://opengameart.org/content/daisy"
+    },
+    {
+      "id": "another_august",
+      "file": "another_august.ogg",
+      "title": "Another August",
+      "by": "cynicmusic",
+      "gain_db": -1.2,
+      "page": "https://opengameart.org/content/another-august"
+    }
+  ],
+  "day": [
+    "bluebonnet",
+    "sunset_plains",
+    "forget_me_not",
+    "morning_sky"
+  ],
+  "night": [
+    "catmint",
+    "another_august",
+    "daisy"
+  ]
+}

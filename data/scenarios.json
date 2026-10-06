@@ -1,0 +1,294 @@
+{
+  "scenarios": [
+    {
+      "id": "free_play",
+      "name": "Free Play",
+      "money": 30000,
+      "mode": "free",
+      "map": {
+        "w": 128,
+        "h": 128,
+        "holes": 0,
+        "biome": "lush",
+        "land": "starter"
+      },
+      "blurb": "Empty land, a clubhouse, a healthy bank balance and no deadlines. Lay out every hole yourself and buy the land round you as the club grows.",
+      "goals": [],
+      "pick_biome": true
+    },
+    {
+      "id": "three_holes",
+      "name": "Three Holes",
+      "hidden": true,
+      "money": 30000,
+      "mode": "free",
+      "map": {
+        "w": 128,
+        "h": 128,
+        "holes": 3,
+        "biome": "lush",
+        "land": "starter"
+      },
+      "blurb": "The old free play: a three-hole starter course. Kept for the tests and the measuring scripts, not shown on the start screen.",
+      "goals": [],
+      "pick_biome": true
+    },
+    {
+      "id": "sandbox",
+      "name": "Sandbox",
+      "money": 5000000,
+      "mode": "free",
+      "map": {
+        "w": 160,
+        "h": 160,
+        "holes": 0,
+        "biome": "lush",
+        "land": "all"
+      },
+      "blurb": "Empty land and a bottomless wallet. For designers who just want to draw golf holes.",
+      "goals": [],
+      "pick_biome": true
+    },
+    {
+      "id": "first_tee",
+      "name": "First Tee",
+      "money": 12000,
+      "mode": "challenge",
+      "map": {
+        "w": 128,
+        "h": 128,
+        "holes": 3,
+        "biome": "lush",
+        "land": "starter"
+      },
+      "deadline": {
+        "year": 2,
+        "month": 8
+      },
+      "blurb": "Your uncle left you three holes and a mower. Grow it into a proper little club.",
+      "goals": [
+        {
+          "type": "holes",
+          "value": 6,
+          "text": "Have 6 holes open"
+        },
+        {
+          "type": "rating",
+          "value": 60,
+          "text": "Reach a course rating of 60"
+        }
+      ]
+    },
+    {
+      "id": "weed_patch",
+      "name": "The Weed Patch",
+      "money": 7000,
+      "mode": "challenge",
+      "map": {
+        "w": 128,
+        "h": 128,
+        "holes": 5,
+        "neglect": 0.8,
+        "biome": "lush",
+        "land": "starter"
+      },
+      "deadline": {
+        "year": 2,
+        "month": 8
+      },
+      "blurb": "Five holes, no staff, and more dandelions than grass. The gophers have unionised.",
+      "goals": [
+        {
+          "type": "condition",
+          "value": 85,
+          "text": "Bring course condition up to 85%"
+        },
+        {
+          "type": "satisfaction",
+          "value": 65,
+          "text": "Reach 65% golfer satisfaction"
+        },
+        {
+          "type": "rounds",
+          "value": 150,
+          "text": "Host 150 rounds of golf"
+        }
+      ]
+    },
+    {
+      "id": "monsoon",
+      "name": "Monsoon Links",
+      "money": 15000,
+      "mode": "challenge",
+      "map": {
+        "w": 128,
+        "h": 128,
+        "holes": 4,
+        "biome": "highlands",
+        "land": "starter",
+        "coast": true
+      },
+      "climate": {
+        "rain": 2.2,
+        "wind": 1.5
+      },
+      "deadline": {
+        "year": 3,
+        "month": 8
+      },
+      "blurb": "A windswept highland coast where it rains sideways. Golfers hate wet socks. Make money anyway.",
+      "goals": [
+        {
+          "type": "money",
+          "value": 45000,
+          "text": "Have $45,000 in the bank"
+        },
+        {
+          "type": "holes",
+          "value": 7,
+          "text": "Have 7 holes open"
+        }
+      ]
+    },
+    {
+      "id": "open_road",
+      "name": "Road to the Open",
+      "money": 40000,
+      "mode": "challenge",
+      "map": {
+        "w": 176,
+        "h": 176,
+        "holes": 0,
+        "biome": "lush",
+        "land": "starter"
+      },
+      "deadline": {
+        "year": 4,
+        "month": 8
+      },
+      "blurb": "A big empty property and a bigger ambition: put this town on the golfing map.",
+      "goals": [
+        {
+          "type": "holes",
+          "value": 9,
+          "text": "Have 9 holes open"
+        },
+        {
+          "type": "tournament",
+          "value": "state",
+          "text": "Host a State Open"
+        },
+        {
+          "type": "rating",
+          "value": 70,
+          "text": "Reach a course rating of 70"
+        }
+      ]
+    },
+    {
+      "id": "highland_fling",
+      "name": "Highland Fling",
+      "money": 20000,
+      "mode": "challenge",
+      "map": {
+        "w": 128,
+        "h": 128,
+        "holes": 3,
+        "biome": "highlands",
+        "land": "starter"
+      },
+      "deadline": {
+        "year": 3,
+        "month": 8
+      },
+      "blurb": "Three holes clinging to a mountainside. The views are free. Everything else is uphill.",
+      "goals": [
+        {
+          "type": "holes",
+          "value": 7,
+          "text": "Have 7 holes open"
+        },
+        {
+          "type": "satisfaction",
+          "value": 62,
+          "text": "Reach 62% golfer satisfaction"
+        },
+        {
+          "type": "members",
+          "value": 15,
+          "text": "Sign up 15 club members"
+        }
+      ]
+    },
+    {
+      "id": "mirage",
+      "name": "Mirage Springs",
+      "money": 22000,
+      "mode": "challenge",
+      "map": {
+        "w": 128,
+        "h": 128,
+        "holes": 3,
+        "biome": "desert",
+        "land": "starter"
+      },
+      "deadline": {
+        "year": 3,
+        "month": 8
+      },
+      "blurb": "A green oasis in the middle of nowhere. The grass wants water, the golfers want drinks, and the sun wants everyone dead.",
+      "goals": [
+        {
+          "type": "condition",
+          "value": 80,
+          "text": "Keep course condition at 80%"
+        },
+        {
+          "type": "money",
+          "value": 45000,
+          "text": "Have $45,000 in the bank"
+        },
+        {
+          "type": "members",
+          "value": 20,
+          "text": "Sign up 20 club members"
+        }
+      ]
+    },
+    {
+      "id": "mount_bogey",
+      "name": "Mount Bogey",
+      "money": 28000,
+      "mode": "challenge",
+      "map": {
+        "w": 128,
+        "h": 128,
+        "holes": 3,
+        "biome": "volcanic",
+        "land": "starter"
+      },
+      "deadline": {
+        "year": 3,
+        "month": 8
+      },
+      "blurb": "Golf on the slopes of a live volcano. The hazards are lava, the insurance is void, and the mountain redesigns your course whenever it likes.",
+      "goals": [
+        {
+          "type": "holes",
+          "value": 6,
+          "text": "Have 6 holes open"
+        },
+        {
+          "type": "eruptions",
+          "value": 2,
+          "text": "Stay open through 2 eruptions"
+        },
+        {
+          "type": "rating",
+          "value": 55,
+          "text": "Reach a course rating of 55"
+        }
+      ]
+    }
+  ]
+}

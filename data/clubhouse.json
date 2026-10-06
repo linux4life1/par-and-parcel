@@ -1,0 +1,17 @@
+{
+	"_about": "The clubhouse ladder. A club can only lay out as many holes as its clubhouse allows ('holes'). Each step up costs 'cost' and asks for a membership and a reputation first: 'members' in all, 'tier_count' of them at the named 'tier' or better, and a course 'rating'. Paced against a well-run course adding a hole every three months (see tests): the first step comes in the first year, the pro shop in the second, the grand clubhouse in the third. The two top steps ask for Silver and Gold members, which only a club with a high rating ever gets.",
+	"levels": [
+		{"id": "starter", "name": "Starter clubhouse", "holes": 3,
+			"blurb": "A hut with a kettle. Three holes is all a club this size can look after."},
+		{"id": "clubhouse", "name": "Clubhouse", "holes": 6, "cost": 5000, "members": 4, "rating": 40,
+			"blurb": "A proper clubhouse with a bar and a locker room. Room for six holes."},
+		{"id": "pro_shop", "name": "Clubhouse with a pro shop", "holes": 9, "cost": 12000, "members": 10, "tier": "advanced", "tier_count": 2, "rating": 45,
+			"blurb": "A pro shop and a members' lounge. Nine holes."},
+		{"id": "grand", "name": "Grand clubhouse", "holes": 12, "cost": 20000, "members": 16, "tier": "bronze", "tier_count": 2, "rating": 48,
+			"blurb": "A dining room, a terrace and a trophy cabinet. Twelve holes."},
+		{"id": "country_club", "name": "Country club", "holes": 15, "cost": 35000, "members": 24, "tier": "silver", "tier_count": 2, "rating": 52,
+			"blurb": "A ballroom and a committee that argues about the dress code. Fifteen holes."},
+		{"id": "championship", "name": "Championship clubhouse", "holes": 18, "cost": 60000, "members": 36, "tier": "gold", "tier_count": 2, "rating": 60,
+			"blurb": "Fit to host anything. The full eighteen."}
+	]
+}

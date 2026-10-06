@@ -1,0 +1,223 @@
+{
+  "skills": [
+    {
+      "id": "frugal",
+      "branch": "manager",
+      "col": 0,
+      "row": 0,
+      "name": "Sharp Pencil",
+      "cost": 1,
+      "req": [],
+      "fx": {
+        "wage": -0.1
+      },
+      "desc": "Staff wages cost 10% less."
+    },
+    {
+      "id": "green_thumb",
+      "branch": "manager",
+      "col": 0,
+      "row": 1,
+      "name": "Green Thumb",
+      "cost": 1,
+      "req": [],
+      "fx": {
+        "weed_growth": -0.25
+      },
+      "desc": "Weeds appear and spread 25% slower."
+    },
+    {
+      "id": "word_of_mouth",
+      "branch": "manager",
+      "col": 0,
+      "row": 2,
+      "name": "Word of Mouth",
+      "cost": 1,
+      "req": [],
+      "fx": {
+        "arrivals": 0.15
+      },
+      "desc": "15% more golfers turn up."
+    },
+    {
+      "id": "crew_chief",
+      "branch": "manager",
+      "col": 1,
+      "row": 0,
+      "name": "Crew Chief",
+      "cost": 2,
+      "req": [
+        "frugal"
+      ],
+      "fx": {
+        "staff_eff": 0.25
+      },
+      "desc": "All staff work 25% faster."
+    },
+    {
+      "id": "insurance",
+      "branch": "manager",
+      "col": 2,
+      "row": 0,
+      "name": "Liability Insurance",
+      "cost": 2,
+      "req": [
+        "crew_chief"
+      ],
+      "fx": {
+        "lawsuit": -1.0
+      },
+      "desc": "Golfers hit by balls can no longer sue you."
+    },
+    {
+      "id": "tournament_director",
+      "branch": "manager",
+      "col": 3,
+      "row": 0,
+      "name": "Tournament Director",
+      "cost": 3,
+      "req": [
+        "insurance"
+      ],
+      "fx": {
+        "tourney_income": 0.25
+      },
+      "desc": "Tournaments earn 25% more."
+    },
+    {
+      "id": "drainage",
+      "branch": "manager",
+      "col": 1,
+      "row": 1,
+      "name": "French Drains",
+      "cost": 2,
+      "req": [
+        "green_thumb"
+      ],
+      "fx": {
+        "drainage": 0.4
+      },
+      "desc": "The course dries out 40% faster after rain."
+    },
+    {
+      "id": "pest_whisperer",
+      "branch": "manager",
+      "col": 2,
+      "row": 1,
+      "name": "Pest Whisperer",
+      "cost": 2,
+      "req": [
+        "drainage"
+      ],
+      "fx": {
+        "pest_rate": -0.4
+      },
+      "desc": "40% fewer pest outbreaks."
+    },
+    {
+      "id": "agronomist",
+      "branch": "manager",
+      "col": 3,
+      "row": 1,
+      "name": "Master Agronomist",
+      "cost": 3,
+      "req": [
+        "pest_whisperer"
+      ],
+      "fx": {
+        "wear": -0.3
+      },
+      "desc": "Turf wears out 30% slower."
+    },
+    {
+      "id": "hospitality",
+      "branch": "manager",
+      "col": 1,
+      "row": 2,
+      "name": "Warm Welcome",
+      "cost": 2,
+      "req": [
+        "word_of_mouth"
+      ],
+      "fx": {
+        "welcome": 6.0
+      },
+      "desc": "Golfers arrive in a better mood."
+    },
+    {
+      "id": "retail",
+      "branch": "manager",
+      "col": 2,
+      "row": 2,
+      "name": "Retail Therapy",
+      "cost": 2,
+      "req": [
+        "hospitality"
+      ],
+      "fx": {
+        "retail": 0.3
+      },
+      "desc": "Pro shop and drink stand income up 30%."
+    },
+    {
+      "id": "premium",
+      "branch": "manager",
+      "col": 3,
+      "row": 2,
+      "name": "Five-Star Welcome",
+      "cost": 3,
+      "req": [
+        "retail"
+      ],
+      "fx": {
+        "generosity": 0.2
+      },
+      "desc": "Golfers pay 20% more for a hole they enjoyed."
+    },
+    {
+      "id": "rolodex",
+      "branch": "manager",
+      "col": 2,
+      "row": 3,
+      "name": "Celebrity Rolodex",
+      "cost": 3,
+      "req": [
+        "hospitality"
+      ],
+      "fx": {
+        "celebrity": 1.0
+      },
+      "desc": "Celebrities visit twice as often."
+    },
+    {
+      "id": "membership_drive",
+      "branch": "manager",
+      "col": 1,
+      "row": 3,
+      "name": "Membership Drive",
+      "cost": 2,
+      "req": [
+        "word_of_mouth"
+      ],
+      "fx": {
+        "membership": 0.3
+      },
+      "desc": "Happy golfers are 30% more likely to join the club."
+    },
+    {
+      "id": "concierge",
+      "branch": "manager",
+      "col": 3,
+      "row": 3,
+      "name": "Concierge",
+      "cost": 2,
+      "req": [
+        "rolodex"
+      ],
+      "fx": {
+        "concierge": 1.0
+      },
+      "desc": "Members tell you what would make them upgrade after one visit instead of two."
+    }
+  ]
+}

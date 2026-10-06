@@ -1,0 +1,366 @@
+{
+	"biomes": [
+		{
+			"id": "lush",
+			"name": "Lush Parkland",
+			"hazard": "Water",
+			"lava": false,
+			"blurb": "Soft green hills, old oaks and quiet ponds. Regular rain keeps it green, and keeps the weeds coming.",
+			"gen": {
+				"amp": 5.5,
+				"freq": 0.011,
+				"bump": 0.5,
+				"deep": 0.34,
+				"trees": 0.3,
+				"mix": 0.4,
+				"bushes": 0.012,
+				"rocks": 0.0,
+				"ponds": 2
+			},
+			"climate": {
+				"rain": 1.0,
+				"wind": 1.0,
+				"temp": 0.0,
+				"dry": 1.0,
+				"thirst": 1.0
+			},
+			"turf": {"autumn": 1.0, 
+				"wear": 1.0,
+				"weeds": 1.0,
+				"pests": 1.0,
+				"wild_rough": false
+			},
+			"palette": {
+				"rough": "476f2e",
+				"fairway": "5e9a3a",
+				"green": "76b14c",
+				"tee": "6aa643",
+				"bunker": "d9c28a",
+				"water": "1a4d80",
+				"water2": "3885b3",
+				"deep": "3b5a26",
+				"path": "b3a894",
+				"rock": "7a7a76",
+				"ash": "4a4541",
+				"apron": "213821",
+				"skirt": "40332a"
+			},
+			"sky": {
+				"top": "336bc7",
+				"horizon": "9ec2e6"
+			},
+			"objects": {
+				"1": {
+					"name": "Oak tree",
+					"mesh": "oak"
+				},
+				"2": {
+					"name": "Pine tree",
+					"mesh": "pine"
+				},
+				"3": {
+					"name": "Bush",
+					"mesh": "bush"
+				},
+				"11": {
+					"name": "Boulder",
+					"mesh": "boulder"
+				},
+				"19": {
+					"name": "Old windmill",
+					"mesh": "windmill"
+				}
+			},
+			"layers": [
+				0,
+				1,
+				1,
+				1,
+				2,
+				2,
+				5,
+				4,
+				3,
+				6
+			],
+			"grass": [
+				0.5,
+				1.0,
+				1.0
+			]
+		},
+		{
+			"id": "highlands",
+			"name": "Highlands",
+			"hazard": "Water",
+			"lava": false,
+			"blurb": "Steep hills of heather, cold lochs and boulders. It is wet, and the wind never stops. Big slopes make every bounce an adventure.",
+			"gen": {
+				"amp": 12.0,
+				"freq": 0.013,
+				"bump": 1.4,
+				"deep": 0.1,
+				"trees": 0.07,
+				"mix": 0.75,
+				"bushes": 0.03,
+				"rocks": 0.012,
+				"ponds": 3
+			},
+			"climate": {
+				"rain": 1.5,
+				"wind": 1.6,
+				"temp": -6.0,
+				"dry": 0.8,
+				"thirst": 0.8
+			},
+			"turf": {"autumn": 1.0, 
+				"wear": 0.9,
+				"weeds": 0.8,
+				"pests": 0.7,
+				"wild_rough": false
+			},
+			"palette": {
+				"rough": "5d7339",
+				"fairway": "5f9440",
+				"green": "78ae4f",
+				"tee": "6ba247",
+				"bunker": "c9b88a",
+				"water": "1c3f5e",
+				"water2": "3a6f8f",
+				"deep": "6a5a5e",
+				"path": "a39c8e",
+				"rock": "86867f",
+				"ash": "4a4541",
+				"apron": "2c3327",
+				"skirt": "3a3530"
+			},
+			"sky": {
+				"top": "4a6fa5",
+				"horizon": "b5c4d4"
+			},
+			"objects": {
+				"1": {
+					"name": "Birch",
+					"mesh": "birch"
+				},
+				"2": {
+					"name": "Scots pine",
+					"mesh": "scots"
+				},
+				"3": {
+					"name": "Gorse",
+					"mesh": "gorse"
+				},
+				"11": {
+					"name": "Boulder",
+					"mesh": "boulder"
+				},
+				"19": {
+					"name": "Standing stones",
+					"mesh": "stones"
+				}
+			},
+			"layers": [
+				0,
+				1,
+				1,
+				1,
+				2,
+				2,
+				5,
+				4,
+				3,
+				6
+			],
+			"grass": [
+				0.55,
+				1.15,
+				1.0
+			]
+		},
+		{
+			"id": "desert",
+			"name": "Desert",
+			"hazard": "Water",
+			"lava": false,
+			"blurb": "Emerald fairways laid over sand and red rock. It almost never rains: the ground is hard and fast, golfers are always thirsty, and grass is costly to keep alive.",
+			"gen": {
+				"amp": 4.5,
+				"freq": 0.016,
+				"bump": 1.5,
+				"deep": 0.02,
+				"trees": 0.035,
+				"mix": 0.7,
+				"bushes": 0.02,
+				"rocks": 0.015,
+				"ponds": 1
+			},
+			"climate": {
+				"rain": 0.12,
+				"wind": 0.9,
+				"temp": 11.0,
+				"dry": 1.8,
+				"thirst": 1.6
+			},
+			"turf": {"autumn": 0.25, 
+				"wear": 1.6,
+				"weeds": 0.3,
+				"pests": 0.6,
+				"wild_rough": true
+			},
+			"palette": {
+				"rough": "c9a970",
+				"fairway": "55a243",
+				"green": "72bb52",
+				"tee": "64ae4a",
+				"bunker": "f0e2b6",
+				"water": "1b6a8f",
+				"water2": "49b5c9",
+				"deep": "b07d4c",
+				"path": "9a8f80",
+				"rock": "9a6648",
+				"ash": "4a4541",
+				"apron": "8a6a44",
+				"skirt": "6a4a30"
+			},
+			"sky": {
+				"top": "2f7fd6",
+				"horizon": "ead6b0"
+			},
+			"objects": {
+				"1": {
+					"name": "Palm tree",
+					"mesh": "palm"
+				},
+				"2": {
+					"name": "Saguaro cactus",
+					"mesh": "cactus"
+				},
+				"3": {
+					"name": "Desert scrub",
+					"mesh": "scrub"
+				},
+				"11": {
+					"name": "Red rock",
+					"mesh": "boulder_red"
+				},
+				"19": {
+					"name": "Sandstone arch",
+					"mesh": "arch"
+				}
+			},
+			"layers": [
+				7,
+				1,
+				1,
+				1,
+				2,
+				2,
+				8,
+				4,
+				3,
+				6
+			],
+			"grass": [
+				0.0,
+				0.75,
+				0.45
+			]
+		},
+		{
+			"id": "volcanic",
+			"name": "Volcanic",
+			"hazard": "Lava",
+			"lava": true,
+			"blurb": "Black rock, hot ash and a live volcano. The hazards are boiling lava. Every so often the mountain erupts and rearranges your course.",
+			"gen": {
+				"amp": 5.0,
+				"freq": 0.014,
+				"bump": 1.0,
+				"deep": 0.08,
+				"trees": 0.05,
+				"mix": 0.5,
+				"bushes": 0.02,
+				"rocks": 0.02,
+				"ponds": 2,
+				"volcano": [
+					0.8,
+					0.4,
+					0.16,
+					48.0
+				]
+			},
+			"climate": {
+				"rain": 0.9,
+				"wind": 1.0,
+				"temp": 7.0,
+				"dry": 1.2,
+				"thirst": 1.3
+			},
+			"turf": {"autumn": 0.55, 
+				"wear": 1.2,
+				"weeds": 0.7,
+				"pests": 0.5,
+				"wild_rough": true
+			},
+			"palette": {
+				"rough": "4b4a3c",
+				"fairway": "4d9a3c",
+				"green": "68b44c",
+				"tee": "5aa844",
+				"bunker": "2e2b2b",
+				"water": "5a1205",
+				"water2": "ff8a1a",
+				"deep": "2b2726",
+				"path": "7a7068",
+				"rock": "3a3534",
+				"ash": "5c534c",
+				"apron": "1a1716",
+				"skirt": "241d1a"
+			},
+			"sky": {
+				"top": "4c5270",
+				"horizon": "dba77c"
+			},
+			"objects": {
+				"1": {
+					"name": "Palm tree",
+					"mesh": "palm"
+				},
+				"2": {
+					"name": "Charred tree",
+					"mesh": "deadtree"
+				},
+				"3": {
+					"name": "Fern",
+					"mesh": "fern"
+				},
+				"11": {
+					"name": "Lava rock",
+					"mesh": "boulder_black"
+				},
+				"19": {
+					"name": "Tiki statue",
+					"mesh": "tiki"
+				}
+			},
+			"layers": [
+				7,
+				1,
+				1,
+				1,
+				2,
+				9,
+				9,
+				4,
+				9,
+				6
+			],
+			"grass": [
+				0.0,
+				0.0,
+				0.0
+			]
+		}
+	]
+}

@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.antigravity.parandparcel</id>
+  <name>Par &amp; Parcel</name>
+  <summary>Build a golf course, run the club, play the round</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary</project_license>
+  <developer id="com.antigravity"><name>Antigravity</name></developer>
+  <description>
+    <p>Par &amp; Parcel is a golf course tycoon. Paint fairways and greens, shape the land, lay out holes and buy the parcels round you. Golfers with personalities turn up, play, pay what each hole was worth to them, and come back as members with stories of their own. Hire staff, host tournaments, and take your own clubs out on the course you built with a proper three-click swing.</p>
+    <p>Four biomes, a day and night cycle, weather and wind that bend ball flight, seasons that turn the trees, and full controller support.</p>
+  </description>
+  <launchable type="desktop-id">com.antigravity.parandparcel.desktop</launchable>
+  <url type="homepage">https://github.com/linux4life1/par-and-parcel</url>
+  <url type="bugtracker">https://github.com/linux4life1/par-and-parcel/issues</url>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/linux4life1/par-and-parcel/main/docs/screenshots/course.jpg</image>
+      <caption>The course from above</caption>
+    </screenshot>
+    <screenshot>
+      <image>https://raw.githubusercontent.com/linux4life1/par-and-parcel/main/docs/screenshots/tee.jpg</image>
+      <caption>A golfer on the tee</caption>
+    </screenshot>
+  </screenshots>
+  <content_rating type="oars-1.1" />
+  <releases>
+    <release version="0.1.0" date="2026-10-06" />
+  </releases>
+  <supports><control>pointing</control><control>keyboard</control><control>gamepad</control></supports>
+  <requires><display_length compare="ge">1280</display_length></requires>
+</component>

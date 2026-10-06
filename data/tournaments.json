@@ -1,0 +1,89 @@
+{
+  "tournaments": [
+    {
+      "id": "club",
+      "name": "Club Championship",
+      "min_holes": 3,
+      "min_rating": 35,
+      "field": 8,
+      "purse": 800,
+      "sponsor": 1500,
+      "gate": 18,
+      "prestige": 3,
+      "skill": [
+        0.55,
+        0.75
+      ],
+      "lead_days": 8,
+      "blurb": "The best local players. A low-stakes first event."
+    },
+    {
+      "id": "regional",
+      "name": "Regional Amateur Open",
+      "min_holes": 6,
+      "min_rating": 50,
+      "field": 12,
+      "purse": 3000,
+      "sponsor": 5000,
+      "gate": 45,
+      "prestige": 6,
+      "skill": [
+        0.68,
+        0.85
+      ],
+      "lead_days": 10,
+      "blurb": "Top amateurs from across the region, and the local paper."
+    },
+    {
+      "id": "state",
+      "name": "State Open",
+      "min_holes": 9,
+      "min_rating": 62,
+      "field": 16,
+      "purse": 9000,
+      "sponsor": 14000,
+      "gate": 110,
+      "prestige": 10,
+      "skill": [
+        0.78,
+        0.92
+      ],
+      "lead_days": 12,
+      "blurb": "Club pros and rising stars. Regional television shows up."
+    },
+    {
+      "id": "tour",
+      "name": "Pro Tour Invitational",
+      "min_holes": 12,
+      "min_rating": 75,
+      "field": 20,
+      "purse": 30000,
+      "sponsor": 48000,
+      "gate": 300,
+      "prestige": 18,
+      "skill": [
+        0.88,
+        0.97
+      ],
+      "lead_days": 14,
+      "blurb": "Touring professionals. A bad course gets roasted on national TV."
+    },
+    {
+      "id": "major",
+      "name": "The Grand Masters Cup",
+      "min_holes": 18,
+      "min_rating": 88,
+      "field": 24,
+      "purse": 100000,
+      "sponsor": 170000,
+      "gate": 750,
+      "prestige": 30,
+      "skill": [
+        0.93,
+        0.99
+      ],
+      "lead_days": 16,
+      "blurb": "The biggest event in golf. The whole world is watching."
+    }
+  ]
+}

@@ -1,0 +1,38 @@
+{
+  "clubs": [
+    {"id": "driver", "name": "Driver", "cat": "woods", "speed": 74.7, "loft": 12.0, "lift": 0.15, "spin": 0.05},
+    {"id": "3w", "name": "3 Wood", "cat": "woods", "speed": 68.0, "loft": 13.0, "lift": 0.17, "spin": 0.10},
+    {"id": "5w", "name": "5 Wood", "cat": "woods", "speed": 62.5, "loft": 14.5, "lift": 0.19, "spin": 0.15},
+    {"id": "4i", "name": "4 Iron", "cat": "irons", "speed": 59.4, "loft": 15.0, "lift": 0.20, "spin": 0.20},
+    {"id": "5i", "name": "5 Iron", "cat": "irons", "speed": 56.1, "loft": 16.0, "lift": 0.21, "spin": 0.25},
+    {"id": "6i", "name": "6 Iron", "cat": "irons", "speed": 52.7, "loft": 17.5, "lift": 0.22, "spin": 0.30},
+    {"id": "7i", "name": "7 Iron", "cat": "irons", "speed": 49.3, "loft": 19.0, "lift": 0.23, "spin": 0.38},
+    {"id": "8i", "name": "8 Iron", "cat": "irons", "speed": 45.6, "loft": 21.5, "lift": 0.24, "spin": 0.46},
+    {"id": "9i", "name": "9 Iron", "cat": "irons", "speed": 41.9, "loft": 24.0, "lift": 0.25, "spin": 0.55},
+    {"id": "pw", "name": "Pitching Wedge", "cat": "wedges", "speed": 37.9, "loft": 27.0, "lift": 0.26, "spin": 0.65},
+    {"id": "sw", "name": "Sand Wedge", "cat": "wedges", "speed": 31.4, "loft": 31.0, "lift": 0.27, "spin": 0.80},
+    {"id": "putter", "name": "Putter", "cat": "putter", "speed": 0.0, "loft": 0.0, "lift": 0.0, "spin": 0.0}
+  ],
+  "categories": [
+    {"id": "woods", "name": "Woods", "share": 0.40},
+    {"id": "irons", "name": "Irons", "share": 0.35},
+    {"id": "wedges", "name": "Wedges", "share": 0.15},
+    {"id": "putter", "name": "Putter", "share": 0.10}
+  ],
+  "brands": [
+    {"id": "rental", "name": "Clubhouse Rentals", "style": "Balanced", "power": 1.0, "spread": 1.0, "forgive": 1.0, "wind": 1.0, "putt": 1.0, "price": 0,
+     "blurb": "Scuffed, mismatched, and free. They get the ball airborne. Usually."},
+    {"id": "bogey", "name": "Bogey Brothers", "style": "Forgiving", "power": 0.98, "spread": 0.95, "forgive": 0.4, "wind": 1.0, "putt": 1.05, "price": 700,
+     "blurb": "Huge sweet spots for the rest of us. Mishits are far less likely."},
+    {"id": "thunderhead", "name": "Thunderhead", "style": "Power", "power": 1.09, "spread": 1.22, "forgive": 1.15, "wind": 1.0, "putt": 0.95, "price": 1400,
+     "blurb": "Swing hard, apologise later. Big distance, wide misses."},
+    {"id": "pinpoint", "name": "Pinpoint", "style": "Accuracy", "power": 0.95, "spread": 0.72, "forgive": 0.9, "wind": 1.0, "putt": 1.2, "price": 1400,
+     "blurb": "Fairways and greens all day. You give up yards to find them."},
+    {"id": "marlowe", "name": "Marlowe & Finch", "style": "Classic", "power": 1.03, "spread": 0.92, "forgive": 0.95, "wind": 1.0, "putt": 1.1, "price": 1100,
+     "blurb": "Old-money blades with a little of everything."},
+    {"id": "kestrel", "name": "Kestrel Aero", "style": "Wind cheater", "power": 1.05, "spread": 1.0, "forgive": 1.0, "wind": 0.8, "putt": 1.0, "price": 1800,
+     "blurb": "A low, boring flight that shrugs off a crosswind."},
+    {"id": "apex", "name": "Apex Tour Forged", "style": "Tour", "power": 1.08, "spread": 0.8, "forgive": 1.5, "wind": 0.95, "putt": 1.25, "price": 3200,
+     "blurb": "Long and precise, and brutal on a bad swing. For players only."}
+  ]
+}

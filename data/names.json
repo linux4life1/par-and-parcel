@@ -1,0 +1,388 @@
+{
+  "first": [
+    "Ava",
+    "Ben",
+    "Carlos",
+    "Dana",
+    "Eli",
+    "Fatima",
+    "Gus",
+    "Hana",
+    "Ivan",
+    "Jules",
+    "Kofi",
+    "Lena",
+    "Marcus",
+    "Nia",
+    "Omar",
+    "Priya",
+    "Quinn",
+    "Rosa",
+    "Sam",
+    "Tariq",
+    "Uma",
+    "Vince",
+    "Wendy",
+    "Xavier",
+    "Yuki",
+    "Zoe",
+    "Arlo",
+    "Beatrix",
+    "Cyrus",
+    "Delphine",
+    "Emeka",
+    "Freya",
+    "Gideon",
+    "Harriet",
+    "Idris",
+    "Joni",
+    "Kasper",
+    "Lupita",
+    "Mateo",
+    "Noor",
+    "Otis",
+    "Paloma",
+    "Reggie",
+    "Saoirse",
+    "Theo",
+    "Ursula",
+    "Viktor",
+    "Winnie",
+    "Yara",
+    "Zeke",
+    "Bram",
+    "Cleo",
+    "Dev",
+    "Esme",
+    "Finn",
+    "Greta",
+    "Hugo",
+    "Ines",
+    "Jasper",
+    "Kiri"
+  ],
+  "last": [
+    "Abara",
+    "Bellweather",
+    "Castellanos",
+    "Dunmore",
+    "Eriksen",
+    "Fairbanks",
+    "Grimaldi",
+    "Hollis",
+    "Ishikawa",
+    "Jankowski",
+    "Kaplan",
+    "Lindqvist",
+    "Montrose",
+    "Nakamura",
+    "Okafor",
+    "Pemberton",
+    "Quigley",
+    "Rasmussen",
+    "Shankly",
+    "Tavares",
+    "Underhill",
+    "Voss",
+    "Whitlock",
+    "Yoon",
+    "Zielinski",
+    "Appleby",
+    "Birdwell",
+    "Chipman",
+    "Divot",
+    "Fescue",
+    "Greenwood",
+    "Hackett",
+    "Ironside",
+    "Mulligan",
+    "Parsons",
+    "Roughley",
+    "Sandoval",
+    "Teasdale",
+    "Wedgewood",
+    "Bunker",
+    "Driver",
+    "Fairway",
+    "Lipschitz",
+    "Puttnam",
+    "Slicer"
+  ],
+  "celebrities": [
+    {
+      "name": "Rex Thunderbolt",
+      "title": "action movie star",
+      "handle": "RexThunderbolt"
+    },
+    {
+      "name": "Luna Vex",
+      "title": "pop star",
+      "handle": "LunaVex"
+    },
+    {
+      "name": "Chef Margaux Bellamy",
+      "title": "celebrity chef",
+      "handle": "ChefMargaux"
+    },
+    {
+      "name": "DJ Fairway",
+      "title": "superstar DJ",
+      "handle": "DJFairway"
+    },
+    {
+      "name": "Senator Biff Hollings",
+      "title": "senator",
+      "handle": "SenHollings"
+    },
+    {
+      "name": "Coach Dot Abernathy",
+      "title": "championship basketball coach",
+      "handle": "CoachDot"
+    },
+    {
+      "name": "Sir Alistair Pym",
+      "title": "beloved nature presenter",
+      "handle": "SirAlistairPym"
+    },
+    {
+      "name": "Mika 'The Missile' Okonkwo",
+      "title": "retired striker",
+      "handle": "MikaMissile"
+    },
+    {
+      "name": "Tabitha Crane",
+      "title": "late-night talk show host",
+      "handle": "TabithaCrane"
+    },
+    {
+      "name": "Baron von Strudel",
+      "title": "eccentric billionaire",
+      "handle": "TheRealBaron"
+    }
+  ],
+  "course_first": [
+    "Pine",
+    "Willow",
+    "Eagle",
+    "Fox",
+    "Maple",
+    "Heron",
+    "Stone",
+    "Cedar",
+    "Otter",
+    "Thistle",
+    "Briar",
+    "Kestrel",
+    "Hazel",
+    "Lark"
+  ],
+  "course_second": [
+    "Hollow",
+    "Ridge",
+    "Creek",
+    "Meadow",
+    "Valley",
+    "Point",
+    "Bend",
+    "Glen",
+    "Run",
+    "Heath",
+    "Dunes",
+    "Landing"
+  ],
+  "course_suffix": [
+    "Golf Club",
+    "Golf Links",
+    "Country Club",
+    "Golf Course"
+  ],
+  "staff_first": [
+    "Mo",
+    "Pat",
+    "Ginny",
+    "Hank",
+    "Dolores",
+    "Skip",
+    "Marge",
+    "Earl",
+    "Trudy",
+    "Lou",
+    "Bernie",
+    "Flo",
+    "Walt",
+    "Peg",
+    "Sal",
+    "Dot"
+  ],
+  "pro_first": [
+    "Tiberius",
+    "Magnus",
+    "Anneliese",
+    "Rory",
+    "Sergio",
+    "Minjee",
+    "Collin",
+    "Nelly",
+    "Viktor",
+    "Lydia",
+    "Xander",
+    "Brooke",
+    "Hideki",
+    "Celine",
+    "Ludvig",
+    "Atthaya"
+  ],
+  "bodyparts": [
+    "shin",
+    "elbow",
+    "backside",
+    "shoulder",
+    "hat",
+    "knee",
+    "sandwich",
+    "ankle",
+    "hip",
+    "golf bag"
+  ],
+  "hole_names": [
+    "Purgatory",
+    "Magnolia",
+    "The Gauntlet",
+    "Long Tom",
+    "Widow's Walk",
+    "Lazy River",
+    "The Needle",
+    "Devil's Elbow",
+    "Honeymoon",
+    "Last Chance",
+    "The Quarry",
+    "Sleepy Hollow",
+    "Heartbreak",
+    "Old Faithful",
+    "The Chute",
+    "Cathedral",
+    "Amen",
+    "Postage Stamp",
+    "The Bear",
+    "Wishbone",
+    "Rabbit Run",
+    "Dragon's Tooth",
+    "Sunday Best",
+    "The Anvil",
+    "High Noon",
+    "Whisper",
+    "Double Trouble",
+    "The Saddle",
+    "Moonshine",
+    "Homeward"
+  ],
+  "rival_courses": [
+    [
+      "Pebble Shore Links",
+      96
+    ],
+    [
+      "Pinewood Valley",
+      94
+    ],
+    [
+      "Old Saint Andrew's",
+      92
+    ],
+    [
+      "Augustine National",
+      91
+    ],
+    [
+      "Cypress Bluff",
+      88
+    ],
+    [
+      "Royal Dunmore",
+      85
+    ],
+    [
+      "Shadow Mesa",
+      82
+    ],
+    [
+      "Whistling Reeds",
+      78
+    ],
+    [
+      "Bandit Dunes",
+      75
+    ],
+    [
+      "Torrey Cliffs",
+      71
+    ],
+    [
+      "Kiawah Sands",
+      67
+    ],
+    [
+      "Harbor Pines",
+      62
+    ],
+    [
+      "Spyglass Ridge",
+      57
+    ],
+    [
+      "Rustic Gulch Muni",
+      48
+    ],
+    [
+      "Mud Flats Golf & Tire",
+      34
+    ]
+  ],
+  "rival_pros": [
+    "Ace McSwing",
+    "Birdie Blackwood",
+    "Chip Longfellow",
+    "Lena 'Laser' Okoro",
+    "Duke Fairbanks",
+    "Sandy Trapp",
+    "Iron Mike Mulroney",
+    "Greta van Putt",
+    "Slick Rick Delgado",
+    "Dolores 'The Draw' Kim"
+  ],
+  "vips": {
+    "commissioner": {
+      "name": "Commissioner Ima Stickler",
+      "title": "county land commissioner",
+      "handle": "CommishStickler"
+    },
+    "heiress": {
+      "name": "Vanna Moneypenny",
+      "title": "heiress and patron of the arts",
+      "handle": "VannaM"
+    },
+    "investor": {
+      "name": "J.B. Bigwig",
+      "title": "chairman of Bigwig Capital",
+      "handle": "JBBigwig"
+    }
+  },
+  "animals": {
+    "lush": [
+      "deer",
+      "duck"
+    ],
+    "highlands": [
+      "sheep",
+      "stag"
+    ],
+    "desert": [
+      "roadrunner",
+      "tortoise"
+    ],
+    "volcanic": [
+      "goat",
+      "lizard"
+    ]
+  }
+}

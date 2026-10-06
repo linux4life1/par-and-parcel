@@ -1,0 +1,302 @@
+{
+  "arrive": [
+    "Tee time at {course}! Let's see what the fuss is about.",
+    "Skipped work for {course}. Do not tell my boss.",
+    "First round at {course} today. New glove, same slice.",
+    "Sun's out, clubs are out. {course}, here I come."
+  ],
+  "hole_in_one": [
+    "HOLE IN ONE on number {hole} at {course}!!! I am never washing this glove. Drinks are on me.",
+    "ACE!!! Hole {hole}! Somebody tell me somebody filmed that! #holeinone",
+    "I just made a hole in one on {hole} and nobody in my group was looking. Typical."
+  ],
+  "eagle": [
+    "Eagle on {hole}! I have peaked. It is all downhill from here.",
+    "Just eagled number {hole} at {course}. Framing the scorecard."
+  ],
+  "birdie": [
+    "Birdie on {hole}! {course} is officially my favourite course.",
+    "Rolled in a birdie on number {hole}. Feeling dangerous.",
+    "Birdie on {hole}. I'd like to thank my putter and nobody else."
+  ],
+  "blowup": [
+    "Made a {score} on hole {hole}. I would like to speak to the architect.",
+    "Hole {hole} at {course} just ate four of my golf balls and my will to live.",
+    "Carded a {score} on number {hole}. Golf was a mistake."
+  ],
+  "hit_victim": [
+    "Just took a golf ball to the {bodypart} on hole {hole} at {course}. Is that covered by the green fee? #FORE",
+    "PSA: nobody yells FORE at {course}. My {bodypart} can confirm.",
+    "Got absolutely drilled in the {bodypart} on number {hole}. I'm fine. The {bodypart} is not.",
+    "Hit by a ball at {course}. The guy waved. WAVED."
+  ],
+  "hit_hitter": [
+    "So I may have hit a stranger on hole {hole}. In my defence, they were standing where my slice goes.",
+    "Sincere apologies to the person on number {hole}. That one got away from me.",
+    "If anyone asks, that wasn't my ball on {hole}."
+  ],
+  "weeds": [
+    "Is {course} a golf course or a dandelion farm? Asking for my ball, which I can't find.",
+    "The weeds on hole {hole} are tall enough to need their own tee time.",
+    "Lovely wildflower meadow at {course}. Shame it's the fairway."
+  ],
+  "pests": [
+    "A gopher just stole my ball on {hole}. He looked me dead in the eye.",
+    "More mounds than a baseball tournament out here at {course}. Call an exterminator.",
+    "Putted straight into a gopher hole on {hole}. Do I count that?"
+  ],
+  "wet": [
+    "Hole {hole} is under water. I've seen drier swimming pools. Bring a snorkel to {course}.",
+    "Squelch. Squelch. Squelch. That's my round at {course} summed up.",
+    "My drive plugged so deep on {hole} it's probably in another country."
+  ],
+  "rain": [
+    "Soaked to the bone at {course}. Still better than the office.",
+    "Rain delay? No such thing. Playing through it at {course}."
+  ],
+  "storm": [
+    "Lightning over {course}. I am holding a metal stick. Leaving now.",
+    "Storm rolled in at {course}. Round over. Bar open?"
+  ],
+  "wait": [
+    "Been waiting on the {hole} tee at {course} long enough to grow a beard. Where's the marshal?",
+    "Five-hour round incoming at {course}. Pack a lunch.",
+    "The group ahead on hole {hole} is lining up putts like it's a major."
+  ],
+  "scenery": [
+    "Hole {hole} at {course} is gorgeous. Took more photos than shots.",
+    "The trees and flowers around number {hole} are something else. Great work, {course}.",
+    "Stopped mid-round just to look at hole {hole}. Stunning."
+  ],
+  "thirsty": [
+    "Dying of thirst on hole {hole}. Would pay anything for a lemonade. {course}, sell me a drink!",
+    "Not one drink stand at {course}. It's a golf course, not a desert trek."
+  ],
+  "drink": [
+    "Cold lemonade at the turn. {course} gets it."
+  ],
+  "review_good": [
+    "Just finished at {course}. {reason} Five stars, will be back.",
+    "What a day at {course}. {reason} Already booking my next round.",
+    "{course} is the real deal. {reason}"
+  ],
+  "review_bad": [
+    "Don't bother with {course}. {reason} One star.",
+    "Never again, {course}. {reason}",
+    "Wanted to love {course}. {reason} Disappointing."
+  ],
+  "review_mid": [
+    "{course} was fine. {reason}",
+    "Decent round at {course}. {reason} Might come back."
+  ],
+  "celebrity_arrive": [
+    "Hitting the links at {course} today. Be kind, I haven't played since the premiere.",
+    "Heard good things about {course}. Let's find out. No autographs on the greens please."
+  ],
+  "celebrity_spotted": [
+    "Is that {other} on hole {hole}?! At {course}?! I'm shaking.",
+    "Just watched {other} shank one into the trees at {course}. Celebrities, they're just like us.",
+    "{other} is playing {course} RIGHT NOW. Getting over there."
+  ],
+  "celebrity_happy": [
+    "Had the best time at {course}. What a gem. Telling everyone I know, which is everyone.",
+    "Okay {course}, you win. Gorgeous course, lovely people. I'll be back with a film crew."
+  ],
+  "celebrity_angry": [
+    "{course} was a disaster. {reason} My agent will be hearing about this.",
+    "Would not recommend {course} to my worst enemy. {reason}"
+  ],
+  "celebrity_hit": [
+    "I was just HIT BY A GOLF BALL at {course}. In the {bodypart}. Do they know who I am?"
+  ],
+  "tournament_announce": [
+    "Big news: {course} will host the {event}. Tickets on sale soon.",
+    "The {event} is coming to {course}. Clear your calendar."
+  ],
+  "tournament_start": [
+    "The {event} is under way at {course}. The pros are on the first tee."
+  ],
+  "tournament_winner": [
+    "{other} wins the {event} at {course} with a score of {score}. What a finish.",
+    "Your {event} champion: {other}, at {score}. {course} put on a show."
+  ],
+  "tournament_pro_good": [
+    "Really impressed by {course} this week. Great test of golf, perfect greens.",
+    "{course} is a proper course. Would love to see the tour come back."
+  ],
+  "tournament_pro_bad": [
+    "The greens at {course} were not tournament standard. Just being honest.",
+    "Tough week at {course}. Conditions were, let's say, agricultural."
+  ],
+  "clubhouse_up": [
+    "{course} has a new {name}. Word is they can run {holes} holes now.",
+    "Drove past {course}: that {name} did not build itself. Fancy."
+  ],
+  "new_hole": [
+    "{course} just opened a new hole. Number {hole}, par {score}. Who's coming?",
+    "Fresh grass alert: hole {hole} is open at {course}."
+  ],
+  "staff_hit": [
+    "Took a ball off the mower today. Third one this month. I need hazard pay."
+  ],
+  "weeds_unrest": [
+    "Nobody at {course} seems to care any more. The dandelions have noticed.",
+    "Grumpy golfers, unraked bunkers, divots everywhere. {course} is going to seed, literally."
+  ],
+  "oob_ball": [
+    "Hole {hole} at {course}: my ball is now somebody else's property. Literally.",
+    "Out of bounds on {hole}. Three off the tee. Lovely.",
+    "The white stakes on hole {hole} and I have had words."
+  ],
+  "water_ball": [
+    "Donated another ball to the pond on {hole}. The fish at {course} must have quite a collection.",
+    "Splash. Hole {hole}. Don't ask."
+  ],
+  "greens_bad": [
+    "The greens at {course} look like the surface of the moon. Hire a greenkeeper.",
+    "Putting on hole {hole} is like putting across a car park."
+  ],
+  "greens_good": [
+    "The greens at {course} are rolling like glass today.",
+    "Whoever looks after the greens at {course} deserves a raise."
+  ],
+  "heat": [
+    "It's a furnace out here at {course}. My grips are melting."
+  ],
+  "viral": [
+    "That video of the golfer getting beaned at {course} has two million views. I've watched it forty times.",
+    "Everyone's sharing the {course} clip. The slow-motion replay is art."
+  ],
+  "news_good": [
+    "Golf Weekly calls {course} 'a hidden gem'. Not hidden for long.",
+    "{course} just made the regional 'must-play' list."
+  ],
+  "news_bad": [
+    "Local paper asks: is {course} the worst-kept course in the county?"
+  ],
+  "eruption": [
+    "The volcano at {course} is erupting. Repeat: ERUPTING. Play is, somehow, continuing.",
+    "Seismographs just went off the chart at {course}. Golfers are advised to play through quickly."
+  ],
+  "eruption_end": [
+    "The eruption is over. A few of our holes have new features. We are open!",
+    "Mountain's finished. Fairways are a little crispy. Tee times available."
+  ],
+  "lava_bomb": [
+    "A flaming rock the size of a fridge just landed on hole {hole}. My playing partner asked for a free drop.",
+    "Nearly flattened by a lava bomb at {course}. Still made bogey.",
+    "Does my green fee at {course} cover being set on fire? Asking for my eyebrows."
+  ],
+  "lava_ball": [
+    "My ball rolled into the lava on {hole}. It made a little 'fwoosh'. That was a new one.",
+    "Lost another ball to the lava on hole {hole}. They don't even float.",
+    "The lava on number {hole} at {course} has eaten six of my balls. I respect it."
+  ],
+  "member_join": [
+    "Just signed up as a member at {course}. Best decision since I bought the big driver.",
+    "Officially a member at {course}. See you all on the first tee.",
+    "Joined {course} today. My wallet is lighter and my heart is full."
+  ],
+  "member_up": [
+    "Upgraded to {tier} at {course}. They've earned it.",
+    "{tier} member at {course} as of today. Feeling fancy."
+  ],
+  "member_quit": [
+    "I've resigned my membership at {course}. {reason}",
+    "Done with {course}. Membership cancelled. {reason}"
+  ],
+  "story_done": [
+    "{story} at {course} today. Best round ever.",
+    "{story}. {course}, you beauty."
+  ],
+  "home": [
+    "We bought a house on the course at {course}. I can see the {hole}th green from the kitchen.",
+    "New address: the fairway at {course}. I may never leave."
+  ],
+  "window": [
+    "Someone just put a golf ball through my kitchen window at {course}. I KNEW this would happen."
+  ],
+  "restroom": [
+    "Not one restroom on the whole course at {course}. I've seen things today."
+  ],
+  "hungry": [
+    "Four hours at {course} and nothing to eat. I'd have paid twenty dollars for a hot dog."
+  ],
+  "snack": [
+    "Hot dog at the turn at {course}. This is why I play golf."
+  ],
+  "cart_drinks": [
+    "The drinks cart at {course} appeared right when I needed it. An angel in a golf cart."
+  ],
+  "tantrum_toss": [
+    "That's it. My seven iron lives in the pond at {course} now.",
+    "Threw my putter into the trees on hole {hole}. Not proud. Not sorry."
+  ],
+  "tantrum_punch": [
+    "My playing partner just PUNCHED me on hole {hole} of {course}. Over a gimme."
+  ],
+  "tantrum_seen": [
+    "Just watched a grown adult throw a full golf bag into the lake at {course}. Incredible scenes."
+  ],
+  "ejected": [
+    "A marshal at {course} walked me off the course. Apparently you can't say that to a flagstick."
+  ],
+  "animal": [
+    "Saw a {animal} on hole {hole} at {course}. It had better course management than me.",
+    "A {animal} watched me four-putt at {course}. I could feel it judging."
+  ],
+  "top100": [
+    "Golf Enquirer has named hole {hole} at {course} one of the 100 best holes in golf.",
+    "Hole {hole} at {course} just made the Top 100. Book early."
+  ],
+  "top18": [
+    "'Great Golf Holes' has put number {hole} at {course} in its Dream Eighteen. That's as good as it gets."
+  ],
+  "rank": [
+    "Year-end rankings are out: {course} finishes number {rank} of {total}."
+  ],
+  "vip_happy": [
+    "A delightful afternoon at {course}. I shall be doing something about it.",
+    "Splendid course. My people will be in touch with {course}."
+  ],
+  "vip_angry": [
+    "I visited {course} today. I shall not be returning. {reason}"
+  ],
+  "match_win": [
+    "The owner of {course} just beat {other} in a money match. On their own course. Convenient."
+  ],
+  "match_loss": [
+    "{other} took the owner of {course} to the cleaners in a money match. Ouch."
+  ],
+  "celebrity_home": [
+    "I've bought a little place on the course at {course}. Try not to slice into my pool."
+  ],
+  "owner_wins": [
+    "The owner of {course} has won their own tournament. The trophy engraver did not have far to travel."
+  ],
+  "no_pay": [
+    "Hole {hole} at {course}? I left the green without reaching for my wallet. It hadn't earned it.",
+    "Not one cent for number {hole}. {course}, fix that hole.",
+    "They can whistle for a green fee on hole {hole}. What a slog."
+  ],
+  "tip": [
+    "Happily paid {fee} for hole {hole} at {course}. Worth every bit of it.",
+    "Number {hole} at {course} was so good I paid {fee} and thanked them for it.",
+    "Paid {fee} for one hole at {course} and I'd do it again tomorrow."
+  ],
+  "lucky_bounce": [
+    "Hit the {thing} on hole {hole} at {course} and it kicked onto the short grass. Meant every inch of it.",
+    "Golf gods owed me one. Off the {thing}, back in play on number {hole}.",
+    "That {thing} on hole {hole} at {course} is my new favourite playing partner."
+  ],
+  "night_golf": [
+    "Teeing off under the floodlights at {course}. Why doesn't every course do this?",
+    "Night golf on hole {hole} at {course}. The ball looks like a comet up there.",
+    "Nine o'clock at night and I'm still out at {course}. Don't wait up."
+  ],
+  "too_dark": [
+    "Played hole {hole} at {course} by the light of my phone. Couldn't see the ball, the flag or my own feet.",
+    "{course} goes pitch black after sunset. A few lights would be nice.",
+    "Lost the light on number {hole}. Played it anyway. Do not recommend."
+  ]
+}

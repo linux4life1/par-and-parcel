@@ -1,0 +1,844 @@
+class_name Sim
+extends RefCounted
+## The whole game world, with no rendering in it. The view watches this and
+## draws it; tests run it headless.
+
+signal toast(text: String, kind: String)
+signal dialog(d: Dictionary)
+signal golfer_added(g: Golfer)
+signal golfer_removed(g: Golfer)
+signal staff_changed()
+signal person_hit(pos: Vector3, hitter: Golfer)
+signal hole_finished(g: Golfer, hole_i: int, score: int)
+signal month_ended(label: String)
+signal scenario_ended(won: bool)
+signal popup(pos: Vector3, text: String, kind: String)
+## Something made a noise at a place. `id` names the sound (data/sounds.json)
+## and `power` is how hard, 0 to 1. The simulation only says what happened;
+## what it sounds like is the view's business.
+signal sound(id: String, pos: Vector3, power: float)
+signal match_accepted(offer: Dictionary)
+signal tournament_entry(play: bool)
+
+var db: DataDB
+var rng := RandomNumberGenerator.new()
+var course: Course
+var gear: Gear
+var weather := Weather.new()
+var grounds: Grounds
+var economy := Economy.new()
+var feed: Feed
+var skills: Skills
+var events: Events
+var tourney: Tournaments
+var scenario: Scenario
+var crew: Crew
+var visitors: Visitors
+var player: PlayerProfile
+var eruption: Eruption
+var nav: Nav
+var members: Members
+var stories: Stories          # the long golfer stories, see stories.gd
+var clubhouse_level := 0     # a rung of the ladder in data/clubhouse.json: it sets how many holes the club may have
+var difficulty := 2          # index into data/difficulty.json: 0 relaxed .. 4 brutal
+var gifts := {}              # object type -> free placements you are owed
+var homes := 0               # houses sold on the course
+var resort := {}             # resort buildings on the course: id -> true
+var lab: HoleLab
+var feats: Accomplishments
+var wildlife: Wildlife
+var rivals: Array = []       # [name, rating] of the courses you are ranked against
+var best_rank := 0           # best year-end ranking so far, 0 before the first
+var last_rank := 0
+var land_credits := 0        # parcels the county has agreed to let you have free
+var debt_years := 0
+var course_name := "Pine Hollow Golf Club"
+var biome: Dictionary = {}
+var time := 0.0
+var open := true
+var rating := 45.0          # 0..100 quality of the course as golfers see it
+var design := 0.0           # the layout's share of the rating
+var reputation := 30.0      # follows the rating slowly; drives how many turn up
+var buzz := 0.0             # short-lived publicity, good or bad
+var last_hit_time := -999.0
+var stats := {
+	"rounds": 0, "hits": 0, "player_hits": 0, "aces": 0, "holes_played": 0, "refusals": 0, "eruptions": 0, "stories": 0,
+	"holes_built": 0, "player_wins": 0, "matches_won": 0, "homes": 0, "celebrity_homes": 0, "tantrums": 0, "windows": 0, "ricochets": 0, "night_holes": 0,
+}
+var career: Career
+var clock := 7.0                # hour of the day, 0 to 24
+var clock_rate := 1.0           # 0 stops the clock (tests, screenshots)
+var told_dark := false          # the player has been told why golfers leave at dusk
+var _slow := 0.0
+var _day := 0
+var _scenery := {}
+
+
+func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
+	db = data
+	rng.seed = seed_value if seed_value != 0 else int(Time.get_unix_time_from_system())
+	gear = shared_gear if shared_gear != null else Gear.new(db)
+	skills = Skills.new(db)
+	feed = Feed.new(self)
+	grounds = Grounds.new(self)
+	crew = Crew.new(self)
+	visitors = Visitors.new(self)
+	events = Events.new(self)
+	tourney = Tournaments.new(self)
+	eruption = Eruption.new(self)
+	scenario = Scenario.new(scen)
+	difficulty = int(db.difficulty.get("default", 2))
+	economy.money = float(scen.get("money", 30000))
+	var map: Dictionary = scen.get("map", {})
+	biome = db.biome(biome_id if biome_id != "" else str(map.get("biome", "lush")))
+	_apply_climate(scen)
+	course_name = "%s %s %s" % [db.pick("course_first", rng), db.pick("course_second", rng), db.pick("course_suffix", rng)]
+	course = CourseGen.generate(map, rng, biome)
+	course.biome = biome
+	nav = Nav.new(course)
+	members = Members.new(self)
+	stories = Stories.new(self)
+	lab = HoleLab.new(self)
+	feats = Accomplishments.new(self)
+	wildlife = Wildlife.new(self)
+	wildlife.populate()
+	for r: Array in db.names.get("rival_courses", []):
+		rivals.append([str(r[0]), float(r[1])])
+	for hole in course.holes:
+		name_hole(hole)
+	# a scenario that hands you more holes than a starter clubhouse allows comes with the clubhouse to match
+	clubhouse_level = level_for_holes(course.holes.size())
+	career = Career.new(self)
+	player = PlayerProfile.new(self)
+	skills.changed.connect(player.refresh)
+	skills.leveled.connect(func(branch: String, lvl: int) -> void:
+		toast.emit("%s level %d! You have a new skill point." % ["Manager" if branch == "manager" else "Golfer", lvl], "good"))
+	grounds.refresh_layout()
+	_update_rating(0.0)
+	reputation = rating * 0.7
+
+
+func _apply_climate(scen: Dictionary) -> void:
+	var extra: Dictionary = scen.get("climate", {})
+	var c: Dictionary = biome.get("climate", {})
+	weather.rain_mult = float(c.get("rain", 1.0)) * float(extra.get("rain", 1.0))
+	weather.wind_mult = float(c.get("wind", 1.0)) * float(extra.get("wind", 1.0))
+	weather.temp_offset = float(c.get("temp", 0.0))
+
+
+func is_lava() -> bool:
+	return biome.get("lava", false)
+
+
+## What the player should call a terrain type or an object in this biome.
+func terrain_name(t: int) -> String:
+	if t == Defs.T.WATER:
+		return str(biome.get("hazard", "Water"))
+	return Defs.T_NAMES[t]
+
+
+func object_name(o: int) -> String:
+	var over: Dictionary = biome.get("objects", {}).get(str(o), {})
+	return str(over.get("name", Defs.O_NAMES[o]))
+
+
+# ------------------------------------------------------------- the clock
+
+func step(dt: float) -> void:
+	time += dt
+	clock = fposmod(clock + dt * clock_rate * 24.0 / Defs.CLOCK_DAY_SECONDS, 24.0)
+	visitors.step(dt)
+	crew.step(dt)
+	eruption.step(dt)
+	wildlife.step(dt)
+	lab.step(dt)
+	_slow += dt
+	if _slow >= 0.25:
+		var sdt := _slow
+		_slow = 0.0
+		weather.step(sdt, self)
+		grounds.step(sdt)
+		events.step(sdt)
+		tourney.step(sdt)
+		_update_rating(sdt)
+	var d := day()
+	if d != _day:
+		_day = d
+		_new_day(d)
+
+
+func day() -> int:
+	return int(time / Defs.DAY_SECONDS)
+
+
+## 0 in daylight, 1 at night.
+func darkness() -> float:
+	return Defs.darkness(clock)
+
+
+func clock_text() -> String:
+	return Defs.clock_text(clock)
+
+
+## How well a golfer can see at a spot: 1 in daylight or under lights, down
+## to 0 on unlit ground in the dead of night.
+func sight_at(p: Vector3) -> float:
+	var dark := darkness()
+	if dark <= 0.0:
+		return 1.0
+	return 1.0 - dark * (1.0 - course.light_at(p.x, p.z))
+
+
+## Is this hole in darkness right now? Golfers still play it, but they see
+## poorly, enjoy it less and so pay less for it.
+func too_dark_for(hole: Hole) -> bool:
+	return darkness() > 0.55 and not hole.lit_enough(course)
+
+
+## The share of the holes that are lit well enough for night golf.
+func lit_holes_share() -> float:
+	if course.holes.is_empty():
+		return 0.0
+	var n := 0
+	for hole in course.holes:
+		if hole.lit_enough(course):
+			n += 1
+	return float(n) / course.holes.size()
+
+
+func month() -> int:
+	return (day() % Defs.DAYS_PER_YEAR) / Defs.DAYS_PER_MONTH
+
+
+func year() -> int:
+	return day() / Defs.DAYS_PER_YEAR + 1
+
+
+func date_text() -> String:
+	return Defs.date_text(day())
+
+
+func _new_day(d: int) -> void:
+	buzz *= 0.97
+	tourney.on_day(d)
+	stories.on_day(d)
+	_check_awards()
+	feats.check()
+	scenario.check(self)
+	if d % Defs.DAYS_PER_MONTH == 0:
+		_end_month(d)
+	if d % Defs.DAYS_PER_YEAR == 0 and d > 0:
+		_end_year(d / Defs.DAYS_PER_YEAR)
+
+
+# ------------------------------------------------------- names and standing
+
+## Give a hole a name nobody else on the course has.
+func name_hole(hole: Hole) -> void:
+	if hole.name != "":
+		return
+	var pool: Array = db.names.get("hole_names", [])
+	var taken := {}
+	for other in course.holes:
+		taken[other.name] = true
+	for k in 40:
+		var cand := str(pool[rng.randi() % pool.size()]) if not pool.is_empty() else "Hole"
+		if not taken.has(cand):
+			hole.name = cand
+			return
+	hole.name = "No. %d" % (course.holes.find(hole) + 1)
+
+
+## Municipal, daily fee, country club or championship, by number of holes.
+func course_class() -> String:
+	var n := course.holes.size()
+	if n >= 18:
+		return "Championship course"
+	if n >= 10:
+		return "Country club"
+	if n >= 6:
+		return "Daily-fee course"
+	return "Municipal course"
+
+
+## Where the course stands among its rivals right now. 1 is best.
+func rank() -> int:
+	var r := 1
+	for row: Array in rivals:
+		if float(row[1]) > rating:
+			r += 1
+	return r
+
+
+func _end_year(year_done: int) -> void:
+	var r := rank()
+	last_rank = r
+	if best_rank == 0 or r < best_rank:
+		best_rank = r
+	toast.emit("Year %d rankings: your course finishes number %d of %d." % [year_done, r, rivals.size() + 1], "good" if r <= 5 else "info")
+	feed.say("rank", null, {"rank": r, "total": rivals.size() + 1}, true, "Golf Enquirer", "GolfEnquirer")
+	skills.add_xp("manager", maxi(0, 16 - r))
+	# rivals do not stand still
+	for row: Array in rivals:
+		row[1] = clampf(float(row[1]) + rng.randf_range(-2.0, 2.0), 25.0, 97.0)
+	if economy.money < 0.0:
+		debt_years += 1
+		if debt_years >= 2 and scenario.status == "active":
+			scenario.status = "lost"
+			toast.emit("Two years in debt. The board has run out of patience.", "bad")
+			scenario_ended.emit(false)
+		else:
+			toast.emit("The club ended the year in debt. The board is watching.", "bad")
+	else:
+		debt_years = 0
+	feats.check()
+
+
+## The golf magazines notice a hole that golfers love and that asks
+## something of them.
+func _check_awards() -> void:
+	for i in course.holes.size():
+		var hole := course.holes[i]
+		if hole.plays < 25 or not hole.lab_ready:
+			continue
+		if hole.award == "" and hole.fun >= 70.0 and hole.kind != 0:
+			hole.award = "top100"
+			buzz += 6.0
+			toast.emit("Hole %d, %s, has been named one of the Top 100 holes in golf. Golfers will pay more to play it." % [i + 1, hole.name], "good")
+			feed.say("top100", null, {"hole": i + 1}, true, "Golf Enquirer", "GolfEnquirer")
+		elif hole.award == "top100" and hole.fun >= 82.0 and hole.kind >= 5:
+			hole.award = "top18"
+			buzz += 12.0
+			toast.emit("Hole %d, %s, is in the Dream Eighteen: the best eighteen holes anywhere." % [i + 1, hole.name], "good")
+			feed.say("top18", null, {"hole": i + 1}, true, "Great Golf Holes", "GreatGolfHoles")
+
+
+func _end_month(d: int) -> void:
+	economy.earn("memberships", members.monthly_dues())
+	economy.earn("real_estate", homes * 45.0)
+	economy.spend("wages", crew.monthly_wages())
+	economy.spend("upkeep", monthly_upkeep())
+	if economy.money < 0.0:
+		economy.spend("interest", -economy.money * 0.02)
+	var prev := Defs.date_parts(d - 1)
+	var label := "%s, Year %d" % [Defs.MONTH_NAMES[prev.month], prev.year]
+	var net := economy.net()
+	economy.close_month(label)
+	toast.emit("%s closed: %s%s." % [Defs.MONTH_NAMES[prev.month], "profit of " if net >= 0.0 else "loss of ", Defs.money(absf(net))], "good" if net >= 0.0 else "bad")
+	month_ended.emit(label)
+
+
+func monthly_upkeep() -> float:
+	var t := course.holes.size() * 15.0
+	for o in course.objects:
+		t += Defs.O_UPKEEP[o]
+	return t
+
+
+# ------------------------------------------------------- course standing
+
+func _update_rating(dt: float) -> void:
+	var n := course.holes.size()
+	if n == 0:
+		rating = 0.0
+		design = 0.0
+		reputation = move_toward(reputation, 5.0, dt * 0.05)
+		return
+	var pars := {}
+	var scenery := 0.0
+	for hole in course.holes:
+		pars[hole.par] = true
+		scenery += scenery_score(hole)
+	var am := visitors.amenity_counts()
+	var d := minf(n, 18.0) / 18.0 * 52.0
+	d += [0.0, 0.0, 7.0, 13.0][mini(pars.size(), 3)]
+	d += minf(int(am.drink) + int(am.snack) + crew.count("beverage"), 1) * 5.0 + minf(int(am.snack), 1) * 3.0
+	d += minf(int(am.restroom), 1) * 4.0 + minf(int(am.bench), 4) * 0.75 + minf(int(am.washer), 3) * 0.7
+	d += minf(int(am.putting), 1) * 3.0 + minf(int(am.range), 1) * 3.0 + minf(int(am.cart_barn), 1) * 2.0
+	d += minf(int(am.landmark), 1) * 3.0 + clubhouse_level * 1.2
+	d += scenery / n * 10.0
+	design = clampf(d, 0.0, 100.0)
+	resort = {}
+	for key: String in ["tennis", "hotel", "marina", "airstrip"]:
+		if int(am.get(key, 0)) > 0:
+			resort[key] = true
+	rating = clampf(0.4 * visitors.average_satisfaction() + 15.0 * grounds.condition + 0.45 * design + stories.rating_bias(), 0.0, 100.0)
+	reputation = move_toward(reputation, rating, dt * 0.04)
+
+
+func stars() -> float:
+	return rating / 20.0
+
+
+## Groups arriving per second of sim time.
+func arrival_rate() -> float:
+	var pull := clampf((reputation + buzz) / 100.0, 0.0, 1.3)
+	var r := (1.0 / 38.0) * (0.3 + pull * 1.2) * skills.mult("arrivals")
+	match weather.kind:
+		Weather.K.DRIZZLE:
+			r *= 0.75
+		Weather.K.RAIN:
+			r *= 0.45
+		Weather.K.STORM:
+			r *= 0.08
+		Weather.K.CLEAR:
+			r *= 1.1
+	if events.banners_up():
+		r *= 0.95
+	if resort.has("hotel"):
+		r *= 1.15
+	if eruption.active():
+		r *= 0.1
+	# Daylight is the busy time. After dark only the keen turn up, unless
+	# the course is lit: a fully lit course is nearly as busy by night.
+	r *= lerpf(1.2, 0.22 + 0.78 * lit_holes_share(), darkness())
+	return r
+
+
+func thirst_rate() -> float:
+	var r := 1.0 / 400.0
+	if weather.temp > 24.0:
+		r *= 1.6
+	if time < weather.heat_until:
+		r *= 1.5
+	return r
+
+
+func clubhouse_door() -> Vector3:
+	var c := course.tile_center(course.clubhouse.x, course.clubhouse.y)
+	return course.on_ground(c.x, c.z - 9.0)
+
+
+## 0..1: how much there is to look at along a hole.
+func scenery_score(hole: Hole) -> float:
+	var cached: Array = _scenery.get(hole, [])
+	if not cached.is_empty() and int(cached[0]) == course.revision:
+		return cached[1]
+	var total := 0.0
+	var samples := 0
+	var steps := maxi(2, int(hole.length / 15.0))
+	for s in steps + 1:
+		var p := hole.tee.lerp(hole.pin, float(s) / steps)
+		var tile := course.tile_of(p.x, p.z)
+		samples += 1
+		for ty in range(tile.y - 4, tile.y + 5):
+			for tx in range(tile.x - 4, tile.x + 5):
+				if not course.in_bounds(tx, ty):
+					continue
+				var i := ty * course.w + tx
+				total += Defs.O_SCENERY[course.objects[i]]
+				if course.terrain[i] == Defs.T.WATER:
+					total += 0.25
+	var score := clampf(total / (samples * 9.0), 0.0, 1.0)
+	_scenery[hole] = [course.revision, score]
+	return score
+
+
+# ------------------------------------------------- building, with a budget
+
+## Paint terrain with a round brush. Returns tiles changed, or -1 if broke.
+func paint(tx: int, ty: int, radius: int, t: int) -> int:
+	var unit := float(Defs.T_COST[t])
+	if not economy.can_afford(unit):
+		return -1
+	var n := course.paint(tx, ty, radius, t)
+	if n > 0:
+		economy.spend("construction", n * unit + course.clear_cost)
+		if t == Defs.T.GREEN or t == Defs.T.TEE:
+			# Fresh greens and tees are graded as they are laid, so they are
+			# playable straight away. Sculpt them afterwards to add break.
+			var c := course.tile_center(tx, ty)
+			for i in 2:
+				course.smooth(c.x, c.z, (radius + 1.5) * Defs.TILE, 0.5)
+	return n
+
+
+## Why an object cannot be built yet, or "" if it can.
+func build_block(o: int) -> String:
+	var need: int = Defs.O_MIN_HOLES[o]
+	if course.holes.size() < need and str(scenario.def.get("id", "")) != "sandbox":
+		return "Needs %d holes" % need
+	if o == Defs.O.LANDMARK and int(visitors.amenity_counts().get("landmark", 0)) >= 2 and int(gifts.get(o, 0)) == 0:
+		return "Two landmarks is the limit"
+	return ""
+
+
+func place_object(tx: int, ty: int, o: int) -> int:
+	if build_block(o) != "":
+		return 0
+	var free := int(gifts.get(o, 0)) > 0
+	var cost := 0.0 if free else float(Defs.O_COST[o])
+	if not economy.can_afford(cost):
+		return -1
+	if not course.can_build(tx, ty):
+		return 0
+	var t := course.terrain[ty * course.w + tx]
+	if t == Defs.T.GREEN or t == Defs.T.TEE or t == Defs.T.BUNKER:
+		return 0
+	if course.set_object(tx, ty, o):
+		economy.spend("construction", cost)
+		if free:
+			gifts[o] = int(gifts[o]) - 1
+		return 1
+	return 0
+
+
+## What a home site is worth to a buyer: views, water and a good course push
+## it up; a lot in the line of fire pushes it down.
+func lot_value(tx: int, ty: int) -> float:
+	var v := 1200.0 + rating * 22.0
+	for y in range(ty - 4, ty + 5):
+		for x in range(tx - 4, tx + 5):
+			if not course.in_bounds(x, y) or (x == tx and y == ty):
+				continue
+			var i := y * course.w + x
+			var o := course.objects[i]
+			v += Defs.O_SCENERY[o] * 55.0
+			if o == Defs.O.HOUSE or o == Defs.O.HOME_SITE:
+				v -= 60.0
+			if course.terrain[i] == Defs.T.WATER and not is_lava():
+				v += 22.0
+	var p := Vector2((tx + 0.5) * Defs.TILE, (ty + 0.5) * Defs.TILE)
+	for hole in course.holes:
+		var d := Ball._seg_dist(Vector2(hole.tee.x, hole.tee.z), Vector2(hole.pin.x, hole.pin.z), p)
+		if d < 22.0:
+			v -= 700.0
+		elif d < 70.0:
+			v += hole.fun * 4.0
+	if resort.has("marina"):
+		v *= 1.4
+	return float(int(maxf(v, 500.0) / 50.0) * 50)
+
+
+## A member buys a free home site, if there is one. The lot becomes a house.
+func sell_home(m: Dictionary, celebrity: bool = false) -> bool:
+	if m.get("home", false):
+		return false
+	var best := -1
+	var best_v := 0.0
+	for i in course.objects.size():
+		if course.objects[i] == Defs.O.HOME_SITE:
+			var v := lot_value(i % course.w, i / course.w)
+			if v > best_v:
+				best_v = v
+				best = i
+	if best < 0:
+		return false
+	if celebrity:
+		best_v *= 3.0
+	m["home"] = true
+	homes += 1
+	stats.homes = int(stats.homes) + 1
+	if celebrity:
+		stats.celebrity_homes = int(stats.celebrity_homes) + 1
+	course.objects[best] = Defs.O.HOUSE
+	course.objects_touched(best)
+	course.revision += 1
+	course.objects_changed.emit()
+	economy.earn("real_estate", best_v)
+	toast.emit("%s bought a home site on the course for %s." % [str(m.name), Defs.money(best_v)], "good")
+	feed.say("home", null, {"hole": 1 + rng.randi() % maxi(course.holes.size(), 1)}, true, str(m.name), str(m.get("handle", "Member")))
+	return true
+
+
+## One of the difficulty slider's multipliers (see data/difficulty.json):
+## fee, mood_bad, mood_good, weeds, pests, wear, wages.
+func diff(key: String) -> float:
+	var levels: Array = db.difficulty.get("levels", [])
+	if levels.is_empty():
+		return 1.0
+	var lv: Dictionary = levels[clampi(difficulty, 0, levels.size() - 1)]
+	return float(lv.get(key, 1.0))
+
+
+## Move the difficulty slider. Takes effect at once.
+func set_difficulty(level: int) -> void:
+	var levels: Array = db.difficulty.get("levels", [])
+	difficulty = clampi(level, 0, maxi(levels.size() - 1, 0))
+	if visitors != null:
+		visitors.apply_difficulty()
+
+
+## One sentence on how this level differs from Normal, for a toast.
+func difficulty_blurb() -> String:
+	var levels: Array = db.difficulty.get("levels", [])
+	if levels.is_empty():
+		return ""
+	var lv: Dictionary = levels[clampi(difficulty, 0, levels.size() - 1)]
+	var bits: Array[String] = []
+	var fee := float(lv.get("fee", 1.0))
+	if not is_equal_approx(fee, 1.0):
+		bits.append("golfers pay %d%% %s" % [int(round(absf(fee - 1.0) * 100.0)), "more" if fee > 1.0 else "less"])
+	var bad := float(lv.get("mood_bad", 1.0))
+	if not is_equal_approx(bad, 1.0):
+		bits.append("bad moments hit %d%% %s" % [int(round(absf(bad - 1.0) * 100.0)), "harder" if bad > 1.0 else "softer"])
+	var weeds := float(lv.get("weeds", 1.0))
+	if not is_equal_approx(weeds, 1.0):
+		bits.append("weeds and pests %s %d%% %s" % ["spread" if weeds > 1.0 else "come", int(round(absf(weeds - 1.0) * 100.0)), "faster" if weeds > 1.0 else "slower"])
+	var wages := float(lv.get("wages", 1.0))
+	if not is_equal_approx(wages, 1.0):
+		bits.append("wages are %d%% %s" % [int(round(absf(wages - 1.0) * 100.0)), "higher" if wages > 1.0 else "lower"])
+	if bits.is_empty():
+		return "The game as it was balanced."
+	var text := ", ".join(PackedStringArray(bits)) + "."
+	return text.left(1).to_upper() + text.substr(1)
+
+
+func difficulty_name() -> String:
+	var levels: Array = db.difficulty.get("levels", [])
+	if levels.is_empty():
+		return "Normal"
+	return str((levels[clampi(difficulty, 0, levels.size() - 1)] as Dictionary).get("name", "Normal"))
+
+
+# ------------------------------------------------------------- clubhouse
+# The clubhouse is the club's ambition made of brick: each step up the
+# ladder in data/clubhouse.json allows more holes, and each step asks for
+# money, members (some of them in the higher tiers) and a reputation.
+
+const MAX_HOLES := 18
+
+
+func clubhouse_levels() -> Array:
+	return db.clubhouse.get("levels", [])
+
+
+func clubhouse_def(level: int = clubhouse_level) -> Dictionary:
+	var levels := clubhouse_levels()
+	if levels.is_empty():
+		return {"name": "Clubhouse", "holes": MAX_HOLES}
+	return levels[clampi(level, 0, levels.size() - 1)]
+
+
+func clubhouse_name(level: int = clubhouse_level) -> String:
+	return str(clubhouse_def(level).get("name", "Clubhouse"))
+
+
+func clubhouse_top() -> bool:
+	return clubhouse_level >= clubhouse_levels().size() - 1
+
+
+## The sandbox is for drawing holes, not running a club: nothing is gated.
+func open_build() -> bool:
+	return str(scenario.def.get("id", "")) == "sandbox" or bool(scenario.def.get("open_build", false))
+
+
+## How many holes the club may have with the clubhouse it has.
+func hole_cap() -> int:
+	if open_build():
+		return MAX_HOLES
+	return mini(int(clubhouse_def().get("holes", MAX_HOLES)), MAX_HOLES)
+
+
+## The smallest clubhouse that allows this many holes.
+func level_for_holes(n: int) -> int:
+	var levels := clubhouse_levels()
+	for i in levels.size():
+		if int((levels[i] as Dictionary).get("holes", MAX_HOLES)) >= n:
+			return i
+	return maxi(levels.size() - 1, 0)
+
+
+## What the next step up asks for, and how the club measures up: a list of
+## {what, text, have, need, met}. Empty at the top of the ladder.
+func clubhouse_needs() -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	if clubhouse_top():
+		return out
+	var nxt := clubhouse_def(clubhouse_level + 1)
+	var cost := float(nxt.get("cost", 0.0))
+	out.append({"what": "cash", "text": "%s in the bank" % Defs.money(cost), "have": economy.money, "need": cost,
+		"met": economy.can_afford(cost)})
+	if nxt.has("members"):
+		var need := int(nxt.members)
+		out.append({"what": "members", "text": "%d club members" % need, "have": members.count(), "need": need,
+			"met": members.count() >= need})
+	if nxt.has("tier"):
+		var ti := members.tier_index(str(nxt.tier))
+		var need := int(nxt.get("tier_count", 1))
+		var have := members.count_at_least(ti)
+		out.append({"what": "tier", "text": "%d %s member%s or better" % [need, members.tier_name(ti), "" if need == 1 else "s"],
+			"have": have, "need": need, "met": have >= need})
+	if nxt.has("rating"):
+		var need := float(nxt.rating)
+		out.append({"what": "rating", "text": "a course rating of %d" % int(need), "have": rating, "need": need, "met": rating >= need})
+	return out
+
+
+func can_upgrade_clubhouse() -> bool:
+	if clubhouse_top():
+		return false
+	for n in clubhouse_needs():
+		if not bool(n.met):
+			return false
+	return true
+
+
+func upgrade_clubhouse() -> bool:
+	if not can_upgrade_clubhouse():
+		return false
+	var nxt := clubhouse_def(clubhouse_level + 1)
+	economy.spend("construction", float(nxt.get("cost", 0.0)))
+	clubhouse_level += 1
+	var cap := hole_cap()
+	toast.emit("The clubhouse is now a %s. The club may have %d holes." % [clubhouse_name().to_lower(), cap], "good")
+	feed.say("clubhouse_up", null, {"name": clubhouse_name().to_lower(), "holes": cap}, true)
+	return true
+
+
+func remove_object(tx: int, ty: int) -> bool:
+	return course.set_object(tx, ty, Defs.O.NONE)
+
+
+func sculpt(mode: String, x: float, z: float, radius_m: float, amount: float) -> bool:
+	var cost := 3.0 + radius_m * 0.25
+	if not economy.can_afford(cost):
+		return false
+	match mode:
+		"raise":
+			course.sculpt(x, z, radius_m, amount)
+		"lower":
+			course.sculpt(x, z, radius_m, -amount)
+		"smooth":
+			course.smooth(x, z, radius_m, 0.5)
+		"flatten":
+			course.flatten(x, z, radius_m, amount, 0.5)
+	economy.spend("construction", cost)
+	return true
+
+
+## What the next parcel of land costs. Each one is dearer than the last.
+func land_price() -> float:
+	return float(int(250.0 * (1.0 + 0.035 * course.owned_parcels()) / 10.0) * 10)
+
+
+## Buy the parcel under a tile. Returns 1 bought, 0 not for sale, -1 broke.
+func buy_land(tx: int, ty: int) -> int:
+	var p := course.parcel_of(tx, ty)
+	if not course.parcel_for_sale(p):
+		return 0
+	if land_credits > 0:
+		land_credits -= 1
+		course.set_parcel(p, true)
+		return 1
+	var price := land_price()
+	if not economy.can_afford(price):
+		return -1
+	economy.spend("land", price)
+	course.set_parcel(p, true)
+	return 1
+
+
+func add_hole(tee: Vector3, pin: Vector3) -> Hole:
+	if not economy.can_afford(250.0) or course.holes.size() >= hole_cap():
+		return null
+	economy.spend("construction", 250.0)
+	var hole := course.add_hole(tee, pin)
+	name_hole(hole)
+	stats.holes_built = int(stats.holes_built) + 1
+	feed.say("new_hole", null, {"hole": course.holes.size(), "score": hole.par}, true)
+	return hole
+
+
+func remove_hole(i: int) -> void:
+	if i < 0 or i >= course.holes.size():
+		return
+	course.remove_hole(i)
+	visitors.on_hole_removed(i)
+
+
+## Swap a hole with its neighbour in the playing order. Groups already out
+## stay on the piece of ground they are on.
+func move_hole(i: int, dir: int) -> bool:
+	var j := i + dir
+	if i < 0 or j < 0 or i >= course.holes.size() or j >= course.holes.size():
+		return false
+	var tmp := course.holes[i]
+	course.holes[i] = course.holes[j]
+	course.holes[j] = tmp
+	for gr in visitors.groups:
+		if gr.hole_i == i:
+			gr.hole_i = j
+		elif gr.hole_i == j:
+			gr.hole_i = i
+	course.holes_changed.emit()
+	return true
+
+
+func hire(role_id: String) -> bool:
+	return crew.hire(role_id) != null
+
+
+# ---------------------------------------------------------- save and load
+
+func to_dict() -> Dictionary:
+	var staff := []
+	for m in crew.members:
+		staff.append(m.role.id)
+	var d := {
+		"version": 1, "scenario": scenario.def.get("id", "free_play"), "status": scenario.status,
+		"name": course_name, "time": time, "clock": clock, "career": career.to_dict(), "money": economy.money, "rating": rating, "reputation": reputation,
+		"buzz": buzz, "stats": stats, "recent": visitors.recent, "staff": staff, "skills": skills.to_dict(),
+		"player": player.to_dict(), "hosted": tourney.hosted, "history": economy.history,
+		"weather": weather.kind, "course": course.to_dict(), "biome": str(biome.get("id", "lush")),
+		"members": members.to_list(), "clubhouse": clubhouse_level, "homes": homes, "gifts": gifts,
+		"feats": feats.done, "rivals": rivals, "best_rank": best_rank, "land_credits": land_credits, "debt_years": debt_years,
+		"difficulty": difficulty,
+	}
+	d["stories"] = stories.to_dict()
+	return d
+
+
+static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> Sim:
+	var scen := DataDB.find(data.scenarios, str(d.get("scenario", "free_play")))
+	if scen.is_empty():
+		scen = data.scenarios[0]
+	var blank := scen.duplicate(true)
+	blank["map"] = {"w": 8, "h": 8, "holes": 0}
+	var sim := Sim.new(data, blank, 0, shared_gear, str(d.get("biome", "lush")))
+	sim.scenario = Scenario.new(scen)
+	sim.scenario.status = str(d.get("status", sim.scenario.status))
+	sim.course = Course.from_dict(d.course)
+	sim.course.biome = sim.biome
+	sim.nav = Nav.new(sim.course)
+	sim.members.from_list(d.get("members", []))
+	sim.stories.from_dict(d.get("stories", {}))
+	sim.clubhouse_level = int(d.get("clubhouse", 0))
+	sim.homes = int(d.get("homes", 0))
+	var gf: Dictionary = d.get("gifts", {})
+	for k: String in gf:
+		sim.gifts[int(k)] = int(gf[k])
+	sim.feats.done = d.get("feats", {})
+	if d.has("rivals"):
+		sim.rivals = d.rivals
+	sim.best_rank = int(d.get("best_rank", 0))
+	sim.land_credits = int(d.get("land_credits", 0))
+	sim.set_difficulty(int(d.get("difficulty", sim.db.difficulty.get("default", 2))))
+	sim.debt_years = int(d.get("debt_years", 0))
+	sim.wildlife.populate()
+	sim.course_name = str(d.get("name", sim.course_name))
+	sim.time = float(d.get("time", 0.0))
+	sim.clock = float(d.get("clock", 8.0))
+	sim._day = sim.day()
+	sim.economy.money = float(d.get("money", 0.0))
+	for hrow: Dictionary in d.get("history", []):
+		sim.economy.history.append(hrow)
+	sim.rating = float(d.get("rating", 45.0))
+	sim.reputation = float(d.get("reputation", 30.0))
+	sim.buzz = float(d.get("buzz", 0.0))
+	var st: Dictionary = d.get("stats", {})
+	for k: String in st:
+		sim.stats[k] = int(st[k])
+	for v: float in d.get("recent", []):
+		sim.visitors.recent.append(v)
+	sim.skills.from_dict(d.get("skills", {}))
+	sim.career.from_dict(d.get("career", {}))
+	sim.player.from_dict(d.get("player", {}))
+	var hosted: Dictionary = d.get("hosted", {})
+	for k: String in hosted:
+		sim.tourney.hosted[k] = int(hosted[k])
+	sim.weather.kind = int(d.get("weather", 0))
+	for role_id: String in d.get("staff", []):
+		sim.crew.hire(role_id)
+	sim.grounds.refresh_layout()
+	return sim

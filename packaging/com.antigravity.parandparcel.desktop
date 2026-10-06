@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Par & Parcel
+GenericName=Golf course tycoon
+Comment=Build a golf course, run it as a business, and play it yourself
+Exec=parandparcel
+Icon=com.antigravity.parandparcel
+Terminal=false
+Categories=Game;Simulation;SportsGame;
+Keywords=golf;tycoon;course;builder;simulation;
+StartupWMClass=Par & Parcel

@@ -1,0 +1,35 @@
+{
+	"_about": "What the ground does to the next shot. 'spin', 'lift' and 'spread' multiply the club's own; 'mishit' multiplies the odds of a fat, thin or shanked shot. Each terrain can sit the ball several ways: 'chance' is the share of balls that end up like that, 'power' is the share of the swing that reaches the ball. A 'plugged' sit is never rolled: the ball earns it by dropping steeply into sand.",
+	"lies": {
+		"fairway": {"spin": 1.0, "lift": 1.0, "mishit": 1.0, "sits": []},
+		"tee": {"spin": 1.0, "lift": 1.0, "mishit": 0.85, "sits": []},
+		"green": {"spin": 1.0, "lift": 1.0, "mishit": 1.0, "sits": []},
+		"rough": {"spin": 0.75, "lift": 0.95, "mishit": 1.0, "sits": [
+			{"id": "up", "name": "sitting up", "chance": 0.25, "power": 1.04, "spread": 0.85, "spin": 0.55, "lift": 0.92, "mishit": 0.6,
+				"note": "A flyer. It comes out hot with little spin, so it will run."},
+			{"id": "down", "name": "sitting down", "chance": 0.25, "power": 0.9, "spread": 1.15, "spin": 0.7, "lift": 0.95, "mishit": 1.4,
+				"note": "Grass behind the ball. Expect to lose distance and spin."}
+		]},
+		"deep_rough": {"spin": 0.4, "lift": 0.88, "mishit": 1.2, "sits": [
+			{"id": "buried", "name": "buried", "chance": 0.3, "power": 0.8, "spread": 1.2, "spin": 0.5, "lift": 0.9, "mishit": 1.5,
+				"note": "Buried. The grass will grab the club: just get it out."},
+			{"id": "up", "name": "perched", "chance": 0.2, "power": 1.08, "spread": 0.8, "spin": 0.8, "lift": 1.0, "mishit": 0.6,
+				"note": "Perched on top of the grass. A lucky break."}
+		]},
+		"bunker": {"spin": 0.9, "lift": 1.0, "mishit": 1.3, "sits": [
+			{"id": "plugged", "name": "plugged", "chance": 0.0, "power": 0.6, "spread": 1.35, "spin": 0.15, "lift": 0.8, "mishit": 1.5,
+				"note": "Plugged. It will come out low with no spin and run."}
+		]},
+		"path": {"spin": 0.85, "lift": 1.0, "mishit": 1.3, "sits": []},
+		"rock": {"spin": 0.6, "lift": 0.95, "mishit": 1.8, "sits": []},
+		"ash": {"spin": 0.5, "lift": 0.9, "mishit": 1.2, "sits": [
+			{"id": "down", "name": "sunk in", "chance": 0.3, "power": 0.85, "spread": 1.2, "spin": 0.6, "lift": 0.9, "mishit": 1.3,
+				"note": "Sunk into the ash. It will come out heavy."}
+		]}
+	},
+	"slope": {
+		"_about": "A sloping stance. 'loft' is how many radians of launch a slope of 100% along the line adds, 'curve' how much sidespin a slope of 100% across it adds, 'flat' the slope below which nobody notices, and the 'max' values cap both.",
+		"loft": 0.45, "loft_max": 0.09, "curve": 0.22, "curve_max": 0.035, "flat": 0.05
+	},
+	"wet": {"from": 0.45, "spin": 0.6}
+}
