@@ -336,7 +336,8 @@ func _click_hole(p: Vector3) -> void:
 	if hole == null:
 		_warn_broke()
 		return
-	sim.toast.emit("Hole %d is open: par %d, %d yards." % [course.holes.size(), hole.par, Defs.yards(hole.length)], "good")
+	hole.open = false
+	sim.toast.emit("Hole %d is a draft: par %d, %d yards. Test it, then open it to the public." % [course.holes.size(), hole.par, Defs.yards(hole.length)], "good")
 	set_mode("")
 	hole_added.emit(course.holes.size() - 1)
 

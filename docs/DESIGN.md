@@ -32,6 +32,7 @@ check. **Basic** works but is thin. **Not yet** is planned.
 | Home sites and resort | Built | Sell home sites to members, then tennis courts, a hotel, a marina and an airstrip as the club grows. |
 | Camera | Built | Move, zoom, turn and tilt, from the whole property down to standing beside a golfer. Works with a one-button mouse, a trackpad, a wheel mouse, the keyboard, or the Camera bar on screen. Click a golfer and follow them. |
 | Map overlays | Built | Moisture, turf health, height, mood, contours, build grid. The mood map is where golfers have lately been pleased or annoyed, and it fades over a couple of days. A thought in the golfer card remembers the spot and jumps the camera there. |
+| Draft holes | Built | A hole laid out by hand starts closed. Test plays it with the lab golfers and marks where their tee shots stopped. Open lets the public on. Generated holes, and saves that never stored the flag, stay open. |
 | Undo | Not yet | Bulldoze and repaint instead. No refunds. |
 | Streams, pot bunkers, waste areas | Not yet | |
 

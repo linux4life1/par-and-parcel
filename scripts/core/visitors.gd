@@ -85,7 +85,7 @@ func step(dt: float) -> void:
 # ------------------------------------------------------------- arrivals
 
 func _spawn(dt: float) -> void:
-	if not sim.open or sim.course.holes.is_empty():
+	if not sim.open or sim.course.open_count() == 0:
 		return
 	# The timer counts expected arrivals, not seconds, so it runs at the
 	# rate of the moment: a timer wound up in the afternoon slows down
@@ -96,12 +96,16 @@ func _spawn(dt: float) -> void:
 	spawn_t = sim.rng.randf_range(0.6, 1.4)
 	var public := 0
 	var at_first := 0
+	var first := 0
+	var holes := sim.course.holes
+	while first < holes.size() and not holes[first].open:
+		first += 1
 	for gr in groups:
 		if gr.kind == "public" and gr.state != Group.S.LEAVING:
 			public += 1
-		if gr.hole_i == 0 and (gr.state == Group.S.TO_TEE or gr.state == Group.S.QUEUE):
+		if gr.hole_i == first and (gr.state == Group.S.TO_TEE or gr.state == Group.S.QUEUE):
 			at_first += 1
-	if public >= int(sim.course.holes.size() * 1.5) + 1 or at_first >= 2:
+	if public >= int(sim.course.open_count() * 1.5) + 1 or at_first >= 2:
 		return
 	# Members who are due a round get the tee time first.
 	var due := sim.members.due(4)
@@ -126,6 +130,7 @@ func add_group(kind: String, count: int, base_skill: float, spread: float = 0.1)
 		var g := make_golfer("pro" if kind == "tournament" else "public", clampf(base_skill + sim.rng.randfn(0.0, spread), 0.03, 0.99))
 		_join(gr, g)
 	_outfit_group(gr)
+	gr.skip_closed(sim)
 	groups.append(gr)
 	return gr
 
@@ -145,6 +150,7 @@ func add_member_group(list: Array) -> Group:
 		guest.satisfaction += 4.0
 		_join(gr, guest)
 	_outfit_group(gr)
+	gr.skip_closed(sim)
 	groups.append(gr)
 	sim.stories.on_arrive(gr)
 	return gr
@@ -1168,3 +1174,6 @@ func on_hole_removed(i: int) -> void:
 			gr.state = Group.S.TO_TEE
 		elif gr.hole_i > i:
 			gr.hole_i -= 1
+		gr.skip_closed(sim)
+		if gr.current_hole(sim) == null:
+			gr.state = Group.S.LEAVING

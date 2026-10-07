@@ -37,6 +37,7 @@ var _trail_mat := StandardMaterial3D.new()
 var _trail_n := 0
 var _ring := MeshInstance3D.new()
 var _mounds := MultiMeshInstance3D.new()
+var _spots: MultiMeshInstance3D
 var _mound_set := {}
 var _mound_cursor := 0
 var _mound_changed := false
@@ -1307,6 +1308,14 @@ func _ready() -> void:
 	_mounds.multimesh = mm
 	_mounds.material_override = mat(Color(0.42, 0.3, 0.18))
 	add_child(_mounds)
+	_spots = MultiMeshInstance3D.new()
+	var spots_mm := MultiMesh.new()
+	spots_mm.transform_format = MultiMesh.TRANSFORM_3D
+	spots_mm.mesh = _sphere(0.42, 10, 6)
+	_spots.multimesh = spots_mm
+	_spots.material_override = glow(Color(1.0, 0.95, 0.55))
+	_spots.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_spots)
 	var smm := MultiMesh.new()
 	smm.transform_format = MultiMesh.TRANSFORM_3D
 	smm.mesh = mesh("stake")
@@ -1344,6 +1353,7 @@ func bind(s: Sim, camera_rig: CameraRig) -> void:
 	_holes_dirty = true
 	sim.course.objects_changed.connect(func() -> void: _objects_dirty = true)
 	sim.course.holes_changed.connect(func() -> void: _holes_dirty = true)
+	sim.lab.rated.connect(func(_hole: Hole) -> void: _holes_dirty = true)
 	sim.course.heights_changed.connect(func(_r: Rect2i) -> void:
 		_objects_dirty = true
 		_holes_dirty = true
@@ -1984,11 +1994,37 @@ func _rebuild_holes() -> void:
 			mk.material_override = paint(Color(0.12, 0.3, 0.8), 0.25)
 			mk.position = side * sgn * 1.9 + Vector3(0, 0.08, 0)
 			tee.add_child(mk)
-		var tl := _label("Hole %d  ·  Par %d  ·  %d yd" % [i + 1, hole.par, Defs.yards(hole.length)], Vector3(0, 2.6, 0), Color(0.8, 0.92, 1.0))
+		var title := "Hole %d  ·  Par %d  ·  %d yd" % [i + 1, hole.par, Defs.yards(hole.length)]
+		if not hole.open:
+			title = "Draft  ·  " + title
+		var tl := _label(title, Vector3(0, 2.6, 0), Color(0.8, 0.92, 1.0))
 		tl.pixel_size = 0.0003
 		tl.set_meta("base_y", 2.6)
 		tee_at.add_child(tl)
 		_hole_labels.append(tl)
+	_rebuild_spots()
+
+
+## Gold discs where the expert test golfers' tee shots stopped, on drafts only.
+func _rebuild_spots() -> void:
+	if _spots == null:
+		return
+	var mm := _spots.multimesh
+	var n := 0
+	for hole in sim.course.holes:
+		if not hole.open:
+			n += hole.spots.size()
+	mm.instance_count = n
+	var k := 0
+	for hole in sim.course.holes:
+		if hole.open:
+			continue
+		for i in hole.spots.size():
+			var p2: Vector2 = hole.spots[i]
+			var p := sim.course.on_ground(p2.x, p2.y)
+			p.y += 0.3
+			mm.set_instance_transform(k, Transform3D(Basis.IDENTITY, p))
+			k += 1
 
 
 func _label(text: String, at: Vector3, color: Color) -> Label3D:

@@ -11,6 +11,12 @@ var length := 0.0
 ## world x/z. Par and yardage are the length of this line, not the chord.
 ## Named route because `line` is the queue of parties waiting on the tee.
 var route := PackedVector2Array()
+## False while the hole is a draft. Paying golfers skip it until it is opened.
+## Generated holes and old saves stay open.
+var open := true
+## Where the expert test golfers' tee shots came to rest, the last time the
+## hole was rated. Only drawn while the hole is still a draft.
+var spots := PackedVector2Array()
 ## Fingerprint of the ground the line was measured on. -1 until then.
 var line_sig := -1
 var earned := 0.0               # green fees golfers have paid for this hole
@@ -509,7 +515,7 @@ func to_dict() -> Dictionary:
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
-		"name": name, "award": award, "comments": comments,
+		"name": name, "award": award, "comments": comments, "open": open,
 	}
 
 
@@ -528,6 +534,7 @@ static func from_dict(d: Dictionary) -> Hole:
 	for k: String in tl:
 		hole.tally[k] = int(tl[k])
 	hole.name = str(d.get("name", ""))
+	hole.open = bool(d.get("open", true))
 	hole.award = str(d.get("award", ""))
 	hole.comments = d.get("comments", {})
 	# Par is filled in properly once the ground is loaded (Course.from_dict).

@@ -105,6 +105,7 @@ func rate_now(hole: Hole) -> void:
 
 
 func _begin(hole: Hole) -> void:
+	hole.spots = PackedVector2Array()
 	_job = {"hole": hole, "class": 0, "run": 0, "sums": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], "g": null}
 	_new_run()
 
@@ -139,7 +140,10 @@ func _shot() -> void:
 		_job = {}
 		return
 	var g: Golfer = _job.g
+	var tee_shot := int(_job["class"]) == 0 and g.strokes == 0
 	play_shot(sim, g, hole)
+	if tee_shot:
+		hole.spots.append(Vector2(g.ball.pos.x, g.ball.pos.z))
 	if g.done:
 		var ci := int(_job["class"])
 		var sums: Array = _job.sums

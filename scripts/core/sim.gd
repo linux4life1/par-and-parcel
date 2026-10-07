@@ -350,17 +350,20 @@ func monthly_upkeep() -> float:
 # ------------------------------------------------------- course standing
 
 func _update_rating(dt: float) -> void:
-	var n := course.holes.size()
+	var n := 0
+	var pars := {}
+	var scenery := 0.0
+	for hole in course.holes:
+		if not hole.open:
+			continue
+		n += 1
+		pars[hole.par] = true
+		scenery += scenery_score(hole)
 	if n == 0:
 		rating = 0.0
 		design = 0.0
 		reputation = move_toward(reputation, 5.0, dt * 0.05)
 		return
-	var pars := {}
-	var scenery := 0.0
-	for hole in course.holes:
-		pars[hole.par] = true
-		scenery += scenery_score(hole)
 	var am := visitors.amenity_counts()
 	var d := minf(n, 18.0) / 18.0 * 52.0
 	d += [0.0, 0.0, 7.0, 13.0][mini(pars.size(), 3)]

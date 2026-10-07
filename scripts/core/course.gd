@@ -490,6 +490,23 @@ func remove_hole(i: int) -> void:
 	holes_changed.emit()
 
 
+## Holes the public may play. Drafts are left out.
+func open_count() -> int:
+	var n := 0
+	for hole in holes:
+		if hole.open:
+			n += 1
+	return n
+
+
+## Open or close a hole and tell the views, so the draft markers update.
+func set_open(hole: Hole, on: bool) -> void:
+	if hole.open == on:
+		return
+	hole.open = on
+	holes_changed.emit()
+
+
 func total_par() -> int:
 	var p := 0
 	for hole in holes:

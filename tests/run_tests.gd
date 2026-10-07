@@ -55,6 +55,7 @@ func _ready() -> void:
 	_test_gallery()
 	_test_dogleg()
 	_test_mood_map()
+	_test_draft_hole()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2686,6 +2687,72 @@ func _test_mood_map() -> void:
 	course_d.erase("mood")
 	var old := Sim.from_dict(db, raw, gear)
 	check(old.course.mood[i] == 0.0, "an old save without a mood map loads as calm ground")
+
+
+func _test_draft_hole() -> void:
+	print("-- draft holes")
+	var sim := _sim("three_holes", 4)
+	var hole: Hole = sim.course.holes[0]
+	check(hole.open and sim.course.open_count() == 3, "a generated hole starts open to the public")
+	hole.open = false
+	check(sim.course.open_count() == 2, "a draft is not counted as open")
+	var gr := sim.visitors.add_group("public", 2, 0.4)
+	check(gr.hole_i == 1 and gr.current_hole(sim) == sim.course.holes[1], "a party skips a draft and tees off on the next open hole")
+	hole.open = true
+	var gr2 := sim.visitors.add_group("public", 2, 0.4)
+	check(gr2.hole_i == 0 and gr2.current_hole(sim) == hole, "opening it lets the next party on")
+	var stopped := sim.visitors.add_group("public", 1, 0.4)
+	stopped.hole_i = 0
+	stopped.last_hole = 0
+	hole.open = false
+	stopped.skip_closed(sim)
+	check(stopped.current_hole(sim) == null, "a round that was only going to play a draft ends instead")
+	hole.open = true
+	var box := _sim("sandbox", 5)
+	box.economy.money = 100000.0
+	box.clubhouse_level = box.level_for_holes(1)
+	var bc := box.course
+	for y in range(40, 53):
+		box.paint(30, y, 0, Defs.T.FAIRWAY)
+	box.paint(30, 40, 1, Defs.T.TEE)
+	box.paint(30, 52, 2, Defs.T.GREEN)
+	var tools := BuildTools.new()
+	tools.sim = box
+	tools._tee = bc.tile_center(30, 40)
+	tools._click_hole(bc.tile_center(30, 52))
+	check(bc.holes.size() == 1 and not bc.holes[0].open, "a hole laid out by hand starts closed")
+	tools.free()
+	var short: Hole = sim.course.holes[1]
+	short.open = false
+	sim.lab.rate_now(short)
+	var landed := false
+	for i in short.spots.size():
+		var p: Vector2 = short.spots[i]
+		if p.distance_to(Vector2(short.tee.x, short.tee.z)) > 20.0:
+			landed = true
+	check(short.lab_ready and short.spots.size() == 8 and landed, "Test Hole rates a draft and marks the eight expert tee shots")
+	short.open = true
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var back := Sim.from_dict(db, saved, gear)
+	check(back.course.holes[0].open and back.course.holes[1].open, "a save remembers that the holes were opened")
+	var course_d: Dictionary = saved.course
+	var hs: Array = course_d.holes
+	var hd: Dictionary = hs[0]
+	hd["open"] = false
+	var closed := Sim.from_dict(db, saved, gear)
+	check(not closed.course.holes[0].open, "a save remembers a draft")
+	hd.erase("open")
+	var legacy := Sim.from_dict(db, saved, gear)
+	check(legacy.course.holes[0].open, "an old save, with no open flag, stays open to the public")
+	for h in sim.course.holes:
+		h.open = false
+	var waiting := sim.visitors.groups.size()
+	sim.visitors.spawn_t = 0.0
+	sim.step(1.0)
+	check(sim.visitors.groups.size() == waiting, "nobody arrives while every hole is a draft")
+	check(sim.rating == 0.0, "a course with nothing open is unrated")
+	var tutor := FileAccess.get_file_as_string("res://data/tutorial.json")
+	check(tutor.contains("starts closed") and tutor.contains("press Open"), "the tutorial tells you to open a hole before anyone pays")
 
 
 func _test_bar_and_vending() -> void:

@@ -967,7 +967,12 @@ func _run_demo(delta: float) -> void:
 					for k in range(4, 42, 2):
 						Game.sim.paint(cb.x + 6, cb.y - k, 1, Defs.T.FAIRWAY)
 				"hole":
-					Game.sim.add_hole(c.tile_center(cb.x + 6, cb.y - 2), c.tile_center(cb.x + 6, cb.y - 44))
+					var laid := Game.sim.add_hole(c.tile_center(cb.x + 6, cb.y - 2), c.tile_center(cb.x + 6, cb.y - 44))
+					if laid != null:
+						laid.open = false
+				"open":
+					if not Game.sim.course.holes.is_empty():
+						Game.sim.course.set_open(Game.sim.course.holes[0], true)
 				"paid":
 					for i in 600:
 						Game.sim.step(1.0 / 60.0)
