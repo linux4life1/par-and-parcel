@@ -68,9 +68,9 @@ PLIST
 
 echo "== signing $(basename "$APP") as $MACOS_CERTIFICATE_NAME"
 security find-identity -v -p codesigning | grep -q "$MACOS_CERTIFICATE_NAME" || { echo "identity not in the keychain" >&2; exit 1; }
-MAIN="$APP/Contents/MacOS/$(defaults read "$APP/Contents/Info.plist" CFBundleExecutable)"
-# anything executable inside, innermost first, then the bundle itself
-find "$APP/Contents" -type f -perm -u+x ! -path "$MAIN" | while IFS= read -r f; do
+# anything executable inside apart from the main program (which is signed
+# with the bundle), then the bundle itself
+find "$APP/Contents" -type f -perm -u+x ! -path "$APP/Contents/MacOS/*" | while IFS= read -r f; do
 	file "$f" | grep -q "Mach-O" || continue
 	codesign --force --sign "$MACOS_CERTIFICATE_NAME" --timestamp --options runtime "$f"
 done

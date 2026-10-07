@@ -121,8 +121,8 @@ jobs:
         run: |
           set -eo pipefail
           mkdir -p build
-          godot --headless --path . --import >/dev/null 2>&1 || true
-          godot --headless --path . --export-release "Windows Desktop" build/$APP.exe 2>&1 | grep -v "ObjectDB\|still in use\|^\[ *[0-9]*% \]\|savepack" || true
+          godot_console --headless --path . --import >/dev/null 2>&1 || true
+          godot_console --headless --path . --export-release "Windows Desktop" build/$APP.exe 2>&1 | grep -v "ObjectDB\|still in use\|^\[ *[0-9]*% \]\|savepack" || true
           test -s build/$APP.exe
           ls -la build
       - name: Zip

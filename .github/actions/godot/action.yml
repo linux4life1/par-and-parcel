@@ -60,7 +60,9 @@ runs:
             TDIR="$HOME/Library/Application Support/Godot/export_templates/${{ inputs.version }}.stable" ;;
           Windows)
             unzip -o -q "Godot_v${V}_win64.exe.zip" -d ~/godot-bin
-            cp ~/godot-bin/Godot_v${V}_win64_console.exe ~/godot-bin/godot.exe
+            # the console wrapper must sit next to its program under matching names
+            cp ~/godot-bin/Godot_v${V}_win64.exe ~/godot-bin/godot.exe
+            cp ~/godot-bin/Godot_v${V}_win64_console.exe ~/godot-bin/godot_console.exe
             TDIR="$APPDATA/Godot/export_templates/${{ inputs.version }}.stable" ;;
         esac
         echo "$HOME/godot-bin" >> "$GITHUB_PATH"
@@ -71,4 +73,4 @@ runs:
           cp -R ~/godot-dl/tpl/templates/. "$TDIR"/
           rm -rf ~/godot-dl/tpl
         fi
-        ~/godot-bin/godot --version
+        if [ "${{ runner.os }}" = "Windows" ]; then ~/godot-bin/godot_console.exe --version; else ~/godot-bin/godot --version; fi
