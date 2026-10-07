@@ -2761,6 +2761,9 @@ func _test_landmarks() -> void:
 	var kinds: Array = db.landmarks.get("kinds", [])
 	check(kinds.size() >= 1 and int(kinds[0].get("object", -1)) == Defs.O.LANDMARK, "landmark powers are data, on the landmark object")
 	var sim := _sim("sandbox", 6)
+	# _sim switches the long stories off so they do not deal themselves into
+	# other tests. This one is about them.
+	sim.stories.enabled = true
 	var c := sim.course
 	var g := sim.visitors.make_golfer("public", 0.5)
 	g.persona = {}
