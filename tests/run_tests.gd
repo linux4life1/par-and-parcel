@@ -57,6 +57,7 @@ func _ready() -> void:
 	_test_mood_map()
 	_test_draft_hole()
 	_test_pace()
+	_test_lot_shade()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2824,6 +2825,50 @@ func _test_pace() -> void:
 	sim.remove_hole(0)
 	check(on_it.state == Group.S.TO_TEE and absf(on_it.hole_time) < 0.001, "removing the hole they were on starts the next one from zero")
 	check(later.hole_i == 1 and absf(later.hole_time - 4.0) < 0.001, "a party further along keeps the time on the hole they are still playing")
+
+
+func _test_lot_shade() -> void:
+	print("-- home value")
+	var sim := _sim("three_holes", 5)
+	var c := sim.course
+	var tx := -1
+	var ty := -1
+	for y in range(6, c.h - 6):
+		if tx >= 0:
+			break
+		for x in range(6, c.w - 6):
+			var at := y * c.w + x
+			if c.terrain[at] == Defs.T.ROUGH and c.objects[at] == 0 and c.terrain[at + 1] != Defs.T.WATER:
+				tx = x
+				ty = y
+				break
+	check(tx >= 0, "the starter course has a rough tile to price")
+	var i := ty * c.w + tx
+	var first := sim.lot_shade()
+	var again := sim.lot_shade()
+	check(first.size() == c.w * c.h and int(first[i]) == int(again[i]), "the lot map covers the course and is kept until it changes")
+	var hi := 0
+	var lo := 255
+	for b in first:
+		var n := int(b)
+		if n > hi:
+			hi = n
+		if n < lo:
+			lo = n
+	check(hi > lo, "the dearest ground is brighter than the cheapest")
+	var worth := sim.lot_value(tx, ty)
+	var was := int(first[i])
+	c.guard = false
+	var painted := 0
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if dx == 0 and dy == 0:
+				continue
+			if c.set_terrain(tx + dx, ty + dy, Defs.T.WATER):
+				painted += 1
+	check(painted > 0 and sim.lot_value(tx, ty) > worth, "water next door raises what the lot is worth (%.0f to %.0f)" % [worth, sim.lot_value(tx, ty)])
+	var second := sim.lot_shade()
+	check(int(second[i]) > was, "and the map gets brighter there (%d to %d)" % [was, int(second[i])])
 
 
 func _test_bar_and_vending() -> void:

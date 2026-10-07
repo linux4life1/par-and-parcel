@@ -75,6 +75,10 @@ var _slow := 0.0
 var _day := 0
 var _scenery := {}
 var _lines_rev := -1
+var _lot_rev := -2
+var _lot_rating := -1.0
+var _lot_fun := -1.0
+var _lot_shade := PackedByteArray()
 
 
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
@@ -537,6 +541,36 @@ func lot_value(tx: int, ty: int) -> float:
 	if resort.has("marina"):
 		v *= 1.4
 	return float(int(maxf(v, 500.0) / 50.0) * 50)
+
+
+## 0 is the cheapest ground on the course right now, 255 the dearest.
+## Kept until the course, the rating or the holes' fun changes, so the
+## overlay can show it without pricing every tile every frame.
+func lot_shade() -> PackedByteArray:
+	var fun := 0.0
+	for hole in course.holes:
+		fun += hole.fun
+	var n := course.w * course.h
+	if _lot_rev == course.revision and is_equal_approx(_lot_rating, rating) and is_equal_approx(_lot_fun, fun) and _lot_shade.size() == n:
+		return _lot_shade
+	_lot_rev = course.revision
+	_lot_rating = rating
+	_lot_fun = fun
+	var vals := PackedFloat32Array()
+	vals.resize(n)
+	var lo := 1.0e12
+	var hi := -1.0e12
+	for i in n:
+		var v := lot_value(i % course.w, i / course.w)
+		vals[i] = v
+		lo = minf(lo, v)
+		hi = maxf(hi, v)
+	_lot_shade.resize(n)
+	var span := hi - lo
+	for i in n:
+		var t := 0.5 if span < 1.0 else (vals[i] - lo) / span
+		_lot_shade[i] = int(clampf(t, 0.0, 1.0) * 255.0)
+	return _lot_shade
 
 
 ## A member buys a free home site, if there is one. The lot becomes a house.

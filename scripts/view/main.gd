@@ -264,6 +264,7 @@ func _on_sim_changed() -> void:
 	terrain.set_biome(sim.biome)
 	sky.set_biome(sim.biome)
 	terrain.bind(sim.course)
+	terrain.sim = sim
 	grass.bind(terrain, sim.course, sim.biome)
 	rig.bind(sim.course)
 	world.bind(sim, rig)
@@ -422,7 +423,7 @@ func _process(delta: float) -> void:
 #   --loadingcard (hold the loading screen up) --demo=menuload (save, then load through the Menu)
 #   --soundcheck --soundlog (see sound_desk.gd)
 #   Without --shot the game opens its normal full-size window; add --exit to quit after --frames.
-#   --play=hole --overlay=0..4 --staff=N --demo=name --perf=1
+#   --play=hole --overlay=0..5 --staff=N --demo=name --perf=1
 #   --exit=1 quits after --frames without a screenshot (tests a normal launch)
 func _apply_test_args() -> void:
 	var a := Game.args
