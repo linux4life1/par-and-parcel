@@ -24,7 +24,7 @@ var _tick := 0.0
 var _level := 0.0
 var _tee: Variant = null
 var _warned := -10.0
-var _marker := MeshInstance3D.new()
+var _marker: MeshInstance3D
 var _preview_tile := Vector2i(-999, -999)
 var _preview_text := ""
 var _ribbon: MeshInstance3D
@@ -32,6 +32,7 @@ var _ribbon_mesh: ImmediateMesh
 
 
 func _ready() -> void:
+	_marker = MeshInstance3D.new()
 	_marker.mesh = WorldView._cyl(0.12, 0.12, 6.0, 6)
 	_marker.material_override = WorldView.glow(Color(0.3, 0.7, 1.0))
 	_marker.visible = false
@@ -64,7 +65,8 @@ func set_mode(m: String) -> void:
 		_ribbon.visible = false
 	if rig != null:
 		rig.tool_active = m != ""
-	_marker.visible = false
+	if _marker != null:
+		_marker.visible = false
 	_last_tile = Vector2i(-999, -999)
 	if terrain != null:
 		terrain.material.set_shader_parameter("grid_alpha", 1.0 if m != "" else 0.0)

@@ -2645,6 +2645,7 @@ func _test_dogleg() -> void:
 	tools.hover = hole.pin
 	var preview := tools.hint()
 	check(preview.contains("Par 4") and preview.contains("yd") and preview.contains("1 tile ≈ 5.5 yd."), "laying out a hole previews par and yardage (%s)" % preview.replace("\n", " "))
+	tools.free()
 	var tutor := FileAccess.get_file_as_string("res://data/tutorial.json")
 	check(tutor.contains("thirty-seven to fifty-five") and tutor.contains("five and a half") and not tutor.contains("eight to twelve"), "the tutorial gives the real scale of a tile")
 	for ty in range(pin_t.y - 2, tee_t.y + 3):
