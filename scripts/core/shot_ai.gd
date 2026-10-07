@@ -3,7 +3,16 @@ extends RefCounted
 ## Decides where a computer golfer aims and with which club, then swings
 ## with errors that depend on their ability, their clubs and the lie.
 
-const ANGLES: Array[float] = [0.0, -0.14, 0.14, -0.3, 0.3, -0.5, 0.5, -0.75, 0.75]
+const ANGLES: Array[float] = [0.0, -0.1, 0.1, -0.2, 0.2, -0.32, 0.32, -0.46, 0.46, -0.62, 0.62, -0.8, 0.8]
+## What a lie costs, in metres of the hole's cost field: about 150 m is a
+## stroke for an average golfer, so these are the strokes a lie adds.
+const COST_ROUGH := 26.0
+const COST_DEEP := 65.0
+const COST_BUNKER := 75.0
+const COST_WATER := 240.0
+const COST_OUT := 300.0
+const COST_TREE := 48.0
+const GAIN_GREEN := 10.0
 const REACH: Array[float] = [1.0, 0.9, 0.78, 0.64, 0.5]
 
 static var _scratch := Ball.new()
@@ -35,6 +44,9 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 	if dists.is_empty():
 		dists.append(minf(d, maxd))
 	var sig := g.spread() * Defs.T_LIE_SPREAD[lie]
+	# How much trouble weighs on the choice: a thoughtful golfer plays for
+	# the fairway, a duffer aims at the flag and hopes.
+	var care := lerpf(0.55, 1.35, g.imagination)
 	var best_cost := INF
 	var best_target := p2 + to_pin.normalized() * dists[0]
 	for r in dists:
@@ -47,11 +59,11 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 			var perp := Vector2(-dir.y, dir.x)
 			var lat := r * sig * 1.3
 			var lon := r * 0.07
-			var c := _spot_cost(sim, hole, p2 + dir * r) * 2.0
-			c += _spot_cost(sim, hole, p2 + dir * r + perp * lat)
-			c += _spot_cost(sim, hole, p2 + dir * r - perp * lat)
-			c += _spot_cost(sim, hole, p2 + dir * (r + lon))
-			c += _spot_cost(sim, hole, p2 + dir * (r - lon))
+			var c := _spot_cost(sim, hole, p2 + dir * r, care) * 2.0
+			c += _spot_cost(sim, hole, p2 + dir * r + perp * lat, care)
+			c += _spot_cost(sim, hole, p2 + dir * r - perp * lat, care)
+			c += _spot_cost(sim, hole, p2 + dir * (r + lon), care)
+			c += _spot_cost(sim, hole, p2 + dir * (r - lon), care)
 			c /= 6.0
 			c += _line_block(course, p2, dir, minf(r, 40.0)) * (1.0 - 0.6 * g.imagination)
 			if c < best_cost:
@@ -82,25 +94,29 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 		"target": Vector3(best_target.x, course.height_at(best_target.x, best_target.y), best_target.y)}
 
 
-static func _spot_cost(sim: Sim, hole: Hole, pt: Vector2) -> float:
+## What finishing a shot here would cost: the way left to the pin, plus
+## what the lie would add to the next shot. `care` scales the trouble.
+static func _spot_cost(sim: Sim, hole: Hole, pt: Vector2, care: float = 1.0) -> float:
 	var course := sim.course
 	var i := course.index_at(pt.x, pt.y)
 	if i < 0 or course.locked[i] != 0:
-		return hole.field_at(course, pt.x, pt.y, sim.time) + 130.0
+		return hole.field_at(course, pt.x, pt.y, sim.time) + COST_OUT * maxf(care, 0.8)
 	var f := hole.field_at(course, pt.x, pt.y, sim.time)
 	match course.terrain[i]:
 		Defs.T.WATER:
-			f += 115.0
+			f += COST_WATER * maxf(care, 0.8)
 		Defs.T.BUNKER:
-			f += 24.0
+			f += COST_BUNKER * care
 		Defs.T.DEEP_ROUGH:
-			f += 28.0
+			f += COST_DEEP * care
 		Defs.T.ROUGH:
-			f += 7.0
+			f += COST_ROUGH * care
+		Defs.T.ROCK, Defs.T.ASH:
+			f += COST_DEEP * care
 		Defs.T.GREEN:
-			f -= 5.0
+			f -= GAIN_GREEN
 	if Defs.is_tree(course.objects[i]):
-		f += 16.0
+		f += COST_TREE * care
 	return f
 
 

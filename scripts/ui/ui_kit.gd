@@ -231,8 +231,9 @@ class Meter:
 	var running := false       # the marker is on the move
 	var result := 0.0          # -1 early .. 1 late, shown once the swing is struck
 	var show_result := false
-	var zone := 0.11           # bar units either side of the line: amber band
-	var perfect := 0.014       # and the green band
+	var zone := 0.17           # bar units either side of the line: amber band
+	var good := 0.06           # the band that still flies straight: pale green
+	var perfect := 0.02        # and the flush window: bright green
 	var over := 1.0            # the bar units past 1.0 that are an overswing
 
 	func _init() -> void:
@@ -266,9 +267,13 @@ class Meter:
 			draw_line(Vector2(tx, 0), Vector2(tx, size.y), UIKit.GOLD, 3.0)
 		# the timing bands and the line itself
 		var zx := _x(zone) - x0
+		var gx := _x(good) - x0
 		var px := _x(perfect) - x0
 		draw_rect(Rect2(x0 - zx, size.y, zx * 2.0, 6), Color(0.95, 0.7, 0.2, 0.7))
+		draw_rect(Rect2(x0 - gx, size.y, gx * 2.0, 6), Color(0.55, 0.8, 0.5, 0.9))
 		draw_rect(Rect2(x0 - px, size.y, px * 2.0, 6), UIKit.GOOD)
+		# the good band shows on the bar itself too, where the eye is
+		draw_rect(Rect2(x0 - gx, 0, gx * 2.0, size.y), Color(0.55, 0.9, 0.55, 0.12))
 		draw_line(Vector2(x0, -4), Vector2(x0, size.y + 6), Color.WHITE, 2.5)
 		draw_rect(r, Color(1, 1, 1, 0.35), false, 1.5)
 		# the marker
@@ -279,5 +284,5 @@ class Meter:
 		elif show_result:
 			# where the third press landed: left of the line was early
 			var rx := x0 - result * zx
-			var col := UIKit.GOOD if result == 0.0 else (Color(0.95, 0.7, 0.2) if absf(result) < 0.5 else UIKit.BAD)
+			var col := UIKit.GOOD if result == 0.0 else (Color(0.6, 0.85, 0.55) if absf(result) <= 0.16 else (Color(0.95, 0.7, 0.2) if absf(result) < 0.5 else UIKit.BAD))
 			draw_colored_polygon(PackedVector2Array([Vector2(rx, 0), Vector2(rx - 6, -12), Vector2(rx + 6, -12)]), col)

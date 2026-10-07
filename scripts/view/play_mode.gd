@@ -17,11 +17,13 @@ signal round_done(card: Array, pars: Array)
 enum S { OFF, WALK, AIM, POWER, ACCURACY, SWING, FLIGHT, PAUSE }
 
 const MAX_PUTT := 30.0     # metres a full-power putt rolls on a flat dry green
-const METER_RATE := 1.25   # bar units a second: 0.8 s from rest to full power
+const METER_RATE := 1.0    # bar units a second: one second from rest to full power, and one back
 const OVER := 1.12         # the bar's end; past 1.0 is an overswing
-const LATE := -0.1         # the marker gets this far past the line before the swing goes anyway
-const ZONE := 0.11         # bar units early or late that make a full hook or slice
-const PERFECT := 0.014     # bar units either side of the line that count as flush
+const LATE := -0.14        # the marker gets this far past the line before the swing goes anyway
+const ZONE := 0.17         # bar units early or late that make a full hook or slice
+const GOOD := 0.06         # within this of the line the shot flies all but straight
+const PERFECT := 0.02      # bar units either side of the line that count as flush
+const GOOD_MISS := 0.15    # the most a shot inside the good band can bend
 const STICK_PULL := 0.55   # how far back the stick must go to start a swing
 ## Shot shapes. `need` is the golfer skill effect that unlocks one.
 const SHAPES := [
@@ -50,6 +52,7 @@ var needle_dir := 1.0
 var target_power := -1.0
 var swing_word := ""            # what the third press earned: "Flush", "A touch late"...
 var zone := ZONE                # this shot's margin, in bar units, before a full hook or slice
+var good := GOOD                # the band that still flies straight
 var perfect := PERFECT          # and its flush window
 var stick_phase := 0            # analog swing: 0 not swinging, 1 pulling back, 2 coming forward
 var _stick_t := 0.0             # seconds since the stick left the back position
@@ -414,7 +417,9 @@ func _set_margins() -> void:
 		ease = 1.15
 	if power > 1.0:
 		ease *= 1.0 - (power - 1.0) / (OVER - 1.0) * 0.45
+	ease *= sim.diff("swing")
 	zone = ZONE * ease
+	good = GOOD * ease
 	perfect = PERFECT * (1.0 + sim.skills.bonus("sweet") * 12.0) * ease
 
 
@@ -428,11 +433,16 @@ func _set_power(at: float) -> void:
 
 ## Turn where the marker was stopped (bar units above the line) into the
 ## swing's timing: 0 flush, -1 a full hook, 1 a full slice.
+## Flush inside the perfect window; a shade of bend across the good band;
+## only beyond it does the shot start to hook or slice in earnest.
 func _timing(at: float) -> float:
 	var e := -at          # early is negative, late positive
-	if absf(e) <= perfect:
+	var a := absf(e)
+	if a <= perfect:
 		return 0.0
-	return signf(e) * clampf((absf(e) - perfect) / maxf(zone - perfect, 0.001), 0.0, 1.0)
+	if a <= good:
+		return signf(e) * GOOD_MISS * (a - perfect) / maxf(good - perfect, 0.001)
+	return signf(e) * (GOOD_MISS + (1.0 - GOOD_MISS) * clampf((a - good) / maxf(zone - good, 0.001), 0.0, 1.0))
 
 
 func _commit(timing: float) -> void:
@@ -441,7 +451,9 @@ func _commit(timing: float) -> void:
 		swing_word = "Way late. Hold on to your hat."
 	elif timing == 0.0:
 		swing_word = "Flush."
-	elif absf(timing) < 0.35:
+	elif absf(timing) <= GOOD_MISS + 0.001:
+		swing_word = "Good. A shade %s." % ("early" if timing < 0.0 else "late")
+	elif absf(timing) < 0.5:
 		swing_word = "A touch %s." % ("early" if timing < 0.0 else "late")
 	elif absf(timing) < 1.0:
 		swing_word = "Early: it will hook." if timing < 0.0 else "Late: it will slice."
@@ -461,8 +473,6 @@ func _meter_rate() -> float:
 	var r := METER_RATE / (1.0 + sim.skills.bonus("tempo"))
 	if putting:
 		r *= 0.85
-	if state == S.ACCURACY:
-		r *= 0.9 + 0.4 * minf(power, 1.0)
 	return r
 
 
@@ -495,7 +505,7 @@ func stick(x: float, y: float, delta: float) -> void:
 			if y < -STICK_PULL:
 				# the hit: sideways drift of the push is the error, and a
 				# slow change of direction loses power
-				var e := clampf((x - _stick_x) * 1.8, -1.0, 1.0)
+				var e := clampf((x - _stick_x) * 1.2, -1.0, 1.0)
 				if _stick_t > 0.45:
 					power *= 0.85
 					e = clampf(e + 0.25, -1.0, 1.0)
@@ -638,7 +648,7 @@ func _strike() -> void:
 		lie_read = Lie.read(sim, g, aim)
 		var mods: Dictionary = shape().mods
 		var full := _full_speed()
-		var sig := g.spread() * bs * Defs.T_LIE_SPREAD[lie] * float(lie_read.spread) * 2.4
+		var sig := g.spread() * bs * Defs.T_LIE_SPREAD[lie] * float(lie_read.spread) * 1.2
 		if pin_dist < 150.0 / Defs.YARDS:
 			# the Approach attribute tightens the scoring shots
 			sig *= maxf(0.35, 1.0 + sim.skills.bonus("approach"))
@@ -650,7 +660,7 @@ func _strike() -> void:
 		# a bad lie turns a poor swing into a poor strike more often, and so
 		# do an overswing and a swing that was never stopped
 		var odds := 0.35 * forgive * float(lie_read.mishit) + maxf(power - 1.0, 0.0) * 2.5 + (0.3 if _late else 0.0)
-		if absf(miss) > 0.8 and sim.rng.randf() < minf(odds, 0.9) and not (clean_lie and sim.skills.bonus("pure") > 0.0):
+		if absf(miss) > 0.9 and sim.rng.randf() < minf(odds, 0.9) and not (clean_lie and sim.skills.bonus("pure") > 0.0):
 			g.mishit = true
 			speed *= 0.5
 			loft *= 0.5
@@ -665,7 +675,7 @@ func _strike() -> void:
 		b.struck_from = lie
 		var from := b.pos
 		var lift_c := float(c.lift) * float(mods.get("lift", 1.0)) * float(lie_read.lift)
-		var side_c := miss * 0.07 * bs + float(mods.get("side", 0.0)) + float(lie_read.side)
+		var side_c := miss * 0.05 * bs + float(mods.get("side", 0.0)) + float(lie_read.side)
 		var spin_c := (float(c.spin) + float(mods.get("spin", 0.0))) * float(lie_read.spin)
 		b.launch(speed, aim + miss * sig, loft, lift_c, side_c, spin_c)
 		# the same swing in still air, so the golfer can be told what the wind did

@@ -65,9 +65,11 @@ when a ball finds the pond. They go home when it is over. You stay.
 When the office gets quiet, take your clubs out. The swing is the old
 three-click: press to start the marker up the bar, press to set the power
 where you stop it, and press once more as it comes back down to the line.
-Early hooks. Late slices. Let it run past the line and you will find out
-what a snap hook looks like from behind. There are no do-overs, because
-there are no do-overs.
+Anywhere in the green band flies straight. The thin bright line in the
+middle is a flush strike, and you will know it when you hear it. Early
+hooks. Late slices. Let it run past the line and you will find out what a
+snap hook looks like from behind. There are no do-overs, because there are
+no do-overs.
 
 The ball knows where it is lying. From the rough it comes out hot with no
 spin and runs forever. From a plugged lie in the sand it comes out angry.

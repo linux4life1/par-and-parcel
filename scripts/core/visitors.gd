@@ -25,7 +25,7 @@ var golfers: Array[Golfer] = []
 var balls: Array[Ball] = []
 var pins: Array[Vector3] = []
 var recent: Array[float] = []     # satisfaction of the last golfers to leave
-var spawn_t := 3.0
+var spawn_t := 0.05            # arrivals expected before the next group turns up
 var facilities := {}              # kind -> Array of world positions
 var amenities := {}               # kind -> how many the course has
 
@@ -78,10 +78,13 @@ func step(dt: float) -> void:
 func _spawn(dt: float) -> void:
 	if not sim.open or sim.course.holes.is_empty():
 		return
-	spawn_t -= dt
+	# The timer counts expected arrivals, not seconds, so it runs at the
+	# rate of the moment: a timer wound up in the afternoon slows down
+	# when night falls instead of bringing a group in at midnight.
+	spawn_t -= dt * sim.arrival_rate()
 	if spawn_t > 0.0:
 		return
-	spawn_t = sim.rng.randf_range(0.6, 1.4) / maxf(sim.arrival_rate(), 0.001)
+	spawn_t = sim.rng.randf_range(0.6, 1.4)
 	var public := 0
 	var at_first := 0
 	for gr in groups:

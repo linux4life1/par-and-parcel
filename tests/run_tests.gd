@@ -27,6 +27,7 @@ func _ready() -> void:
 	_test_collisions()
 	_test_spin_wind_lies()
 	_test_seasons_and_scorecard()
+	_test_planner()
 	_test_night()
 	_test_career()
 	_test_gamepad()
@@ -598,17 +599,35 @@ func _test_night() -> void:
 	live.events.timer = 99999.0
 	var by_day := 0
 	var by_night := 0
+	var came_by_day := 0
+	var came_by_night := 0
 	var last := 0
+	var last_gid := live.visitors._gid
+	var arrivals := ""
 	for i in int(Defs.CLOCK_DAY_SECONDS * 3.0 * 60.0):
 		live.step(1.0 / 60.0)
+		var dark := live.darkness() > 0.55
 		if live.stats.holes_played != last:
-			if live.darkness() > 0.55:
+			if dark:
 				by_night += live.stats.holes_played - last
 			else:
 				by_day += live.stats.holes_played - last
 			last = live.stats.holes_played
-	print("   three days with the clock running and no lights: %d holes played by day, %d finished after dark" % [by_day, by_night])
-	check(by_day > 12 and by_night > 0 and by_night < by_day, "an unlit course does most of its business in daylight")
+		if live.visitors._gid != last_gid:
+			# a golfer who storms off gets a group of their own; only count
+			# groups that have come to play
+			var newest: Group = live.visitors.groups[-1]
+			if newest.state != Group.S.LEAVING:
+				arrivals += "%s%s " % [Defs.clock_text(live.clock).replace(" ", ""), "*" if dark else ""]
+				if dark:
+					came_by_night += 1
+				else:
+					came_by_day += 1
+			last_gid = live.visitors._gid
+	print("   three days with the clock running and no lights: %d groups arrived by day and %d after dark; %d holes played by day, %d finished after dark" % [came_by_day, came_by_night, by_day, by_night])
+	print("   arrivals: " + arrivals)
+	check(came_by_day > came_by_night * 2 and came_by_day > 6, "an unlit course does most of its business in daylight")
+	check(by_night > 0, "and a round that runs into the night is played on, not abandoned")
 
 
 ## Play one hole of a career by hand: the strokes are described, not swung.
@@ -1963,8 +1982,9 @@ func _test_club_life() -> void:
 	var angry := gr.members[0]
 	angry.persona = {}
 	angry.satisfaction = 10.0
+	var tantrums_before := int(sim.stats.tantrums)
 	sim.visitors._tantrum(angry)
-	check(angry.tantrum and sim.stats.tantrums == 1, "a furious golfer has a tantrum")
+	check(angry.tantrum and int(sim.stats.tantrums) == tantrums_before + 1, "a furious golfer has a tantrum")
 	check(sim.wildlife.animals.size() >= 4, "there is wildlife on the course (%d animals)" % sim.wildlife.animals.size())
 	var a := sim.wildlife.animals[0]
 	var was := a.pos
@@ -2406,3 +2426,66 @@ func _test_gallery() -> void:
 static func Game_fast(sim: Sim, seconds: float) -> void:
 	for i in int(seconds * 60.0):
 		sim.step(1.0 / 60.0)
+
+
+func _test_planner() -> void:
+	print("-- where the computer golfers aim")
+	# a dogleg: a leg north from the tee, a block of trees on the corner,
+	# then a leg east to the green; the pin is straight over the trees
+	var sim := _sim("sandbox", 5)
+	var c := sim.course
+	for i in c.heights.size():
+		c.heights[i] = 0.0
+	for i in c.terrain.size():
+		if c.hot[i] == 0:
+			c.terrain[i] = Defs.T.ROUGH
+			c.objects[i] = 0
+	c.revision += 1
+	sim.paint(40, 100, 1, Defs.T.TEE)
+	for ty in range(66, 98):
+		for tx in range(38, 44):
+			c.terrain[ty * c.w + tx] = Defs.T.FAIRWAY
+	for tx in range(38, 70):
+		for ty in range(60, 67):
+			c.terrain[ty * c.w + tx] = Defs.T.FAIRWAY
+	sim.paint(70, 63, 2, Defs.T.GREEN)
+	for ty in range(68, 96):
+		for tx in range(46, 66):
+			if (tx + ty) % 2 == 0:
+				c.objects[ty * c.w + tx] = Defs.O.OAK
+	c.revision += 1
+	c.objects_touched()
+	var hole := sim.add_hole(c.tile_center(40, 100), c.tile_center(70, 63))
+	var pin_line := Vector2(hole.pin.x - hole.tee.x, hole.pin.z - hole.tee.z).angle()
+	var on_fairway := 0
+	var down_the_leg := 0
+	var n := 20
+	for k in n:
+		var g := sim.visitors.make_golfer("public", 0.55)
+		g.persona = {}
+		g.begin_hole()
+		g.ball.place(c.on_ground(hole.tee.x, hole.tee.z))
+		var plan := ShotAI.plan(sim, g, hole)
+		var t: Vector3 = plan.target
+		var tt := c.terrain_at(t.x, t.z)
+		if tt == Defs.T.FAIRWAY or tt == Defs.T.GREEN:
+			on_fairway += 1
+		if absf(wrapf(float(plan.heading) - pin_line, -PI, PI)) > deg_to_rad(5.0):
+			down_the_leg += 1
+	print("   on a dogleg, %d of %d average golfers aim at the fairway and %d aim down the leg rather than at the flag" % [on_fairway, n, down_the_leg])
+	check(on_fairway >= n * 0.8, "golfers aim for the fairway, not the trees between them and the flag")
+	check(down_the_leg >= n * 0.6, "and follow the dogleg rather than aiming at the pin")
+	var duffer := sim.visitors.make_golfer("public", 0.1)
+	duffer.persona = {}
+	duffer.imagination = 0.0
+	duffer.begin_hole()
+	duffer.ball.place(c.on_ground(hole.tee.x, hole.tee.z))
+	var dp := ShotAI.plan(sim, duffer, hole)
+	var pro := sim.visitors.make_golfer("pro", 0.95)
+	pro.persona = {}
+	pro.imagination = 1.0
+	pro.begin_hole()
+	pro.ball.place(c.on_ground(hole.tee.x, hole.tee.z))
+	var pp := ShotAI.plan(sim, pro, hole)
+	check(ShotAI._spot_cost(sim, hole, Vector2(c.tile_center(50, 80).x, c.tile_center(50, 80).z), 1.35) > ShotAI._spot_cost(sim, hole, Vector2(c.tile_center(50, 80).x, c.tile_center(50, 80).z), 0.55), "trouble weighs more on a thoughtful golfer than on a duffer")
+	check(float(dp.dist) > 0.0 and float(pp.dist) > 0.0, "both still have a shot to play")

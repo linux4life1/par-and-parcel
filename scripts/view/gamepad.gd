@@ -450,7 +450,7 @@ func _watch_round(delta: float) -> void:
 			if play.stick_phase == 2:
 				hud.play_keys.text = "Push the stick straight forward. Off to one side bends the shot."
 			else:
-				hud.play_keys.text = "%s as the marker comes back to the line. Early hooks, late slices." % label("a")
+				hud.play_keys.text = "%s as the marker comes back to the line. The green band flies straight." % label("a")
 
 
 # ------------------------------------------------------------- the pointer

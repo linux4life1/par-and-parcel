@@ -108,9 +108,23 @@ Issuer ID, which only the owner has.
   be reachable by a click and must fit on a 1600 by 900 screen.
 - **The swing is one pass of one bar** (`PlayMode.press`, `stick`): start,
   set power, stop on the line, no retries, and the marker runs past the
-  line if nobody presses. Anything that makes it easier (a wider window, a
-  slower marker) must come from a golfer attribute, not a constant. The
-  owner found the old meter "way too easy".
+  line if nobody presses. The feel to match is Everybody's Golf: a wide
+  band that flies straight (`GOOD`), a thin flush line inside it that is a
+  bonus, not the requirement, and misses that curve more the further out
+  they are. The owner found the first meter "way too easy" and the second
+  so hard a golf gamer "can't even hit a single shot straight"; a press
+  jitter of 35 ms should land in the band nine times in ten. Lie, club,
+  difficulty (`swing` in `data/difficulty.json`) and attributes scale the
+  band; do not hide the tuning in a view constant.
+- **Computer golfers choose a landing spot by cost in strokes**
+  (`ShotAI._spot_cost`): rough, sand, trees, water and out of bounds are
+  priced as fractions of a stroke, weighted by the golfer's imagination.
+  Distances are in metres, so a cost of 7 on a 150 m shot is nothing; keep
+  trouble costs in the tens and hundreds or the golfers aim at the flag
+  through whatever is in the way.
+- **Arrivals count expected golfers, not seconds** (`Visitors.spawn_t`
+  ticks down by `dt * arrival_rate()`), so the rate of the moment applies.
+  A timer in seconds set at dusk brought a daytime queue in at midnight.
 - **Difficulty multipliers come from `sim.diff(key)`** (`data/difficulty.json`).
   A golfer's mood factors are fields set by `Visitors.set_temper`; a new
   golfer kind that should be exempt (like `player` and `lab`) must be

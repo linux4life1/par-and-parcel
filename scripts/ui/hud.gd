@@ -551,6 +551,7 @@ func _update_play() -> void:
 	meter.locked = p.power if (p.state == PlayMode.S.ACCURACY or p.state == PlayMode.S.SWING or p.state == PlayMode.S.FLIGHT) else -1.0
 	meter.target = p.target_power
 	meter.zone = p.zone
+	meter.good = p.good
 	meter.perfect = p.perfect
 	meter.show_result = p.state == PlayMode.S.SWING or p.state == PlayMode.S.FLIGHT or p.state == PlayMode.S.PAUSE
 	meter.result = p.needle
@@ -561,7 +562,7 @@ func _update_play() -> void:
 		PlayMode.S.POWER:
 			play_keys.text = "Space to set the power. The gold line reaches the pin; past the 100 mark is an overswing."
 		PlayMode.S.ACCURACY:
-			play_keys.text = "Space as the marker comes back to the line. Early hooks, late slices."
+			play_keys.text = "Space as the marker comes back to the line. Anywhere in the green band flies straight; the thin bright line is flush."
 		_:
 			play_keys.text = ""
 
