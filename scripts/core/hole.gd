@@ -39,6 +39,10 @@ var test_imagination := 0.0
 var kind := 0                   # bit 1 length, 2 accuracy, 4 imagination
 var expect := {}                # expected score for a beginner, average, expert
 var teeing_group: Group = null  # the group holding the tee box
+## Recent parties' time on this hole, in sim seconds, newest last. The
+## scorecard shows the average on the course clock.
+var play_times: Array[float] = []
+const PACE_KEEP := 12
 var _lit := 0.0
 var _lit_rev := -1
 var _lit_stamp := 0
@@ -509,6 +513,25 @@ func average_paid() -> float:
 	return earned / payers if payers > 0 else 0.0
 
 
+## Remember how long one party took, and forget the oldest once the window fills.
+func note_time(seconds: float) -> void:
+	if seconds <= 0.0:
+		return
+	play_times.append(seconds)
+	while play_times.size() > PACE_KEEP:
+		play_times.pop_front()
+
+
+## Sim seconds a party has been taking lately. Zero until someone has finished.
+func average_time() -> float:
+	if play_times.is_empty():
+		return 0.0
+	var s := 0.0
+	for t in play_times:
+		s += t
+	return s / float(play_times.size())
+
+
 func to_dict() -> Dictionary:
 	return {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
@@ -516,6 +539,7 @@ func to_dict() -> Dictionary:
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
 		"name": name, "award": award, "comments": comments, "open": open,
+		"play_times": play_times,
 	}
 
 
@@ -535,6 +559,11 @@ static func from_dict(d: Dictionary) -> Hole:
 		hole.tally[k] = int(tl[k])
 	hole.name = str(d.get("name", ""))
 	hole.open = bool(d.get("open", true))
+	var pt: Array = d.get("play_times", [])
+	for x in pt:
+		hole.play_times.append(float(x))
+	while hole.play_times.size() > PACE_KEEP:
+		hole.play_times.pop_front()
 	hole.award = str(d.get("award", ""))
 	hole.comments = d.get("comments", {})
 	# Par is filled in properly once the ground is loaded (Course.from_dict).

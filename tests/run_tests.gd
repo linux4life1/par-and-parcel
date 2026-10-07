@@ -56,6 +56,7 @@ func _ready() -> void:
 	_test_dogleg()
 	_test_mood_map()
 	_test_draft_hole()
+	_test_pace()
 	_test_landmarks()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
@@ -2754,6 +2755,76 @@ func _test_draft_hole() -> void:
 	check(sim.rating == 0.0, "a course with nothing open is unrated")
 	var tutor := FileAccess.get_file_as_string("res://data/tutorial.json")
 	check(tutor.contains("starts closed") and tutor.contains("press Open"), "the tutorial tells you to open a hole before anyone pays")
+
+
+func _finish_timed(sim: Sim, hole_i: int, seconds: float) -> void:
+	var gr := sim.visitors.add_group("public", 1, 0.4)
+	gr.hole_i = hole_i
+	gr.state = Group.S.PLAY
+	gr.hole_time = 0.0
+	for m in gr.members:
+		m.done = true
+	gr.step(seconds, sim)
+
+
+func _test_pace() -> void:
+	print("-- pace of play")
+	check(Defs.pace_text(2.5) == "12 min" and Defs.pace_text(2.5, true) == "12m", "a short hole is told in minutes on the course clock")
+	check(Defs.pace_text(12.5) == "1 h" and Defs.pace_text(15.0) == "1 h 12 min" and Defs.pace_text(15.0, true) == "1h12", "longer stretches are told in hours")
+	check(absf(Defs.ROUND_LONG - 62.5) < 0.001, "five hours on the course clock is the long-round line")
+	var sim := _sim("three_holes", 8)
+	var holes := sim.course.holes
+	var queued := sim.visitors.add_group("public", 1, 0.4)
+	var blocker := Group.new()
+	blocker.state = Group.S.PLAY
+	blocker.hole_i = 0
+	holes[0].teeing_group = blocker
+	queued.state = Group.S.QUEUE
+	queued.hole_time = 0.0
+	queued.step(4.0, sim)
+	check(queued.state == Group.S.QUEUE and absf(queued.hole_time - 4.0) < 0.001, "waiting on the tee counts toward the hole")
+	holes[0].teeing_group = null
+	queued.state = Group.S.PLAY
+	for m in queued.members:
+		m.done = true
+	queued.step(1.0, sim)
+	check(holes[0].play_times.size() == 1 and absf(holes[0].average_time() - 5.0) < 0.001, "the hole keeps the wait and the play together (%.2f)" % holes[0].average_time())
+	_finish_timed(sim, 1, 20.0)
+	_finish_timed(sim, 2, 5.0)
+	check(sim.course.bottleneck() == 1, "the hole that takes four times as long is the bottleneck")
+	check(sim.course.times_complete() and absf(sim.course.round_time() - 30.0) < 0.001, "a round is the sum of the open holes (%.2f)" % sim.course.round_time())
+	holes[1].open = false
+	check(sim.course.bottleneck() != 1 and absf(sim.course.round_time() - 10.0) < 0.001, "a draft is left out of the round and out of the bottleneck")
+	holes[1].open = true
+	for i in 13:
+		holes[2].note_time(100.0 if i == 0 else 2.0)
+	check(holes[2].play_times.size() == Hole.PACE_KEEP and absf(holes[2].average_time() - 2.0) < 0.01, "only the last dozen parties stay in the average")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var back := Sim.from_dict(db, saved, gear)
+	check(absf(back.course.holes[0].average_time() - 5.0) < 0.001, "a save keeps how long the hole has been taking")
+	var course_d: Dictionary = saved.course
+	var hs: Array = course_d.holes
+	var hd: Dictionary = hs[0]
+	hd.erase("play_times")
+	var legacy := Sim.from_dict(db, saved, gear)
+	check(legacy.course.holes[0].play_times.is_empty(), "an old save, with no times, has no pace yet")
+	var fresh := sim.visitors.add_group("public", 1, 0.4)
+	check(fresh.hole_i == 0 and fresh.state == Group.S.TO_TEE and not holes[0].line.has(fresh), "a new party starts at the clubhouse, off hole 1's clock")
+	fresh.step(3.0, sim)
+	check(holes[0].line.has(fresh) and absf(fresh.hole_time) < 0.001, "hole 1's clock stays off until the party has joined the tee line")
+	fresh.step(2.0, sim)
+	check(absf(fresh.hole_time - 2.0) < 0.001, "once they are in the line, the walk to the tee counts (%.2f)" % fresh.hole_time)
+	var on_it := sim.visitors.add_group("public", 1, 0.4)
+	on_it.hole_i = 0
+	on_it.state = Group.S.PLAY
+	on_it.hole_time = 9.0
+	var later := sim.visitors.add_group("public", 1, 0.4)
+	later.hole_i = 2
+	later.state = Group.S.PLAY
+	later.hole_time = 4.0
+	sim.remove_hole(0)
+	check(on_it.state == Group.S.TO_TEE and absf(on_it.hole_time) < 0.001, "removing the hole they were on starts the next one from zero")
+	check(later.hole_i == 1 and absf(later.hole_time - 4.0) < 0.001, "a party further along keeps the time on the hole they are still playing")
 
 
 func _test_landmarks() -> void:

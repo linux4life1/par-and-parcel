@@ -487,6 +487,8 @@ func _holes(body: VBoxContainer) -> Callable:
 				txt += "\nNo lights. Golfers pay less for it after dark."
 			if hole.lab_ready and not hole.expect.is_empty():
 				txt += "\nExpected score: beginner %.1f, average %.1f, expert %.1f" % [float(hole.expect.beginner), float(hole.expect.average), float(hole.expect.expert)]
+			if not hole.play_times.is_empty():
+				txt += "\nAbout %s a group, waiting included" % Defs.pace_text(hole.average_time())
 			(row[2] as Label).text = txt
 			(row[3] as Label).text = _hole_report(hole)
 			var paid: Label = row[4]
@@ -514,11 +516,11 @@ func _scorecard(box: VBoxContainer) -> void:
 	card.add_child(cv)
 	cv.add_child(UIKit.label("SCORECARD", 12, UIKit.ACCENT))
 	var grid := GridContainer.new()
-	grid.columns = 8
-	grid.add_theme_constant_override("h_separation", 10)
+	grid.columns = 9
+	grid.add_theme_constant_override("h_separation", 8)
 	grid.add_theme_constant_override("v_separation", 2)
 	cv.add_child(grid)
-	for head: String in ["Hole", "Par", "Yards", "Average", "Birdies", "Bogeys", "Fun", "Pays"]:
+	for head: String in ["Hole", "Par", "Yards", "Average", "Birdies", "Bogeys", "Fun", "Pays", "Time"]:
 		var hl := UIKit.label(head, 11, UIKit.MUTED)
 		hl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if head != "Hole" else HORIZONTAL_ALIGNMENT_LEFT
 		grid.add_child(hl)
@@ -530,6 +532,7 @@ func _scorecard(box: VBoxContainer) -> void:
 	var easiest := -1
 	var favourite := -1
 	var least := -1
+	var slow := sim.course.bottleneck()
 	for i in holes.size():
 		var h := holes[i]
 		par_total += h.par
@@ -554,15 +557,20 @@ func _scorecard(box: VBoxContainer) -> void:
 			("%d%%" % int(round(h.share(["1", "2", "3"]) * 100.0))) if h.plays > 0 else "–",
 			str(int(h.fun)),
 			Defs.money(h.average_paid()) if h.payers > 0 else "–",
+			Defs.pace_text(h.average_time(), true) if not h.play_times.is_empty() else "–",
 		]
 		for c in cells.size():
 			var cl := UIKit.label(cells[c], 12, UIKit.TEXT if c > 0 else UIKit.GOLD)
 			cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if c > 0 else HORIZONTAL_ALIGNMENT_LEFT
 			if c == 0:
-				cl.custom_minimum_size = Vector2(120, 0)
+				cl.custom_minimum_size = Vector2(108, 0)
 				cl.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+			if c == 8 and i == slow:
+				cl.add_theme_color_override("font_color", UIKit.WARN)
+				cl.tooltip_text = "The slowest hole on the course"
 			grid.add_child(cl)
-	var foot: Array[String] = ["Out", str(par_total), str(yards_total), ("%.1f" % avg_total) if played_all else "–", "", "", "", ""]
+	var time_total := Defs.pace_text(sim.course.round_time(), true) if sim.course.times_complete() else "–"
+	var foot: Array[String] = ["Out", str(par_total), str(yards_total), ("%.1f" % avg_total) if played_all else "–", "", "", "", "", time_total]
 	for c in foot.size():
 		var fl := UIKit.label(foot[c], 12, UIKit.MUTED)
 		fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if c > 0 else HORIZONTAL_ALIGNMENT_LEFT
@@ -578,6 +586,16 @@ func _scorecard(box: VBoxContainer) -> void:
 		aces += h.aces
 	if aces > 0:
 		notes.append("%d hole-in-one%s on the course so far." % [aces, "" if aces == 1 else "s"])
+	if sim.course.times_complete():
+		var round_s := sim.course.round_time()
+		var pace_note := "A round takes about %s." % Defs.pace_text(round_s)
+		if round_s > Defs.ROUND_LONG:
+			pace_note += " That is over five hours."
+		notes.append(pace_note)
+	elif sim.course.round_time() > 0.0:
+		notes.append("Timed holes so far add up to %s." % Defs.pace_text(sim.course.round_time()))
+	if slow >= 0:
+		notes.append("Slowest: hole %d, %s a group." % [slow + 1, Defs.pace_text(holes[slow].average_time())])
 	if not notes.is_empty():
 		cv.add_child(UIKit.para("  ".join(PackedStringArray(notes)), 12))
 
