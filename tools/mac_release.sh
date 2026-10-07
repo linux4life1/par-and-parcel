@@ -50,6 +50,14 @@ ditto -x -k "$ZIP" "$WORK/app"
 APP="$(find "$WORK/app" -maxdepth 2 -name "*.app" | head -1)"
 [ -n "$APP" ] || { echo "no .app inside $ZIP" >&2; exit 1; }
 xattr -cr "$APP"
+# Godot writes the project's name into Info.plist without escaping it, and
+# "Par & Parcel" is not valid XML. Mend it, or codesign cannot bind the plist.
+PLIST="$APP/Contents/Info.plist"
+if ! plutil -lint -s "$PLIST" >/dev/null 2>&1; then
+	sed -i '' -E 's/&([^a-zA-Z#][^;]*|$)/\&amp;\1/g' "$PLIST"
+	plutil -lint -s "$PLIST" || { echo "Info.plist is still not valid" >&2; exit 1; }
+	echo "== mended the ampersand in Info.plist"
+fi
 
 # Hardened runtime with the two exceptions a GDScript Godot game needs.
 ENT="$WORK/entitlements.plist"
