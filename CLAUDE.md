@@ -94,6 +94,17 @@ Issuer ID, which only the owner has.
   a model in `world_view.gd` (`_built`), collision shapes in
   `data/solids.json` under the same kind name, and a button in the build
   menu. A test checks that every solid object in every biome has shapes.
+- **One party on a tee; the rest wait in a line** (`Hole.line`,
+  `Group.line_spot`, `Group.arc_spot`). A party joins the line the first
+  time it heads for the tee and leaves it when it begins the hole, moves
+  on or goes home (`Hole.line_index` prunes). Partners of the golfer
+  hitting stand in the arc behind the marker, never on the box. Standing
+  spots are kept apart by `Visitors.clear_spot`, a deterministic nudge.
+  Nobody hits into people (`Group._danger`): the only exceptions are a
+  drunk (`plan.reckless`) and the safety valve `WAIT_LIMIT` (150 s, or
+  `WAIT_PLAYER` when the owner alone is in the way), which exists so a
+  stuck golfer or an idle owner cannot gridlock a hole. Waiting is charged
+  as it happens through `Visitors.wait_on`; do not add a second charge.
 - **Golfers never stop for the night.** A round outlasts a day, so after dark
   they play on: unlit holes are less fun and pay less. Do not make darkness
   end a round.

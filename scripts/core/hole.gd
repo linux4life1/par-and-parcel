@@ -32,6 +32,26 @@ var _lit_sig := Vector3.ZERO
 ## A hole needs this much of its length lit to be played after dark.
 const LIT_ENOUGH := 0.7
 var groups: Array[Group] = []   # every group currently playing the hole
+## Parties waiting to tee off, in the order they arrived. The front of the
+## line is the next party up; the party on the tee is teeing_group, not here.
+var line: Array[Group] = []
+
+
+## Where this party stands in the line for the tee (0 is next up). A party
+## not yet in the line joins the back of it; parties that have moved on, or
+## gone home, are dropped on the way.
+func line_index(gr: Group, hole_i: int) -> int:
+	var k := line.size() - 1
+	while k >= 0:
+		var o := line[k]
+		if o.state >= Group.S.PLAY or o.hole_i != hole_i or o.members.is_empty() or o == teeing_group:
+			line.remove_at(k)
+		k -= 1
+	var at := line.find(gr)
+	if at < 0:
+		line.append(gr)
+		at = line.size() - 1
+	return at
 
 # Routing field: "effective metres to the pin" for tiles in a box around the hole.
 var _field := PackedFloat32Array()

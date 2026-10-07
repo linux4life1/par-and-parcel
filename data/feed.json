@@ -63,6 +63,11 @@
     "Five-hour round incoming at {course}. Pack a lunch.",
     "The group ahead on hole {hole} is lining up putts like it's a major."
   ],
+  "hit_into": [
+    "Couldn't wait any longer on hole {hole} at {course}. Hit into the group ahead. FORE, I suppose.",
+    "Stood on hole {hole} for an age. Gave up and hit. If you got hit, that's on the course for the slow play.",
+    "Group ahead on hole {hole} at {course} would not move. So I moved them."
+  ],
   "scenery": [
     "Hole {hole} at {course} is gorgeous. Took more photos than shots.",
     "The trees and flowers around number {hole} are something else. Great work, {course}.",
