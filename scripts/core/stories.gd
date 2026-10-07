@@ -281,7 +281,9 @@ func _cast_role(spec: Dictionary, taken: Array[int]) -> Dictionary:
 ## abilities come from the story's dice; joining uses the club's own code.
 func _new_character(spec: Dictionary) -> Dictionary:
 	var g := Golfer.new()
+	sim.tag_eddy(g)
 	g.kind = "public"
+	g.course = sim.course
 	g.roll_stats(float(spec.get("skill", 0.4)), rng)
 	g.wealth = float(spec.get("wealth", g.wealth))
 	var first := sim.db.pick("first", rng)
@@ -609,7 +611,7 @@ func _objects_along(hole: Hole, kind: int, reach: int) -> int:
 	var seen := {}
 	var steps := maxi(2, int(hole.length / Defs.TILE))
 	for s in steps + 1:
-		var p := hole.tee.lerp(hole.pin, float(s) / steps)
+		var p := hole.point_along(float(s) / steps)
 		var t := course.tile_of(p.x, p.z)
 		for dy in range(-reach, reach + 1):
 			for dx in range(-reach, reach + 1):
@@ -625,7 +627,7 @@ func _terrain_along(hole: Hole, kind: int, reach: int) -> int:
 	var seen := {}
 	var steps := maxi(2, int(hole.length / Defs.TILE))
 	for s in steps + 1:
-		var p := hole.tee.lerp(hole.pin, float(s) / steps)
+		var p := hole.point_along(float(s) / steps)
 		var t := course.tile_of(p.x, p.z)
 		for dy in range(-reach, reach + 1):
 			for dx in range(-reach, reach + 1):

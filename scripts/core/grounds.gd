@@ -5,6 +5,8 @@ extends RefCounted
 ## time so the cost per frame stays tiny.
 
 const SLICES := 16
+## A feeling painted on a tile halves in about two calendar days.
+const MOOD_FADE := 0.023
 const SEASON_WEEDS: Array[float] = [1.3, 1.6, 1.4, 1.0, 0.9, 0.9, 0.8, 0.5]
 const SEASON_PESTS: Array[float] = [0.6, 0.9, 1.2, 1.6, 1.8, 1.5, 1.0, 0.5]
 
@@ -122,6 +124,11 @@ func step(dt: float) -> void:
 			_cursor = 0
 			_finish_pass()
 		var t: int = course.terrain[i]
+		var md := course.mood[i]
+		if absf(md) > 0.02:
+			course.mood[i] = md * exp(-MOOD_FADE * edt)
+		else:
+			course.mood[i] = 0.0
 		if t == Defs.T.WATER:
 			course.wet[i] = 0.0 if lava else 1.0
 			continue

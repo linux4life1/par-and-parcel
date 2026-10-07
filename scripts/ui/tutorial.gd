@@ -139,6 +139,11 @@ func _met(st: Dictionary) -> bool:
 			return c.terrain.count(Defs.T.FAIRWAY) >= COUNT_FAIRWAY
 		"hole":
 			return not c.holes.is_empty()
+		"hole_open":
+			for h in c.holes:
+				if h.open:
+					return true
+			return false
 		"paid":
 			for h in c.holes:
 				if h.payers > 0:

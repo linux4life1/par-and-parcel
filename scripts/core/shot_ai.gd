@@ -65,7 +65,7 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 			c += _spot_cost(sim, hole, p2 + dir * (r + lon), care)
 			c += _spot_cost(sim, hole, p2 + dir * (r - lon), care)
 			c /= 6.0
-			c += _line_block(course, p2, dir, minf(r, 40.0)) * (1.0 - 0.6 * g.imagination)
+			c += _line_block(course, p2, dir, r) * (1.0 - 0.3 * g.imagination)
 			if c < best_cost:
 				best_cost = c
 				best_target = p2 + dir * r
@@ -120,15 +120,21 @@ static func _spot_cost(sim: Sim, hole: Hole, pt: Vector2, care: float = 1.0) -> 
 	return f
 
 
-## Penalty for trees standing in the first part of the flight.
+## Penalty for trees standing in the way. A low ball pays the full price;
+## one well above the canopy pays a little, in case the branch is taller
+## than the guess. Carry and apex are a rough arc, not the real flight.
 static func _line_block(course: Course, from: Vector2, dir: Vector2, length: float) -> float:
 	var c := 0.0
+	var carry := maxf(length * 0.87, 1.0)
+	var apex := carry * 0.12
 	var s := 6.0
 	while s < length:
 		var q := from + dir * s
 		var i := course.index_at(q.x, q.y)
 		if i >= 0 and Defs.is_tree(course.objects[i]):
-			c += 22.0
+			var u := clampf(s / carry, 0.0, 1.0)
+			var h := 4.0 * apex * u * (1.0 - u)
+			c += 22.0 if h < 10.0 else 4.0
 		s += Defs.TILE
 	return c
 
@@ -278,7 +284,7 @@ static func strike(sim: Sim, g: Golfer) -> void:
 			heading = lerpf(pl.heading, heading, 0.94)
 		b.shot_wind = brand.get("wind", 1.0)
 		b.dodge = g.imagination * 0.45
-		b.air_seed = fposmod(sim.time * 7.31 + float(g.id) * 13.7, 600.0)
+		b.air_seed = g.air_phase(sim.time)
 		b.struck_from = lie
 		b.launch(speed, heading, loft, float(c.lift) * float(lr.lift), side, float(c.spin) * float(lr.spin))
 	g.strokes += 1

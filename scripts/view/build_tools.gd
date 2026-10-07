@@ -24,14 +24,30 @@ var _tick := 0.0
 var _level := 0.0
 var _tee: Variant = null
 var _warned := -10.0
-var _marker := MeshInstance3D.new()
+var _marker: MeshInstance3D
+var _preview_tile := Vector2i(-999, -999)
+var _preview_text := ""
+var _ribbon: MeshInstance3D
+var _ribbon_mesh: ImmediateMesh
 
 
 func _ready() -> void:
+	_marker = MeshInstance3D.new()
 	_marker.mesh = WorldView._cyl(0.12, 0.12, 6.0, 6)
 	_marker.material_override = WorldView.glow(Color(0.3, 0.7, 1.0))
 	_marker.visible = false
 	add_child(_marker)
+	_ribbon_mesh = ImmediateMesh.new()
+	_ribbon = MeshInstance3D.new()
+	_ribbon.mesh = _ribbon_mesh
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(0.85, 0.95, 1.0)
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_ribbon.material_override = mat
+	_ribbon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_ribbon.visible = false
+	add_child(_ribbon)
 
 
 func bind(s: Sim) -> void:
@@ -43,9 +59,14 @@ func set_mode(m: String) -> void:
 	mode = m
 	_down = false
 	_tee = null
+	_preview_tile = Vector2i(-999, -999)
+	_preview_text = ""
+	if _ribbon != null:
+		_ribbon.visible = false
 	if rig != null:
 		rig.tool_active = m != ""
-	_marker.visible = false
+	if _marker != null:
+		_marker.visible = false
 	_last_tile = Vector2i(-999, -999)
 	if terrain != null:
 		terrain.material.set_shader_parameter("grid_alpha", 1.0 if m != "" else 0.0)
@@ -53,26 +74,35 @@ func set_mode(m: String) -> void:
 
 
 func hint() -> String:
+	var body := ""
 	match mode:
 		"terrain":
-			return "Drag to paint %s. %s per tile." % [sim.terrain_name(terrain_type).to_lower(), Defs.money(Defs.T_COST[terrain_type])]
+			body = "Drag to paint %s. %s per tile." % [sim.terrain_name(terrain_type).to_lower(), Defs.money(Defs.T_COST[terrain_type])]
 		"sculpt":
-			return "Hold the mouse button to %s the land. Hold Shift for fine control." % sculpt_mode
+			body = "Hold the mouse button to %s the land. Hold Shift for fine control." % sculpt_mode
 		"object":
 			if object_type == Defs.O.BRIDGE:
-				return "Click %s to bridge it. %s a span." % [sim.terrain_name(Defs.T.WATER).to_lower(), Defs.money(Defs.O_COST[object_type])]
-			return "Click to place: %s. %s each." % [sim.object_name(object_type).to_lower(), Defs.money(Defs.O_COST[object_type])]
+				body = "Click %s to bridge it. %s a span." % [sim.terrain_name(Defs.T.WATER).to_lower(), Defs.money(Defs.O_COST[object_type])]
+			else:
+				body = "Click to place: %s. %s each." % [sim.object_name(object_type).to_lower(), Defs.money(Defs.O_COST[object_type])]
 		"bulldoze":
-			return "Drag to clear trees, scenery and buildings."
+			body = "Drag to clear trees, scenery and buildings."
 		"hole":
 			if _tee == null:
-				return "Click where the tee goes."
-			return "Now click a green to place the pin."
+				body = "Click where the tee goes."
+			else:
+				_update_preview()
+				body = "Now click a green to place the pin. %s" % _preview_text
 		"land":
 			if sim.land_credits > 0:
-				return "Click a greyed-out parcel to claim it. The county owes you %d." % sim.land_credits
-			return "Click a greyed-out parcel to buy it for %s." % Defs.money(sim.land_price())
-	return ""
+				body = "Click a greyed-out parcel to claim it. The county owes you %d." % sim.land_credits
+			else:
+				body = "Click a greyed-out parcel to buy it for %s." % Defs.money(sim.land_price())
+	if mode == "":
+		return body
+	if body != "":
+		body += "\n"
+	return body + "1 tile ≈ 5.5 yd."
 
 
 func radius_m() -> float:
@@ -107,6 +137,10 @@ func _process(delta: float) -> void:
 		elif mode == "hole":
 			col = Color(0.4, 0.75, 1.0)
 		terrain.set_brush(hover, radius_m(), col)
+	if mode == "hole" and _tee != null and hover != null:
+		_update_preview()
+	elif _ribbon != null and mode != "hole":
+		_ribbon.visible = false
 	if _down and mode == "sculpt" and hover != null:
 		_tick -= delta
 		if _tick <= 0.0:
@@ -225,6 +259,53 @@ func _apply() -> void:
 				SoundDesk.ui("remove")
 
 
+## Par and yardage of the hole the pointer would make, and a ribbon along it.
+func _update_preview() -> void:
+	if sim == null or _tee == null or hover == null:
+		_preview_text = ""
+		return
+	var p: Vector3 = hover
+	var tile := sim.course.tile_of(p.x, p.z)
+	if tile == _preview_tile and _preview_text != "":
+		return
+	_preview_tile = tile
+	var tee: Vector3 = _tee
+	var pin := sim.course.on_ground(p.x, p.z)
+	if Vector2(pin.x - tee.x, pin.z - tee.z).length() < 40.0:
+		_preview_text = "Too short (a hole needs 45 yards)."
+		_show_route(PackedVector2Array())
+		return
+	var measured: Dictionary = Hole.measure(sim.course, tee, pin)
+	_preview_text = "Par %d · %d yd." % [int(measured.par), Defs.yards(float(measured.length))]
+	var pts: PackedVector2Array = measured.line
+	_show_route(pts)
+
+
+func _show_route(pts: PackedVector2Array) -> void:
+	if _ribbon_mesh == null:
+		return
+	_ribbon_mesh.clear_surfaces()
+	if pts.size() < 2:
+		_ribbon.visible = false
+		return
+	_ribbon_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
+	for i in pts.size():
+		var p: Vector2 = pts[i]
+		var prev: Vector2 = pts[i - 1] if i > 0 else p
+		var nxt: Vector2 = pts[i + 1] if i + 1 < pts.size() else p
+		var dir := nxt - prev
+		if dir.length_squared() < 0.01:
+			dir = Vector2(1.0, 0.0)
+		else:
+			dir = dir.normalized()
+		var side := Vector2(-dir.y, dir.x) * 0.45
+		var y := sim.course.height_at(p.x, p.y) + 0.35
+		_ribbon_mesh.surface_add_vertex(Vector3(p.x + side.x, y, p.y + side.y))
+		_ribbon_mesh.surface_add_vertex(Vector3(p.x - side.x, y, p.y - side.y))
+	_ribbon_mesh.surface_end()
+	_ribbon.visible = true
+
+
 func _click_hole(p: Vector3) -> void:
 	var course := sim.course
 	var tile := course.tile_of(p.x, p.z)
@@ -255,7 +336,8 @@ func _click_hole(p: Vector3) -> void:
 	if hole == null:
 		_warn_broke()
 		return
-	sim.toast.emit("Hole %d is open: par %d, %d yards." % [course.holes.size(), hole.par, Defs.yards(hole.length)], "good")
+	hole.open = false
+	sim.toast.emit("Hole %d is a draft: par %d, %d yards. Test it, then open it to the public." % [course.holes.size(), hole.par, Defs.yards(hole.length)], "good")
 	set_mode("")
 	hole_added.emit(course.holes.size() - 1)
 

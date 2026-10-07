@@ -422,7 +422,7 @@ func _process(delta: float) -> void:
 #   --loadingcard (hold the loading screen up) --demo=menuload (save, then load through the Menu)
 #   --soundcheck --soundlog (see sound_desk.gd)
 #   Without --shot the game opens its normal full-size window; add --exit to quit after --frames.
-#   --play=hole --overlay=0..3 --staff=N --demo=name --perf=1
+#   --play=hole --overlay=0..4 --staff=N --demo=name --perf=1
 #   --exit=1 quits after --frames without a screenshot (tests a normal launch)
 func _apply_test_args() -> void:
 	var a := Game.args
@@ -437,19 +437,22 @@ func _apply_test_args() -> void:
 		sim.economy.money = 9000000.0
 		for hi in mini(int(a.lights), sim.course.holes.size()):
 			var hole := sim.course.holes[hi]
-			var dir := hole.pin - hole.tee
-			dir.y = 0.0
-			var side := Vector3(-dir.z, 0.0, dir.x).normalized()
 			var n := maxi(2, int(hole.length / 35.0) + 1)
 			for k in n + 1:
-				var p := hole.tee.lerp(hole.pin, float(k) / n)
+				var t := float(k) / n
+				var p := hole.point_along(t)
+				var dir2 := hole.direction_at(t)
+				var side := Vector3(-dir2.y, 0.0, dir2.x)
 				for off: float in [14.0, -14.0, 20.0, -20.0]:
 					var q := p + side * off * (1.0 if k % 2 == 0 else -1.0)
 					var tile := sim.course.tile_of(q.x, q.z)
 					if sim.place_object(tile.x, tile.y, Defs.O.FLOODLIGHT) == 1:
 						break
+			var tee_dir := hole.direction_at(0.0)
+			var tee_side := Vector3(-tee_dir.y, 0.0, tee_dir.x)
+			var tee_back := Vector3(tee_dir.x, 0.0, tee_dir.y)
 			for off: float in [6.0, -6.0]:
-				var q2 := hole.tee + side * off - dir.normalized() * 4.0
+				var q2 := hole.tee + tee_side * off - tee_back * 4.0
 				var t2 := sim.course.tile_of(q2.x, q2.z)
 				sim.place_object(t2.x, t2.y, Defs.O.LAMP)
 	if a.has("weeds"):
@@ -964,7 +967,12 @@ func _run_demo(delta: float) -> void:
 					for k in range(4, 42, 2):
 						Game.sim.paint(cb.x + 6, cb.y - k, 1, Defs.T.FAIRWAY)
 				"hole":
-					Game.sim.add_hole(c.tile_center(cb.x + 6, cb.y - 2), c.tile_center(cb.x + 6, cb.y - 44))
+					var laid := Game.sim.add_hole(c.tile_center(cb.x + 6, cb.y - 2), c.tile_center(cb.x + 6, cb.y - 44))
+					if laid != null:
+						laid.open = false
+				"open":
+					if not Game.sim.course.holes.is_empty():
+						Game.sim.course.set_open(Game.sim.course.holes[0], true)
 				"paid":
 					for i in 600:
 						Game.sim.step(1.0 / 60.0)

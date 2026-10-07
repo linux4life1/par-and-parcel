@@ -285,7 +285,11 @@ func new_game(scenario_id: String, seed_value: int = 0, biome_id: String = "") -
 
 
 func _process(delta: float) -> void:
-	if sim == null or paused:
+	if sim == null:
+		return
+	# Painting while the game is paused still has to move par onto the new fairway.
+	sim.refresh_hole_lines()
+	if paused:
 		return
 	var t0 := Time.get_ticks_usec()
 	_acc += minf(delta, 0.1) * speed

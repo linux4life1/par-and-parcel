@@ -49,6 +49,7 @@ func current_hole(sim: Sim) -> Hole:
 
 
 func _to_tee(dt: float, sim: Sim) -> void:
+	skip_closed(sim)
 	var hole := current_hole(sim)
 	if hole == null:
 		state = S.LEAVING
@@ -430,9 +431,21 @@ func _finish_hole(sim: Sim, hole: Hole) -> void:
 		state = S.LEAVING
 		return
 	hole_i += 1
+	skip_closed(sim)
 	state = S.TO_TEE if hole_i < sim.course.holes.size() else S.LEAVING
 	if state == S.TO_TEE:
 		stop = sim.visitors.plan_stop(self)
+
+
+## Step past holes the public is not allowed on yet. A round that was only
+## going as far as a closed hole ends instead of playing it.
+func skip_closed(sim: Sim) -> void:
+	var holes := sim.course.holes
+	while hole_i < holes.size() and not holes[hole_i].open:
+		hole_i += 1
+		if last_hole >= 0 and hole_i > last_hole:
+			hole_i = holes.size()
+			return
 
 
 func leave_hole(hole: Hole) -> void:

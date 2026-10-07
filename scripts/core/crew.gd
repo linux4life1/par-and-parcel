@@ -231,7 +231,7 @@ func _find_marshal_job(m: Member) -> void:
 		m.target = course.on_ground(p.x + 8.0, p.z + 8.0)
 	elif not course.holes.is_empty():
 		var hole := course.holes[sim.rng.randi() % course.holes.size()]
-		var mid := hole.tee.lerp(hole.pin, sim.rng.randf())
+		var mid := hole.point_along(sim.rng.randf())
 		m.target = course.on_ground(mid.x + sim.rng.randf_range(-20.0, 20.0), mid.z + sim.rng.randf_range(-20.0, 20.0))
 	else:
 		m.timer = 3.0
@@ -258,7 +258,7 @@ func _find_drinks_job(m: Member) -> void:
 		m.target = course.on_ground(p.x + 4.0, p.z + 4.0)
 	elif not course.holes.is_empty():
 		var hole := course.holes[sim.rng.randi() % course.holes.size()]
-		var mid := hole.tee.lerp(hole.pin, sim.rng.randf())
+		var mid := hole.point_along(sim.rng.randf())
 		m.target = course.on_ground(mid.x + 14.0, mid.z + 14.0)
 	else:
 		m.timer = 3.0

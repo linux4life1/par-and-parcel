@@ -327,7 +327,7 @@ func _design_tip(hole: Hole, worst: String) -> String:
 
 func _holes(body: VBoxContainer) -> Callable:
 	var sim := hud.sim
-	body.add_child(UIKit.para("You don't set green fees. Golfers pay as they walk off each green, and how much depends on how much they enjoyed the hole. Build holes people love, keep them in good shape, and they pay more. Each new hole is test-played to find out what it asks of a golfer."))
+	body.add_child(UIKit.para("You don't set green fees. Golfers pay as they walk off each green, and how much depends on how much they enjoyed the hole. Build holes people love, keep them in good shape, and they pay more. A hole you lay out starts closed. Test plays it with the lab golfers and marks their tee shots; Open lets the public on."))
 	var top := UIKit.hbox()
 	body.add_child(top)
 	var takings := UIKit.label("", 14, UIKit.MUTED)
@@ -393,9 +393,22 @@ func _holes(body: VBoxContainer) -> Callable:
 		down.add_theme_font_size_override("font_size", 12)
 		h2.add_child(down)
 		var view := UIKit.button("View", func() -> void:
-			hud.rig.center_on(hole.tee.lerp(hole.pin, 0.5), clampf(hole.length * 1.1, 80.0, 500.0)), "Move the camera to this hole")
+			hud.rig.center_on(hole.point_along(0.5, sim.course), clampf(hole.length * 1.1, 80.0, 500.0)), "Move the camera to this hole")
 		view.add_theme_font_size_override("font_size", 12)
 		h2.add_child(view)
+		if not hole.open:
+			var draft_row := UIKit.hbox(6)
+			cv.add_child(draft_row)
+			var test_btn := UIKit.button("Test", func() -> void:
+				sim.lab.rate_now(hole)
+				hud.rebuild_dock(), "Play the hole now with test golfers, and mark where their tee shots land")
+			test_btn.add_theme_font_size_override("font_size", 12)
+			draft_row.add_child(test_btn)
+			var open_btn := UIKit.button("Open", func() -> void:
+				sim.course.set_open(hole, true)
+				hud.rebuild_dock(), "Let paying golfers onto this hole")
+			open_btn.add_theme_font_size_override("font_size", 12)
+			draft_row.add_child(open_btn)
 		var close := UIKit.button("X", func() -> void:
 			hud.show_dialog("Close hole %d?" % (i + 1), "The tee and pin are removed. The grass stays. Golfers on the hole move on.", [
 				["Keep it", Callable()],
@@ -449,8 +462,11 @@ func _holes(body: VBoxContainer) -> Callable:
 			var row: Array = rows[i]
 			var kind: Label = row[0]
 			var bars: Array = row[1]
-			if hole.lab_ready:
-				kind.text = HoleLab.type_name(hole.kind) + ("  ·  Top 100" if hole.award == "top100" else ("  ·  Dream Eighteen" if hole.award == "top18" else ""))
+			if not hole.open and not hole.lab_ready:
+				kind.text = "Draft"
+				kind.tooltip_text = "The public cannot play this yet. Test it, then open it."
+			elif hole.lab_ready:
+				kind.text = ("Draft  ·  " if not hole.open else "") + HoleLab.type_name(hole.kind) + ("  ·  Top 100" if hole.award == "top100" else ("  ·  Dream Eighteen" if hole.award == "top18" else ""))
 				kind.tooltip_text = HoleLab.type_blurb(hole.kind)
 				(bars[0] as ProgressBar).value = clampf(hole.test_length / 1.5, 0.0, 1.0)
 				(bars[1] as ProgressBar).value = clampf(hole.test_accuracy / 1.5, 0.0, 1.0)

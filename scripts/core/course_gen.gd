@@ -122,6 +122,10 @@ static func generate(spec: Dictionary, rng: RandomNumberGenerator, biome: Dictio
 					c.pests[i] = rng.randf_range(0.4, 0.9)
 	if str(spec.get("land", "all")) == "starter":
 		_starter_land(c)
+	# Holes were measured as each one was laid, before later holes and the
+	# starter fence. Measure them again on the finished ground.
+	for hole in c.holes:
+		hole.update_metrics(c)
 	c.guard = true
 	c.revision += 1
 	return c

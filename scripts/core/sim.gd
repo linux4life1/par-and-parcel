@@ -22,6 +22,8 @@ signal tournament_entry(play: bool)
 
 var db: DataDB
 var rng := RandomNumberGenerator.new()
+## Next eddy number to hand a golfer. Starts at 1 in every simulation.
+var _eddy := 1
 var course: Course
 var gear: Gear
 var weather := Weather.new()
@@ -72,6 +74,7 @@ var told_dark := false          # the player has been told why golfers leave at 
 var _slow := 0.0
 var _day := 0
 var _scenery := {}
+var _lines_rev := -1
 
 
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
@@ -110,6 +113,8 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	clubhouse_level = level_for_holes(course.holes.size())
 	career = Career.new(self)
 	player = PlayerProfile.new(self)
+	player.golfer.course = course
+	tag_eddy(player.golfer)
 	skills.changed.connect(player.refresh)
 	skills.leveled.connect(func(branch: String, lvl: int) -> void:
 		toast.emit("%s level %d! You have a new skill point." % ["Manager" if branch == "manager" else "Golfer", lvl], "good"))
@@ -145,6 +150,7 @@ func object_name(o: int) -> String:
 # ------------------------------------------------------------- the clock
 
 func step(dt: float) -> void:
+	refresh_hole_lines()
 	time += dt
 	clock = fposmod(clock + dt * clock_rate * 24.0 / Defs.CLOCK_DAY_SECONDS, 24.0)
 	visitors.step(dt)
@@ -169,6 +175,12 @@ func step(dt: float) -> void:
 
 func day() -> int:
 	return int(time / Defs.DAY_SECONDS)
+
+
+## Give a golfer their eddy number for this simulation.
+func tag_eddy(g: Golfer) -> void:
+	g.eddy = _eddy
+	_eddy += 1
 
 
 ## 0 in daylight, 1 at night.
@@ -338,17 +350,20 @@ func monthly_upkeep() -> float:
 # ------------------------------------------------------- course standing
 
 func _update_rating(dt: float) -> void:
-	var n := course.holes.size()
+	var n := 0
+	var pars := {}
+	var scenery := 0.0
+	for hole in course.holes:
+		if not hole.open:
+			continue
+		n += 1
+		pars[hole.par] = true
+		scenery += scenery_score(hole)
 	if n == 0:
 		rating = 0.0
 		design = 0.0
 		reputation = move_toward(reputation, 5.0, dt * 0.05)
 		return
-	var pars := {}
-	var scenery := 0.0
-	for hole in course.holes:
-		pars[hole.par] = true
-		scenery += scenery_score(hole)
 	var am := visitors.amenity_counts()
 	var d := minf(n, 18.0) / 18.0 * 52.0
 	d += [0.0, 0.0, 7.0, 13.0][mini(pars.size(), 3)]
@@ -409,6 +424,20 @@ func clubhouse_door() -> Vector3:
 	return course.on_ground(c.x, c.z - 9.0)
 
 
+## Remeasure any hole whose ground has changed, so par follows the fairway
+## as it is repainted. The fingerprint is the one the hole lab already uses.
+func refresh_hole_lines() -> void:
+	if _lines_rev == course.revision:
+		return
+	_lines_rev = course.revision
+	for hole in course.holes:
+		var sig := lab._signature(hole)
+		if sig == hole.line_sig and hole.route.size() >= 2:
+			continue
+		hole.update_metrics(course)
+		hole.line_sig = sig
+
+
 ## 0..1: how much there is to look at along a hole.
 func scenery_score(hole: Hole) -> float:
 	var cached: Array = _scenery.get(hole, [])
@@ -418,7 +447,7 @@ func scenery_score(hole: Hole) -> float:
 	var samples := 0
 	var steps := maxi(2, int(hole.length / 15.0))
 	for s in steps + 1:
-		var p := hole.tee.lerp(hole.pin, float(s) / steps)
+		var p := hole.point_along(float(s) / steps)
 		var tile := course.tile_of(p.x, p.z)
 		samples += 1
 		for ty in range(tile.y - 4, tile.y + 5):
@@ -783,7 +812,7 @@ func to_dict() -> Dictionary:
 		"weather": weather.kind, "course": course.to_dict(), "biome": str(biome.get("id", "lush")),
 		"members": members.to_list(), "clubhouse": clubhouse_level, "homes": homes, "gifts": gifts,
 		"feats": feats.done, "rivals": rivals, "best_rank": best_rank, "land_credits": land_credits, "debt_years": debt_years,
-		"difficulty": difficulty,
+		"difficulty": difficulty, "rng_seed": str(rng.seed), "rng_state": str(rng.state),
 	}
 	d["stories"] = stories.to_dict()
 	return d
@@ -795,7 +824,9 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 		scen = data.scenarios[0]
 	var blank := scen.duplicate(true)
 	blank["map"] = {"w": 8, "h": 8, "holes": 0}
-	var sim := Sim.new(data, blank, 0, shared_gear, str(d.get("biome", "lush")))
+	# Seed 0 would draw from the wall clock. A load must not: the blank
+	# course is thrown away, and the saved dice are put back below.
+	var sim := Sim.new(data, blank, 1, shared_gear, str(d.get("biome", "lush")))
 	sim.scenario = Scenario.new(scen)
 	sim.scenario.status = str(d.get("status", sim.scenario.status))
 	sim.course = Course.from_dict(d.course)
@@ -841,4 +872,11 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	for role_id: String in d.get("staff", []):
 		sim.crew.hire(role_id)
 	sim.grounds.refresh_layout()
+	# After everything that drew on the blank game's dice, so play continues
+	# from the save and not from the clock.
+	if d.has("rng_state"):
+		sim.rng.seed = int(str(d.get("rng_seed", "1")))
+		sim.rng.state = int(str(d.rng_state))
+	else:
+		sim.rng.seed = 1
 	return sim

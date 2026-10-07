@@ -1,11 +1,24 @@
 class_name Hole
 extends RefCounted
-## One golf hole: a tee, a pin, and a routing field the golfer AI steers by.
+## One golf hole: a tee, a pin, the line of play between them, and a routing
+## field the golfer AI steers by.
 
 var tee := Vector3.ZERO
 var pin := Vector3.ZERO
 var par := 4
 var length := 0.0
+## Centreline of the hole the way it is meant to be played, tee to pin, in
+## world x/z. Par and yardage are the length of this line, not the chord.
+## Named route because `line` is the queue of parties waiting on the tee.
+var route := PackedVector2Array()
+## False while the hole is a draft. Paying golfers skip it until it is opened.
+## Generated holes and old saves stay open.
+var open := true
+## Where the expert test golfers' tee shots came to rest, the last time the
+## hole was rated. Only drawn while the hole is still a draft.
+var spots := PackedVector2Array()
+## Fingerprint of the ground the line was measured on. -1 until then.
+var line_sig := -1
 var earned := 0.0               # green fees golfers have paid for this hole
 var payers := 0                 # how many times a golfer has finished it and been asked
 var plays := 0
@@ -28,9 +41,18 @@ var expect := {}                # expected score for a beginner, average, expert
 var teeing_group: Group = null  # the group holding the tee box
 var _lit := 0.0
 var _lit_rev := -1
-var _lit_sig := Vector3.ZERO
+var _lit_stamp := 0
 ## A hole needs this much of its length lit to be played after dark.
 const LIT_ENOUGH := 0.7
+## Par 3 up to this, par 4 up to the next, par 5 after that. Metres.
+const PAR_3 := 225.0
+const PAR_4 := 430.0
+## A route longer than this times the straight line is a detour, not the hole.
+const ROUTE_CAP := 1.6
+## Step cost for choosing the line of play. Fairway, tee and green are cheap.
+## Everything else is dearer, never infinite, so a carry still connects.
+const PLAY_COST: Array[float] = [3.0, 1.0, 1.0, 1.0, 4.0, 8.0, 5.0, 2.0, 6.0, 4.0]
+const PLAY_TREE := 6.0
 var groups: Array[Group] = []   # every group currently playing the hole
 ## Parties waiting to tee off, in the order they arrived. The front of the
 ## line is the next party up; the party on the tee is teeing_group, not here.
@@ -68,14 +90,254 @@ var _hn := 0
 var _pop_key := 0.0
 
 
-func update_metrics() -> void:
-	length = Vector2(pin.x - tee.x, pin.z - tee.z).length()
-	if length <= 225.0:
-		par = 3
-	elif length <= 430.0:
-		par = 4
-	else:
-		par = 5
+func straight_length() -> float:
+	return Vector2(pin.x - tee.x, pin.z - tee.z).length()
+
+
+static func par_for(metres: float) -> int:
+	if metres <= PAR_3:
+		return 3
+	if metres <= PAR_4:
+		return 4
+	return 5
+
+
+## Par and yardage from the cheapest playable route, then smoothed so a
+## staircase of tiles does not add length. Safe to call again: the scorecard
+## is shifted only when par actually changes.
+##
+## Scores already recorded stay what they were against the new par (a 3 that
+## was even on a wrongly short par 3 becomes a birdie once the hole is a par
+## 4). The -2 and +3 tally buckets already mean "or better" and "or worse",
+## so a shift can only pile more scores into those ends. Best and aces are
+## stroke counts and are left alone. Medals already given are not taken back.
+## Old saves stored no par; the straight-line par is assumed, which is what
+## those rounds were scored against, and the same shift is applied on load.
+func update_metrics(course: Course) -> void:
+	var before := par
+	route = _route(course)
+	var straight := straight_length()
+	var walked := _polyline_length(route)
+	if walked < straight:
+		walked = straight
+	if straight > 1.0 and walked > straight * ROUTE_CAP:
+		walked = straight * ROUTE_CAP
+	length = walked
+	var now := par_for(length)
+	if now != before and plays > 0:
+		_shift_tally(before, now)
+	par = now
+
+
+## What a hole from tee to pin would be called, without touching this one.
+static func measure(course: Course, tee_at: Vector3, pin_at: Vector3) -> Dictionary:
+	var hole := Hole.new()
+	hole.tee = tee_at
+	hole.pin = pin_at
+	hole.update_metrics(course)
+	return {"par": hole.par, "length": hole.length, "line": hole.route}
+
+
+func _shift_tally(from_par: int, to_par: int) -> void:
+	var shift := from_par - to_par
+	if shift == 0 or tally.is_empty():
+		return
+	var next: Dictionary = {}
+	for k: String in tally:
+		var bucket := clampi(int(k) + shift, -2, 3)
+		var nk := str(bucket)
+		next[nk] = int(next.get(nk, 0)) + int(tally[k])
+	tally = next
+
+
+func _polyline_length(pts: PackedVector2Array) -> float:
+	var total := 0.0
+	for i in range(1, pts.size()):
+		total += pts[i - 1].distance_to(pts[i])
+	return total
+
+
+## Cheapest 8-connected tile path from tee to pin, then pulled tight wherever
+## the straight segment stays on fairway, tee, green or cart path with no trees.
+func _route(course: Course) -> PackedVector2Array:
+	var a := Vector2(tee.x, tee.z)
+	var b := Vector2(pin.x, pin.z)
+	if a.distance_to(b) < 1.0 or _segment_clear(course, a, b):
+		return PackedVector2Array([a, b])
+	var margin := 18
+	var tt := course.tile_of(tee.x, tee.z)
+	var pt := course.tile_of(pin.x, pin.z)
+	var fx := clampi(mini(tt.x, pt.x) - margin, 0, course.w - 1)
+	var fy := clampi(mini(tt.y, pt.y) - margin, 0, course.h - 1)
+	var x1 := clampi(maxi(tt.x, pt.x) + margin, 0, course.w - 1)
+	var y1 := clampi(maxi(tt.y, pt.y) + margin, 0, course.h - 1)
+	var fw := x1 - fx + 1
+	var fh := y1 - fy + 1
+	var n := fw * fh
+	var dist := PackedFloat32Array()
+	dist.resize(n)
+	dist.fill(INF)
+	var parent := PackedInt32Array()
+	parent.resize(n)
+	parent.fill(-1)
+	_hn = 0
+	if _hk.size() < 256:
+		_hk.resize(256)
+		_hv.resize(256)
+	var sx := clampi(tt.x - fx, 0, fw - 1)
+	var sy := clampi(tt.y - fy, 0, fh - 1)
+	var start := sy * fw + sx
+	var gx := clampi(pt.x - fx, 0, fw - 1)
+	var gy := clampi(pt.y - fy, 0, fh - 1)
+	var goal := gy * fw + gx
+	dist[start] = 0.0
+	_heap_push(0.0, start)
+	while _hn > 0:
+		var cur := _heap_pop()
+		var dcur := _pop_key
+		if dcur > dist[cur]:
+			continue
+		if cur == goal:
+			break
+		var cx := cur % fw
+		var cy := int(cur / fw)
+		for oy in range(-1, 2):
+			var ny := cy + oy
+			if ny < 0 or ny >= fh:
+				continue
+			for ox in range(-1, 2):
+				if ox == 0 and oy == 0:
+					continue
+				var nx := cx + ox
+				if nx < 0 or nx >= fw:
+					continue
+				var ni := ny * fw + nx
+				var step := _play_cost(course, fx + nx, fy + ny)
+				if ox != 0 and oy != 0:
+					step *= 1.41421356
+				var nd := dcur + step
+				if nd < dist[ni]:
+					dist[ni] = nd
+					parent[ni] = cur
+					_heap_push(nd, ni)
+	if dist[goal] == INF:
+		return PackedVector2Array([a, b])
+	var chain: Array[int] = []
+	var guard := 0
+	var walk := goal
+	while walk >= 0 and guard < n + 2:
+		chain.append(walk)
+		if walk == start:
+			break
+		walk = parent[walk]
+		guard += 1
+	if chain.is_empty() or chain[chain.size() - 1] != start:
+		return PackedVector2Array([a, b])
+	chain.reverse()
+	var pts := PackedVector2Array()
+	pts.append(a)
+	for k in range(1, chain.size() - 1):
+		var idx: int = chain[k]
+		var tx := fx + (idx % fw)
+		var ty := fy + int(idx / fw)
+		var center := course.tile_center(tx, ty)
+		pts.append(Vector2(center.x, center.z))
+	pts.append(b)
+	return _smooth(course, pts)
+
+
+func _play_cost(course: Course, tx: int, ty: int) -> float:
+	if not course.in_bounds(tx, ty):
+		return 30.0
+	var i := ty * course.w + tx
+	var c: float = PLAY_COST[course.terrain[i]]
+	if Defs.is_tree(course.objects[i]):
+		c += PLAY_TREE
+	if course.locked[i] != 0:
+		c += 10.0
+	return c
+
+
+## True when the whole segment stays on the short grass (or a path) and out of the trees.
+func _segment_clear(course: Course, a: Vector2, b: Vector2) -> bool:
+	var d := a.distance_to(b)
+	var steps := maxi(1, int(d / 1.25))
+	for s in steps + 1:
+		var p := a.lerp(b, float(s) / float(steps))
+		var i := course.index_at(p.x, p.y)
+		if i < 0:
+			return false
+		var t: int = course.terrain[i]
+		if t != Defs.T.FAIRWAY and t != Defs.T.GREEN and t != Defs.T.TEE and t != Defs.T.PATH:
+			return false
+		if Defs.is_tree(course.objects[i]):
+			return false
+	return true
+
+
+func _smooth(course: Course, pts: PackedVector2Array) -> PackedVector2Array:
+	var out := PackedVector2Array()
+	if pts.is_empty():
+		return out
+	var i := 0
+	out.append(pts[0])
+	while i < pts.size() - 1:
+		var j := pts.size() - 1
+		while j > i + 1 and not _segment_clear(course, pts[i], pts[j]):
+			j -= 1
+		out.append(pts[j])
+		i = j
+	return out
+
+
+## A point on the line of play. t is 0 at the tee and 1 at the pin.
+## Pass the course to stand the point on the ground there.
+func point_along(t: float, course: Course = null) -> Vector3:
+	var p := _point_flat(t)
+	var y := lerpf(tee.y, pin.y, clampf(t, 0.0, 1.0))
+	if course != null:
+		y = course.height_at(p.x, p.y)
+	return Vector3(p.x, y, p.y)
+
+
+## Unit direction of the line of play at t, in world x/z.
+func direction_at(t: float) -> Vector2:
+	var pa := _point_flat(maxf(t - 0.03, 0.0))
+	var pb := _point_flat(minf(t + 0.03, 1.0))
+	var d := pb - pa
+	if d.length_squared() < 0.01:
+		d = Vector2(pin.x - tee.x, pin.z - tee.z)
+	if d.length_squared() < 0.01:
+		return Vector2(1.0, 0.0)
+	return d.normalized()
+
+
+func _point_flat(t: float) -> Vector2:
+	var pts := route
+	if pts.size() < 2:
+		return Vector2(tee.x, tee.z).lerp(Vector2(pin.x, pin.z), clampf(t, 0.0, 1.0))
+	var total := 0.0
+	for i in range(1, pts.size()):
+		total += pts[i - 1].distance_to(pts[i])
+	if total < 0.01:
+		return pts[0]
+	var want := clampf(t, 0.0, 1.0) * total
+	var walked := 0.0
+	for i in range(1, pts.size()):
+		var seg := pts[i - 1].distance_to(pts[i])
+		if walked + seg >= want - 0.0001 or i == pts.size() - 1:
+			var u := 0.0 if seg < 0.0001 else (want - walked) / seg
+			return pts[i - 1].lerp(pts[i], clampf(u, 0.0, 1.0))
+		walked += seg
+	return pts[pts.size() - 1]
+
+
+func _line_stamp() -> int:
+	var s := route.size()
+	if s == 0:
+		return 0
+	var mid := route[s / 2]
+	return s * 17 + int(mid.x * 2.0) + int(mid.y * 8.0) + int(length)
 
 
 func snap_to_ground(course: Course) -> void:
@@ -222,15 +484,15 @@ func _heap_pop() -> int:
 
 ## The share of the way from tee to green that is lit after dark.
 func lit_share(course: Course) -> float:
-	var sig := tee + pin * 3.0
-	if _lit_rev == course.lights_rev and sig == _lit_sig:
+	var stamp := _line_stamp()
+	if _lit_rev == course.lights_rev and stamp == _lit_stamp:
 		return _lit
 	_lit_rev = course.lights_rev
-	_lit_sig = sig
+	_lit_stamp = stamp
 	var n := maxi(6, int(length / 12.0))
 	var lit := 0
 	for k in n + 1:
-		var p := tee.lerp(pin, float(k) / n)
+		var p := point_along(float(k) / n)
 		if course.light_at(p.x, p.z) >= 0.45:
 			lit += 1
 	_lit = float(lit) / (n + 1)
@@ -250,9 +512,10 @@ func average_paid() -> float:
 func to_dict() -> Dictionary:
 	return {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
+		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
-		"name": name, "award": award, "comments": comments,
+		"name": name, "award": award, "comments": comments, "open": open,
 	}
 
 
@@ -271,7 +534,16 @@ static func from_dict(d: Dictionary) -> Hole:
 	for k: String in tl:
 		hole.tally[k] = int(tl[k])
 	hole.name = str(d.get("name", ""))
+	hole.open = bool(d.get("open", true))
 	hole.award = str(d.get("award", ""))
 	hole.comments = d.get("comments", {})
-	hole.update_metrics()
+	# Par is filled in properly once the ground is loaded (Course.from_dict).
+	# Until then, a save that recorded one keeps it, and an older save keeps
+	# the straight-line par its rounds were scored against.
+	var straight := hole.straight_length()
+	if d.has("par"):
+		hole.par = int(d.par)
+	else:
+		hole.par = par_for(straight)
+	hole.length = float(d.get("length", straight))
 	return hole
