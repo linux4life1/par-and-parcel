@@ -19,6 +19,7 @@ var last_hole := -1        # stop after this hole index, -1 for the whole course
 var has_cart := false      # rented a golf cart: quick on cart paths, easy on the feet
 var stop := {}             # a facility to visit on the way to the next tee
 var story := {}            # what brought these people out together
+var hole_time := 0.0       # sim seconds since this party headed for the current hole
 
 const LINE_FIRST := 8.0    # metres behind the tee where the next party waits
 const LINE_GAP := 6.0      # and between parties further back
@@ -31,6 +32,8 @@ func step(dt: float, sim: Sim) -> void:
 	if members.is_empty():
 		state = S.GONE
 		return
+	if state == S.TO_TEE or state == S.QUEUE or state == S.PLAY:
+		hole_time += dt
 	match state:
 		S.TO_TEE:
 			_to_tee(dt, sim)
@@ -423,6 +426,8 @@ static func drop_spot(course: Course, b: Ball) -> Vector3:
 
 
 func _finish_hole(sim: Sim, hole: Hole) -> void:
+	hole.note_time(hole_time)
+	hole_time = 0.0
 	for m in members:
 		sim.visitors.on_hole_done(m, hole, hole_i, self)
 	sim.visitors.story_tick(self, hole_i)

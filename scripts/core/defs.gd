@@ -183,6 +183,33 @@ static func darkness(hours: float) -> float:
 	return 0.0
 
 
+## How long a stretch of simulation is on the course clock. A full day and
+## night is CLOCK_DAY_SECONDS, so pace is told in those hours and minutes.
+const ROUND_LONG := 5.0 * CLOCK_DAY_SECONDS / 24.0
+
+
+static func pace_minutes(seconds: float) -> int:
+	return maxi(int(round(seconds * 24.0 * 60.0 / CLOCK_DAY_SECONDS)), 0)
+
+
+## "12 min", "1 h", "1 h 12 min". Compact is for the scorecard column: "12m", "1h", "1h12".
+static func pace_text(seconds: float, compact: bool = false) -> String:
+	var mins := pace_minutes(seconds)
+	var h := mins / 60
+	var m := mins % 60
+	if compact:
+		if h == 0:
+			return "%dm" % m
+		if m == 0:
+			return "%dh" % h
+		return "%dh%02d" % [h, m]
+	if h == 0:
+		return "%d min" % m
+	if m == 0:
+		return "%d h" % h
+	return "%d h %d min" % [h, m]
+
+
 ## "3:40 PM"
 static func clock_text(hours: float) -> String:
 	var total := int(floor(fposmod(hours, 24.0) * 60.0))
