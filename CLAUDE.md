@@ -57,6 +57,16 @@ The product is **Par & Parcel** (`Defs.TITLE`, `project.godot`,
 the owner does not want them. The icon and disk image art come from
 `tools/make_art.gd`; rerun it rather than editing the PNGs.
 
+Release gotchas that cost a run each: Godot writes the project name into
+the Mac Info.plist unescaped, so "Par & Parcel" makes invalid XML and
+codesign cannot bind it (`tools/mac_release.sh` mends it); a universal Mac
+export needs `textures/vram_compression/import_etc2_astc=true`; notarytool
+takes `--key`, `--key-id` and `--issuer` after the subcommand; on Windows,
+Godot's console wrapper must sit next to its program as `godot_console.exe`
+beside `godot.exe`. The export templates are installed on this Mac now, so
+`./build.sh macOS` works locally; a local sign and notarize needs the
+Issuer ID, which only the owner has.
+
 ## Rules
 
 - **The ball's physics and collisions are the game's own** (`ball.gd`,
