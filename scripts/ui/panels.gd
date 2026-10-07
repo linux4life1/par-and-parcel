@@ -9,6 +9,12 @@ const TITLES := {
 	"members": "Club Members",
 	"feed": "Birdie Feed", "play": "Play a Round",
 }
+## What a Build button says when the mouse rests on it, for the things that
+## need a word of explanation.
+const OBJECT_TIPS := {
+	Defs.O.VENDING: "Cans and snacks at the push of a button. Cheap to run, open all night, and nobody raves about it. Golfers use it when no stand is near.",
+	Defs.O.BAR: "Drinkers tip well and forgive a lot, but they play slowly, spray the ball and lose their tempers faster. A gamble, and the house takes $14 a round.",
+}
 
 var hud: Hud
 var _skill_branch := "manager"
@@ -109,8 +115,8 @@ func _build(body: VBoxContainer) -> Callable:
 	var groups := [
 		["Scenery", [Defs.O.OAK, Defs.O.PINE, Defs.O.BUSH, Defs.O.BOULDER, Defs.O.FLOWERS, Defs.O.FOUNTAIN, Defs.O.LANDMARK],
 			"Scenery makes holes prettier, and golfers notice. Trees and boulders also knock down wayward shots."],
-		["On the course", [Defs.O.BENCH, Defs.O.BALL_WASHER, Defs.O.DRINK_STAND, Defs.O.SNACK_BAR, Defs.O.RESTROOM, Defs.O.BRIDGE],
-			"Golfers get thirsty, hungry and tired, and sooner or later need a restroom. Put these where they pass between holes. Benches and ball washers belong beside tees. Bridges carry golfers over the hazard."],
+		["On the course", [Defs.O.BENCH, Defs.O.BALL_WASHER, Defs.O.DRINK_STAND, Defs.O.VENDING, Defs.O.SNACK_BAR, Defs.O.BAR, Defs.O.RESTROOM, Defs.O.BRIDGE],
+			"Golfers get thirsty, hungry and tired, and sooner or later need a restroom. Put these where they pass between holes. Benches and ball washers belong beside tees. Bridges carry golfers over the hazard. A vending machine is the cheap answer to thirst and hunger both. A bar is a gamble: drinkers tip well and forgive a lot, but they play slowly, spray the ball and lose their tempers faster."],
 		["Lighting", [Defs.O.FLOODLIGHT, Defs.O.LAMP],
 			"Golfers play on after dark, but on an unlit hole they see poorly, enjoy it less and pay less, and few new golfers turn up at night. Light a hole from tee to green and it plays as well as by day. A floodlight lights a wide circle, shown as you place it. Lamp posts light paths and odd corners. Holes shows how much of each hole is lit."],
 		["Club facilities", [Defs.O.PUTTING_GREEN, Defs.O.DRIVING_RANGE, Defs.O.CART_BARN, Defs.O.HOME_SITE],
@@ -134,6 +140,8 @@ func _build(body: VBoxContainer) -> Callable:
 				tools.set_mode("object"))
 			b.toggle_mode = true
 			b.add_theme_font_size_override("font_size", 14)
+			if OBJECT_TIPS.has(o):
+				b.tooltip_text = str(OBJECT_TIPS[o])
 			_wide(b)
 			og.add_child(b)
 			toggles.append([b, "object", o])

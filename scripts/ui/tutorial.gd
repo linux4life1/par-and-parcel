@@ -145,7 +145,7 @@ func _met(st: Dictionary) -> bool:
 					return true
 			return false
 		"facility":
-			for o: int in [Defs.O.DRINK_STAND, Defs.O.SNACK_BAR, Defs.O.RESTROOM, Defs.O.BENCH, Defs.O.BALL_WASHER]:
+			for o: int in [Defs.O.DRINK_STAND, Defs.O.SNACK_BAR, Defs.O.RESTROOM, Defs.O.BENCH, Defs.O.BALL_WASHER, Defs.O.VENDING, Defs.O.BAR]:
 				if c.objects.count(o) > 0:
 					return true
 			return false

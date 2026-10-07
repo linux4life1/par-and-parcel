@@ -212,7 +212,7 @@ func _turn_step(dt: float, sim: Sim, hole: Hole) -> void:
 			if g.travel(stance(g, hole), dt, sim, g.walk_speed()):
 				g.plan = ShotAI.plan(sim, g, hole)
 				g.phase = Golfer.P.AIM
-				g.timer = (0.6 + (1.0 - g.pace) * 1.3) * (0.6 if g.plan.putt else 1.0) * sim.crew.pace_factor(g.pos)
+				g.timer = (0.6 + (1.0 - g.pace) * 1.3) * (0.6 if g.plan.putt else 1.0) * sim.crew.pace_factor(g.pos) * g.think_mult()
 				g.facing = g.plan.heading
 		Golfer.P.AIM:
 			g.timer -= dt

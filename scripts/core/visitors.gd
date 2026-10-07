@@ -44,7 +44,16 @@ const FACILITY := {
 	Defs.O.CART_BARN: "cart_barn", Defs.O.FOUNTAIN: "fountain", Defs.O.LANDMARK: "landmark",
 	Defs.O.HOME_SITE: "lot", Defs.O.HOUSE: "house", Defs.O.TENNIS: "tennis", Defs.O.HOTEL: "hotel",
 	Defs.O.MARINA: "marina", Defs.O.AIRSTRIP: "airstrip",
+	Defs.O.VENDING: "vending", Defs.O.BAR: "bar",
 }
+## What a drinker says on the way back to the tee.
+const BAR_LINES: Array[String] = [
+	"One more at the turn and I'll find my swing.",
+	"Everything's fine. Everything's great.",
+	"Best bar on any course I've played. Best course, too.",
+	"I love this place. I love these people.",
+	"The green's moving a bit, but so am I.",
+]
 var _gid := 1
 var _amen_rev := -1
 
@@ -432,6 +441,8 @@ func _tick_golfer(g: Golfer, dt: float) -> void:
 	g.hunger += dt / 900.0 * g.need_rate("hunger")
 	g.bladder += dt / 760.0 * g.need_rate("bladder")
 	g.fatigue += dt / 1000.0 * g.need_rate("fatigue") * (0.3 if riding else 1.0) * (0.5 if sim.resort.has("hotel") else 1.0)
+	if g.drunk > 0.0:
+		g.drunk = maxf(0.0, g.drunk - dt * 0.0018)
 	g.slow_t -= dt
 	if g.slow_t <= 0.0:
 		g.slow_t = 1.0
@@ -486,10 +497,11 @@ func _slow_check(g: Golfer) -> void:
 		g.feel(1.4, "Look, a %s!" % what, "scenery")
 		if sim.rng.randf() < 0.15:
 			sim.feed.say("animal", g, {"animal": what, "hole": _hole_no(g)})
-	if g.satisfaction < 18.0 and staying and not g.tantrum and sim.rng.randf() < 0.07:
+	# a drinker's temper is shorter: the line where they snap sits higher
+	if g.satisfaction < 18.0 + g.drunk * 20.0 and staying and not g.tantrum and sim.rng.randf() < 0.07:
 		_tantrum(g)
 		return
-	if g.satisfaction < 7.0 and staying and g.member.is_empty():
+	if g.satisfaction < 7.0 + g.drunk * 8.0 and staying and g.member.is_empty():
 		g.feel(0.0, "I've had enough of this place.")
 		quit(g)
 
@@ -570,7 +582,7 @@ func plan_stop(gr: Group) -> Dictionary:
 	var here := gr.members[0].pos
 	var best := {}
 	var best_score := 0.0
-	for kind: String in ["restroom", "snack", "drink"]:
+	for kind: String in ["restroom", "snack", "drink", "vending", "bar"]:
 		var need := 0.0
 		for m in gr.members:
 			need += maxf(0.0, m.need_for(kind) - 0.45)
@@ -582,6 +594,9 @@ func plan_stop(gr: Group) -> Dictionary:
 			if detour > 150.0:
 				continue
 			var score := need * 120.0 - detour
+			if kind == "vending":
+				# the machine is what you use when nothing better is near
+				score -= 25.0
 			if score > best_score:
 				best_score = score
 				var toward := (here - spot)
@@ -624,6 +639,33 @@ func serve(gr: Group, kind: String) -> void:
 				g.bladder = 0.0
 				g.feel(2.0, "A clean restroom, right when I needed one.", "amenity")
 				sim.sound.emit("flush", g.pos, 1.0)
+			"vending":
+				# a can and a bag of something: cheaper, and nobody raves about it
+				var take := 0.0
+				if g.thirst >= 0.3:
+					g.thirst = 0.0
+					g.bladder += 0.12
+					take += 4.0
+					sim.sound.emit("slurp", g.pos, 0.7)
+				if g.hunger >= 0.3:
+					g.hunger = 0.0
+					take += 7.0
+					sim.sound.emit("burp", g.pos, 0.8)
+				if take > 0.0:
+					sim.economy.earn("concessions", take * retail)
+					sim.popup.emit(g.pos, "+$%d" % int(take), "money")
+					g.feel(2.0 if take > 4.0 else 1.5, "Vending machine. It'll do.", "snack")
+			"bar":
+				g.thirst = 0.0
+				g.bladder += 0.25
+				g.drunk = minf(1.0, g.drunk + 0.35)
+				g.rd.drinks = int(g.rd.get("drinks", 0)) + 1
+				sim.economy.earn("concessions", 14.0 * retail)
+				sim.popup.emit(g.pos, "+$14", "money")
+				g.feel(4.0, BAR_LINES[sim.rng.randi() % BAR_LINES.size()], "drink")
+				sim.sound.emit("bottle", g.pos, 1.0)
+				if sim.rng.randf() < 0.15:
+					sim.feed.say("bar", g)
 
 
 func facility_near(kind: String, p: Vector3, radius: float) -> bool:
@@ -676,7 +718,8 @@ func _refresh_amenities() -> void:
 	_amen_rev = course.revision
 	facilities = {}
 	amenities = {"drink": 0, "restroom": 0, "bench": 0, "snack": 0, "washer": 0, "putting": 0, "range": 0,
-		"cart_barn": 0, "fountain": 0, "landmark": 0, "lot": 0, "house": 0, "tennis": 0, "hotel": 0, "marina": 0, "airstrip": 0}
+		"cart_barn": 0, "fountain": 0, "landmark": 0, "lot": 0, "house": 0, "tennis": 0, "hotel": 0, "marina": 0, "airstrip": 0,
+		"vending": 0, "bar": 0}
 	for i in course.objects.size():
 		var o := course.objects[i]
 		if o == 0 or not FACILITY.has(o):

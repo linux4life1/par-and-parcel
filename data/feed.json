@@ -222,6 +222,11 @@
   "hungry": [
     "Four hours at {course} and nothing to eat. I'd have paid twenty dollars for a hot dog."
   ],
+  "bar": [
+    "Two at the bar at {course} and suddenly I can putt.",
+    "The bar at {course} is the best hole on the course.",
+    "Had a couple at {course}. The back nine is a bit of a blur."
+  ],
   "snack": [
     "Hot dog at the turn at {course}. This is why I play golf."
   ],

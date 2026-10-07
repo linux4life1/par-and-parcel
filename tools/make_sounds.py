@@ -1049,6 +1049,35 @@ def slurp(rng):
     return mix(gain(sip, 0.5), (gain(swallow, 0.7), 0.26))
 
 
+def bottle(rng):
+    """A bottle opened at the bar: the pop of the seal letting go, the bright
+    tick of the cap, a short hiss of gas, and a glug as it is poured."""
+    pop_s = 0.055
+    n = int(pop_s * SR)
+    pop = [0.0] * n
+    f0 = rng.uniform(520.0, 700.0)
+    phase = 0.0
+    for i in range(n):
+        u = i / n
+        phase += f0 * (1.0 - 0.5 * u) / SR
+        pop[i] = math.sin(phase * math.tau) * math.exp(-u * 8.0)
+    tick = gain(click(rng, 0.0025, 5600.0), 0.55)
+    hiss = shaped(biquad(biquad(noise(0.34, rng), "bp", 4600.0 * rng.uniform(0.9, 1.1), 0.9), "hp", 2600.0), 0.004, 0.08)
+    glugs = []
+    for k in range(3):
+        f = rng.uniform(170.0, 260.0) * (1.0 + 0.12 * k)
+        blip = shaped(biquad(noise(0.07, rng), "bp", f, 4.0), 0.004, 0.045)
+        glugs.append((gain(blip, 0.5), 0.34 + k * 0.1 + rng.uniform(0.0, 0.02)))
+    return mix(pop, tick, (gain(hiss, 0.3), 0.03), *glugs)
+
+
+def bar_set():
+    """The bar: a bottle opened."""
+    print("bar")
+    for v in range(2):
+        write("bottle_%d" % (v + 1), fade(bottle(random.Random("bottle %d" % v)), 0.001, 0.03), peak_db=-5.0)
+
+
 def facilities_set():
     """Sounds of the facilities being used."""
     print("facilities")
@@ -1057,6 +1086,7 @@ def facilities_set():
     write("flush", fade(flush(random.Random("flush")), 0.001, 0.2), peak_db=-5.0)
     for v in range(2):
         write("slurp_%d" % (v + 1), fade(slurp(random.Random("slurp %d" % v)), 0.003, 0.03), peak_db=-6.0)
+    bar_set()
 
 
 def later_set():
@@ -1105,7 +1135,9 @@ def main():
     TMP = tempfile.mkdtemp(prefix="parandparcel-sounds-")
     try:
         only = sys.argv[1:]
-        if "facilities" in only:
+        if "bar" in only:
+            bar_set()
+        elif "facilities" in only:
             facilities_set()
         else:
             if "voices" not in only:
