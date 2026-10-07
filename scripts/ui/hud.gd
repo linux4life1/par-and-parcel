@@ -60,6 +60,7 @@ var play_title: Label
 var play_info: Label
 var play_advice: Label
 var tutorial: Tutorial
+var loading: LoadingScreen        # shown while a game is laid out or read back
 var play_msg: Label
 var play_keys: Label
 var meter := UIKit.Meter.new()
@@ -686,10 +687,16 @@ func show_menu(again: bool = false) -> void:
 			Game.paused = _menu_was_paused
 			show_toast("Game saved." if Game.save_game() else "Could not save the game.", "good")],
 		["Load game", func() -> void:
-			if not Game.load_game():
+			if not Game.has_save():
 				hide_modal()
 				Game.paused = _menu_was_paused
-				show_toast("No saved game found.", "bad")],
+				show_toast("No saved game found.", "bad")
+				return
+			hide_modal()
+			var ok: bool = await loading.run("Reading your course back", Game.load_game)
+			if not ok:
+				Game.paused = _menu_was_paused
+				show_toast("The saved game could not be read.", "bad")],
 		["New game", func() -> void: show_scenarios()],
 		["Controls", func() -> void: show_controls()],
 		["Display and graphics", func() -> void: show_display()],
@@ -1024,7 +1031,12 @@ func show_scenarios(first_launch: bool = false) -> void:
 	tv.add_child(UIKit.label("Build the course. Run the club. Play the round.", 15, UIKit.MUTED))
 	head.add_child(UIKit.spacer())
 	if Game.has_save():
-		head.add_child(UIKit.button("Continue saved game", func() -> void: Game.load_game()))
+		head.add_child(UIKit.button("Continue saved game", func() -> void:
+			hide_modal()
+			var ok: bool = await loading.run("Reading your course back", Game.load_game)
+			if not ok:
+				show_toast("The saved game could not be read.", "bad")
+				show_scenarios(first_launch)))
 	if not first_launch:
 		head.add_child(UIKit.button("Back", func() -> void:
 			hide_modal()

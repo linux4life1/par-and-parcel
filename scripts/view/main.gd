@@ -77,8 +77,12 @@ func _ready() -> void:
 		hud.close_dock())
 	play.ended.connect(func() -> void: tools.enabled = true)
 	play.round_done.connect(hud.show_round_summary)
+	loading = LoadingScreen.new()
+	add_child(loading)
+	hud.loading = loading
 	hud.new_game_requested.connect(func(id: String, biome_id: String) -> void:
-		Game.new_game(id, 0, biome_id)
+		hud.hide_modal()
+		await loading.run("Laying out the land", func() -> void: Game.new_game(id, 0, biome_id))
 		_hint_controls())
 	Game.sim_changed.connect(_on_sim_changed)
 	if Game.args.has("perf"):
@@ -290,6 +294,7 @@ func _on_sim_changed() -> void:
 
 
 var _demo_play_state := -1
+var loading: LoadingScreen
 var _season_day := -1
 
 
@@ -391,6 +396,7 @@ func _process(delta: float) -> void:
 #   --day=N (jump to a day of the year: 0 March 1st, 168 the first of September)
 #   --stories=<id|1> (the Feed panel's Stories tab, starting that story first)
 #   --tutorial (start the guided first round) --demo=tutorial (drive it through every step)
+#   --loadingcard (hold the loading screen up) --demo=menuload (save, then load through the Menu)
 #   --soundcheck --soundlog (see sound_desk.gd)
 #   Without --shot the game opens its normal full-size window; add --exit to quit after --frames.
 #   --play=hole --overlay=0..3 --staff=N --demo=name --perf=1
@@ -574,6 +580,8 @@ func _apply_test_args() -> void:
 		get_window().content_scale_factor = float(a.uiscale)
 	if a.has("displaycard"):
 		hud.show_display()
+	if a.has("loadingcard"):
+		loading.preview()
 	if a.has("stories"):
 		# open the Feed panel on its Stories tab, with a story started
 		if str(a.stories) != "1":
@@ -854,6 +862,19 @@ func _run_demo(delta: float) -> void:
 					hud.panels._skill_pick = "frugal"
 					hud.rebuild_dock()
 				print("DEMO opened ", names[i])
+		"menuload":
+			# save, then load it back through the Menu's own button
+			_demo_step += 1
+			if _demo_step == 5:
+				Game.sim.economy.money = 12345.0
+				print("DEMO menuload saved: %s" % str(Game.save_game()))
+				Game.sim.economy.money = 1.0
+			elif _demo_step == 10:
+				hud.show_menu()
+			elif _demo_step == 20:
+				_click_button_named("Load game", 0)
+			elif _demo_step == 80:
+				print("DEMO menuload after: menu open %s, paused %s, money %.0f, holes %d, speed %d" % [str(hud.modal_open()), str(Game.paused), Game.sim.economy.money, Game.sim.course.holes.size(), Game.speed])
 		"tutorial":
 			# Do what each step asks, through the game's own calls, and watch
 			# the coach move on. Fast-forward the course where it has to wait.

@@ -69,6 +69,12 @@ Issuer ID, which only the owner has.
 
 ## Rules
 
+- **Test runs never touch the real save.** `--shot` and `--exit` runs save to
+  `user://save_test.json`. The live folder is
+  `~/Library/Application Support/ParAndParcel` (a custom user dir sits
+  there, not under `Godot/app_userdata`); `Game._migrate_saves` brings
+  older saves across. Anything that starts or loads a game goes through
+  `LoadingScreen.run`.
 - **The tutorial watches the game, not the mouse** (`Tutorial._met`): a step
   is done when the course shows it (tiles painted, a hole added, a golfer
   paid, a greenkeeper hired). Text lives in `data/tutorial.json`. A new

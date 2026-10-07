@@ -64,7 +64,7 @@ check. **Basic** works but is thin. **Not yet** is planned.
 | Finances | Built | Monthly books by category, history, debt interest, warnings from the board. |
 | Wildlife | Built | Animals wander the course and bolt from flying balls. |
 | Stories | Basic | Groups arrive with a simple one-line story that plays out over the round. The original's long scripted stories are not here. |
-| Save and load | Basic | Course, money, staff, skills, members, records. Golfers mid-round are not saved. Autosaves monthly. |
+| Save and load | Basic | Course, money, staff, skills, members, stories, records. Golfers mid-round are not saved. Autosaves monthly. A loading screen covers a new game or a load: the fairway backdrop, what is happening, a bar, one tip (`data/tips.json`). Saves live in the game's own folder under Application Support; saves left under the earlier folder names are brought across at startup. Test runs use a separate slot and never touch the real save. |
 | Sprinklers and irrigation | Not yet | Turf only scorches in heat waves for now. |
 | Spectators at tournaments | Not yet | |
 | Difficulty levels | Not yet | |

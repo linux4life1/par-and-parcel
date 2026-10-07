@@ -22,6 +22,7 @@ var lies: Dictionary = {}       # what each kind of ground does to a shot
 var difficulty: Dictionary = {} # the difficulty slider's levels
 var clubhouse: Dictionary = {}  # clubhouse levels and what each unlocks
 var tutorial: Dictionary = {}   # the guided first round
+var tips: Dictionary = {}       # for the loading screen
 var stories: Dictionary = {}    # the long golfer stories
 var names: Dictionary = {}
 var feed: Dictionary = {}
@@ -49,6 +50,7 @@ func _init() -> void:
 	difficulty = _load("difficulty")
 	clubhouse = _load("clubhouse")
 	tutorial = _load("tutorial")
+	tips = _load("tips")
 	stories = _load("stories")
 	names = _load("names")
 	feed = _load("feed")

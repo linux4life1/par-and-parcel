@@ -8,7 +8,9 @@ signal quality_changed()
 signal volume_changed()
 
 const STEP := 1.0 / 60.0
-const SAVE_PATH := "user://save.json"
+const SAVE_FILE := "user://save.json"
+const TEST_SAVE_FILE := "user://save_test.json"   # screenshot and test runs never touch the real slot
+var SAVE_PATH := SAVE_FILE
 const SETTINGS_PATH := "user://settings.cfg"
 ## Graphics presets, lightest first. See Main._apply_quality.
 const QUALITY_NAMES: Array[String] = ["Low", "Medium", "High", "Ultra"]
@@ -55,6 +57,9 @@ func _ready() -> void:
 	for a in OS.get_cmdline_user_args():
 		var kv := a.trim_prefix("--").split("=", true, 1)
 		args[kv[0]] = kv[1] if kv.size() > 1 else "1"
+	if args.has("shot") or args.has("exit"):
+		SAVE_PATH = TEST_SAVE_FILE
+	_migrate_saves()
 	if args.has("quality"):
 		quality = clampi(int(args.quality), 0, QUALITY_NAMES.size() - 1)
 	else:
@@ -302,6 +307,31 @@ func fast_forward(seconds: float) -> void:
 		return
 	for i in int(seconds / STEP):
 		sim.step(STEP)
+
+
+## The game's folder was renamed twice in a day. Bring a save and settings
+## left under an old name across, if they are newer than what is here.
+func _migrate_saves() -> void:
+	var here := OS.get_user_data_dir()
+	var parent := here.get_base_dir()
+	# Godot keeps a project's folder under Godot/app_userdata unless it has
+	# a custom name, as this one now does; look in both places
+	var olds: Array[String] = []
+	for old_name in ["Par & Parcel", "Sim Golf", "ParAndParcel"]:
+		olds.append(parent.path_join(old_name))
+		olds.append(parent.path_join("Godot").path_join("app_userdata").path_join(old_name))
+	for old in olds:
+		if old == here or not DirAccess.dir_exists_absolute(old):
+			continue
+		for file in ["save.json", "settings.cfg"]:
+			var src := old.path_join(file)
+			var dst := here.path_join(file)
+			if not FileAccess.file_exists(src):
+				continue
+			if FileAccess.file_exists(dst) and FileAccess.get_modified_time(dst) >= FileAccess.get_modified_time(src):
+				continue
+			if DirAccess.copy_absolute(src, dst) == OK:
+				print("Brought %s across from %s." % [file, old])
 
 
 func has_save() -> bool:
