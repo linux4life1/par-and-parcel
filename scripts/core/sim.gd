@@ -111,6 +111,7 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	clubhouse_level = level_for_holes(course.holes.size())
 	career = Career.new(self)
 	player = PlayerProfile.new(self)
+	player.golfer.course = course
 	skills.changed.connect(player.refresh)
 	skills.leveled.connect(func(branch: String, lvl: int) -> void:
 		toast.emit("%s level %d! You have a new skill point." % ["Manager" if branch == "manager" else "Golfer", lvl], "good"))

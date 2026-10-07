@@ -282,6 +282,7 @@ func _cast_role(spec: Dictionary, taken: Array[int]) -> Dictionary:
 func _new_character(spec: Dictionary) -> Dictionary:
 	var g := Golfer.new()
 	g.kind = "public"
+	g.course = sim.course
 	g.roll_stats(float(spec.get("skill", 0.4)), rng)
 	g.wealth = float(spec.get("wealth", g.wealth))
 	var first := sim.db.pick("first", rng)

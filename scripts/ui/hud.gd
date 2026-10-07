@@ -430,8 +430,8 @@ func _build_bottom() -> void:
 	var oh := UIKit.hbox(4)
 	op.add_child(oh)
 	oh.add_child(UIKit.label("View", 12, UIKit.MUTED))
-	var names := ["Normal", "Moisture", "Turf", "Height"]
-	var tips := ["The course as golfers see it", "How wet the ground is. Wet ground kills bounce and roll.", "Turf health and weeds", "Elevation"]
+	var names := ["Normal", "Moisture", "Turf", "Height", "Mood"]
+	var tips := ["The course as golfers see it", "How wet the ground is. Wet ground kills bounce and roll.", "Turf health and weeds", "Elevation", "Where golfers have been pleased or annoyed. It fades over a couple of days."]
 	for i in names.size():
 		var b := UIKit.button(names[i], set_overlay.bind(i), tips[i])
 		b.toggle_mode = true
@@ -1120,6 +1120,15 @@ func show_scenarios(first_launch: bool = false) -> void:
 
 # -------------------------------------------------------- person inspector
 
+## Centre the camera on where a thought happened, and show the mood map.
+func _show_thought(th: Dictionary) -> void:
+	if rig == null or not th.has("pos"):
+		return
+	var at: Vector3 = th.pos
+	rig.center_on(at, 45.0)
+	set_overlay(4)
+
+
 func inspect(who: Variant) -> void:
 	_inspected = who
 	inspector.visible = who != null
@@ -1203,7 +1212,12 @@ func _update_inspector(force: bool = false) -> void:
 					col = UIKit.GOOD
 				elif float(th.delta) < 0.0:
 					col = UIKit.BAD
-				var line := UIKit.para("\"%s\"" % th.text, 13, col)
+				var line := UIKit.button("\"%s\"" % str(th.text), _show_thought.bind(th), "Show where this was thought")
+				line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+				line.alignment = HORIZONTAL_ALIGNMENT_LEFT
+				line.add_theme_font_size_override("font_size", 13)
+				line.add_theme_color_override("font_color", col)
+				line.add_theme_color_override("font_hover_color", col)
 				line.custom_minimum_size = Vector2(300, 0)
 				inspector_body.add_child(line)
 	else:

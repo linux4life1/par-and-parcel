@@ -282,6 +282,7 @@ func due(limit: int) -> Array[Dictionary]:
 func make_golfer(m: Dictionary) -> Golfer:
 	var g := Golfer.new()
 	g.kind = "public"
+	g.course = sim.course
 	g.name = str(m.name)
 	g.handle = str(m.handle)
 	g.skill = float(m.skill)

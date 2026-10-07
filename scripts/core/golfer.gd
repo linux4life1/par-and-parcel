@@ -51,6 +51,7 @@ var wealth := 0.5
 var pace := 0.5
 var satisfaction := 60.0
 var thoughts: Array[Dictionary] = []
+var course: Course = null      # set when the golfer joins a game, so a feeling can mark the ground
 var gripes := {}                # tag -> summed mood change, for reviews
 var pos := Vector3.ZERO
 var prev := Vector3.ZERO
@@ -242,11 +243,16 @@ func feel(delta: float, text: String = "", tag: String = "") -> void:
 	satisfaction = clampf(satisfaction + delta, 0.0, 100.0)
 	if tag != "":
 		gripes[tag] = float(gripes.get(tag, 0.0)) + delta
+	if course != null and not is_zero_approx(delta):
+		course.note_mood(pos.x, pos.z, delta)
 	if text == "":
 		return
 	if not thoughts.is_empty() and thoughts[-1].text == text:
 		return
-	thoughts.append({"text": text, "delta": delta})
+	var hole_i := -1
+	if group != null:
+		hole_i = group.hole_i
+	thoughts.append({"text": text, "delta": delta, "pos": pos, "hole": hole_i})
 	if thoughts.size() > 12:
 		thoughts.pop_front()
 	bubble = text

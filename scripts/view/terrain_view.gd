@@ -21,6 +21,7 @@ var _bare := PackedByteArray()        # 1 where something stands, so no grass gr
 var _height_img: Image
 var _height_tex: ImageTexture
 var _heights_stale := false
+var _shown_overlay := 0
 var palette := PackedVector3Array()   # linear colours, in PALETTE_KEYS order
 ## Things big enough to cover the tiles around them.
 const WIDE: Array[int] = [Defs.O.CLUBHOUSE, Defs.O.HOTEL, Defs.O.DRIVING_RANGE, Defs.O.MARINA, Defs.O.CART_BARN,
@@ -87,6 +88,13 @@ func _frame_terrain(_delta: float) -> void:
 			n += 1
 			if n >= 6:
 				break
+	# The mood overlay borrows the weeds channel. Refill at once when it is switched.
+	var shown := int(material.get_shader_parameter("overlay"))
+	if shown != _shown_overlay:
+		_shown_overlay = shown
+		for ty in course.h:
+			_fill_row(ty)
+		_upload = true
 	# Refresh wetness, health and weeds a few rows per frame.
 	var rows := maxi(1, course.h / 90)
 	for i in rows:
@@ -161,7 +169,11 @@ func _fill_row(ty: int) -> void:
 		_bytes[j] = course.terrain[i] | (128 if (course.locked[i] != 0 and course.hot[i] == 0) else 0) | (64 if _bare[i] != 0 else 0)
 		_bytes[j + 1] = int(course.wet[i] * 255.0)
 		_bytes[j + 2] = int(course.health[i] * 255.0)
-		_bytes[j + 3] = int(course.weeds[i] * 255.0)
+		if _shown_overlay == 4:
+			var m := clampf(course.mood[i] / 12.0, -1.0, 1.0)
+			_bytes[j + 3] = int((m * 0.5 + 0.5) * 255.0)
+		else:
+			_bytes[j + 3] = int(course.weeds[i] * 255.0)
 		j += 4
 		i += 1
 

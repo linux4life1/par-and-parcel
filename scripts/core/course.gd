@@ -17,6 +17,7 @@ var wet := PackedFloat32Array()       # 0 dry .. 1 flooded
 var health := PackedFloat32Array()    # 0 dead .. 1 perfect turf
 var weeds := PackedFloat32Array()     # 0 .. 1
 var pests := PackedFloat32Array()     # 0 .. 1
+var mood := PackedFloat32Array()      # recent feelings on this tile: negative annoys, positive pleases; fades over a couple of days
 var holes: Array[Hole] = []
 var clubhouse := Vector2i.ZERO
 var revision := 0                     # bumps on any edit that changes play
@@ -55,6 +56,8 @@ func _init(width: int = 128, height: int = 128) -> void:
 	weeds.fill(0.0)
 	pests.resize(w * h)
 	pests.fill(0.0)
+	mood.resize(w * h)
+	mood.fill(0.0)
 	locked.resize(w * h)
 	locked.fill(0)
 	hot.resize(w * h)
@@ -160,6 +163,16 @@ func index_at(x: float, z: float) -> int:
 	if tx < 0 or ty < 0 or tx >= w or ty >= h:
 		return -1
 	return ty * w + tx
+
+
+## A golfer felt something here. The mood map reads this back; it fades in Grounds.
+func note_mood(x: float, z: float, delta: float) -> void:
+	if is_zero_approx(delta):
+		return
+	var i := index_at(x, z)
+	if i < 0:
+		return
+	mood[i] = clampf(mood[i] + delta, -24.0, 24.0)
 
 
 func terrain_at(x: float, z: float) -> int:
@@ -499,6 +512,7 @@ func to_dict() -> Dictionary:
 		"health": Marshalls.raw_to_base64(health.to_byte_array()),
 		"weeds": Marshalls.raw_to_base64(weeds.to_byte_array()),
 		"pests": Marshalls.raw_to_base64(pests.to_byte_array()),
+		"mood": Marshalls.raw_to_base64(mood.to_byte_array()),
 		"clubhouse": [clubhouse.x, clubhouse.y],
 		"holes": hs,
 		"biome": biome_id,
@@ -517,6 +531,12 @@ static func from_dict(d: Dictionary) -> Course:
 	c.health = Marshalls.base64_to_raw(d.health).to_float32_array()
 	c.weeds = Marshalls.base64_to_raw(d.weeds).to_float32_array()
 	c.pests = Marshalls.base64_to_raw(d.pests).to_float32_array()
+	if d.has("mood"):
+		c.mood = Marshalls.base64_to_raw(d.mood).to_float32_array()
+	if c.mood.size() != c.w * c.h:
+		c.mood = PackedFloat32Array()
+		c.mood.resize(c.w * c.h)
+		c.mood.fill(0.0)
 	c.clubhouse = Vector2i(int(d.clubhouse[0]), int(d.clubhouse[1]))
 	c.biome_id = str(d.get("biome", "lush"))
 	for v: Dictionary in d.get("volcanoes", []):

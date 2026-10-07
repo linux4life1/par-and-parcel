@@ -57,6 +57,7 @@ func _ready() -> void:
 	# seeds are derived from it, so a test that makes golfers earlier changes
 	# every later round.
 	_test_dogleg()
+	_test_mood_map()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2657,6 +2658,35 @@ func _test_dogleg() -> void:
 	sim.refresh_hole_lines()
 	check(hole.par == 3 and hole.length <= Hole.PAR_3, "painting the corner fairway shortens the hole to a par 3 (%d yd)" % Defs.yards(hole.length))
 	check(int(hole.tally.get("1", 0)) == 1, "the 4 already recorded becomes a bogey on the new par")
+
+
+func _test_mood_map() -> void:
+	print("-- the mood map")
+	var sim := _sim("sandbox", 3)
+	var g := sim.visitors.make_golfer("public", 0.5)
+	g.persona = {}
+	g.mood_good = 1.0
+	g.mood_bad = 1.0
+	g.pos = sim.course.tile_center(40, 40)
+	g.feel(6.0, "What a fairway.", "scenery")
+	var tile := sim.course.tile_of(g.pos.x, g.pos.z)
+	var i := tile.y * sim.course.w + tile.x
+	check(sim.course.mood[i] > 1.0, "a happy thought paints the tile the golfer is standing on (%.1f)" % sim.course.mood[i])
+	check(sim.course.mood[i + 3] == 0.0, "and nowhere else")
+	var th: Dictionary = g.thoughts[g.thoughts.size() - 1]
+	var at: Vector3 = th.pos
+	check(at.distance_to(g.pos) < 0.1, "the thought remembers where it happened")
+	var before: float = sim.course.mood[i]
+	for n in 160:
+		sim.grounds.step(0.25)
+	check(sim.course.mood[i] < before * 0.55 and sim.course.mood[i] > 0.2, "the colour fades over a couple of days (%.1f to %.1f)" % [before, sim.course.mood[i]])
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var back := Sim.from_dict(db, raw, gear)
+	check(absf(back.course.mood[i] - sim.course.mood[i]) < 0.01, "a save keeps the mood on the ground")
+	var course_d: Dictionary = raw.course
+	course_d.erase("mood")
+	var old := Sim.from_dict(db, raw, gear)
+	check(old.course.mood[i] == 0.0, "an old save without a mood map loads as calm ground")
 
 
 func _test_bar_and_vending() -> void:

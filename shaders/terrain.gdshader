@@ -14,7 +14,7 @@ uniform vec2 map_size = vec2(128.0, 128.0);
 uniform float tile_size = 5.0;
 uniform float grid_alpha = 0.0;
 uniform float contour_alpha = 0.0;
-uniform int overlay = 0;            // 0 off, 1 moisture, 2 turf health, 3 height
+uniform int overlay = 0;            // 0 off, 1 moisture, 2 turf health, 3 height, 4 mood (alpha holds mood, not weeds)
 uniform vec3 brush = vec3(0.0, 0.0, -1.0);   // x, z, radius; negative radius hides it
 uniform vec3 brush_color : source_color = vec3(1.0, 1.0, 1.0);
 uniform vec4 land_rect = vec4(0.0);          // x0, z0, x1, z1 of a highlighted land parcel
@@ -342,6 +342,12 @@ void fragment() {
 		float hgt = clamp((wpos.y + 8.0) / 20.0, 0.0, 1.0);
 		vec3 ecol = mix(lin(vec3(0.15, 0.30, 0.55)), mix(lin(vec3(0.30, 0.65, 0.30)), lin(vec3(0.90, 0.85, 0.70)), smoothstep(0.5, 1.0, hgt)), smoothstep(0.0, 0.5, hgt));
 		col = ecol * (0.55 + 1.6 * luma);
+	} else if (overlay == 4) {
+		// Alpha is the mood, 0.5 calm, towards 0 annoyed, towards 1 pleased.
+		float m = clamp(weeds, 0.0, 1.0);
+		vec3 moodc = mix(lin(vec3(0.72, 0.16, 0.12)), lin(vec3(0.18, 0.62, 0.28)), m);
+		float felt = smoothstep(0.02, 0.14, abs(m - 0.5));
+		col = mix(vec3(luma) * 0.5, moodc * (0.55 + 1.6 * luma), felt);
 	}
 
 	// land you do not own yet is washed out and hatched
