@@ -53,9 +53,6 @@ func _ready() -> void:
 	_test_hole_lab()
 	_test_club_life()
 	_test_gallery()
-	# After the long sims. A golfer's id is a process-wide counter, and eddy
-	# seeds are derived from it, so a test that makes golfers earlier changes
-	# every later round.
 	_test_dogleg()
 	_test_mood_map()
 	print("%d checks, %d failed" % [checks, failures])
@@ -1188,6 +1185,7 @@ func _test_save() -> void:
 	_run(sim, 10.0)
 	var text := JSON.stringify(sim.to_dict())
 	var back := Sim.from_dict(db, JSON.parse_string(text), gear)
+	check(str(back.rng.seed) == str(sim.rng.seed) and str(back.rng.state) == str(sim.rng.state), "a loaded game carries on from the same dice, not the clock")
 	check(back.course.holes.size() == sim.course.holes.size(), "holes survive a save")
 	check(is_equal_approx(back.economy.money, sim.economy.money), "money survives a save")
 	check(back.crew.members.size() == 1, "staff survive a save")

@@ -22,6 +22,8 @@ signal tournament_entry(play: bool)
 
 var db: DataDB
 var rng := RandomNumberGenerator.new()
+## Next eddy number to hand a golfer. Starts at 1 in every simulation.
+var _eddy := 1
 var course: Course
 var gear: Gear
 var weather := Weather.new()
@@ -112,6 +114,7 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	career = Career.new(self)
 	player = PlayerProfile.new(self)
 	player.golfer.course = course
+	tag_eddy(player.golfer)
 	skills.changed.connect(player.refresh)
 	skills.leveled.connect(func(branch: String, lvl: int) -> void:
 		toast.emit("%s level %d! You have a new skill point." % ["Manager" if branch == "manager" else "Golfer", lvl], "good"))
@@ -172,6 +175,12 @@ func step(dt: float) -> void:
 
 func day() -> int:
 	return int(time / Defs.DAY_SECONDS)
+
+
+## Give a golfer their eddy number for this simulation.
+func tag_eddy(g: Golfer) -> void:
+	g.eddy = _eddy
+	_eddy += 1
 
 
 ## 0 in daylight, 1 at night.
@@ -800,7 +809,7 @@ func to_dict() -> Dictionary:
 		"weather": weather.kind, "course": course.to_dict(), "biome": str(biome.get("id", "lush")),
 		"members": members.to_list(), "clubhouse": clubhouse_level, "homes": homes, "gifts": gifts,
 		"feats": feats.done, "rivals": rivals, "best_rank": best_rank, "land_credits": land_credits, "debt_years": debt_years,
-		"difficulty": difficulty,
+		"difficulty": difficulty, "rng_seed": str(rng.seed), "rng_state": str(rng.state),
 	}
 	d["stories"] = stories.to_dict()
 	return d
@@ -812,7 +821,9 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 		scen = data.scenarios[0]
 	var blank := scen.duplicate(true)
 	blank["map"] = {"w": 8, "h": 8, "holes": 0}
-	var sim := Sim.new(data, blank, 0, shared_gear, str(d.get("biome", "lush")))
+	# Seed 0 would draw from the wall clock. A load must not: the blank
+	# course is thrown away, and the saved dice are put back below.
+	var sim := Sim.new(data, blank, 1, shared_gear, str(d.get("biome", "lush")))
 	sim.scenario = Scenario.new(scen)
 	sim.scenario.status = str(d.get("status", sim.scenario.status))
 	sim.course = Course.from_dict(d.course)
@@ -858,4 +869,11 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	for role_id: String in d.get("staff", []):
 		sim.crew.hire(role_id)
 	sim.grounds.refresh_layout()
+	# After everything that drew on the blank game's dice, so play continues
+	# from the save and not from the clock.
+	if d.has("rng_state"):
+		sim.rng.seed = int(str(d.get("rng_seed", "1")))
+		sim.rng.state = int(str(d.rng_state))
+	else:
+		sim.rng.seed = 1
 	return sim

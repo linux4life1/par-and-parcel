@@ -211,6 +211,7 @@ func _equip(g: Golfer) -> void:
 func make_golfer(kind: String, base_skill: float) -> Golfer:
 	var rng := sim.rng
 	var g := Golfer.new()
+	sim.tag_eddy(g)
 	g.kind = kind
 	g.course = sim.course
 	g.ball.lava = sim.is_lava()

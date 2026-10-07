@@ -38,6 +38,10 @@ const THRILL := {
 static var _next_id := 1
 
 var id := 0
+## Which set of eddies this golfer's real shots meet. Numbered inside one
+## simulation, from 1. It is not `id`: that counter lives for the whole
+## process, so a test or a loaded game would reshuffle every later round.
+var eddy := 1
 var name := ""
 var handle := ""
 var kind := "public"            # public, pro, celebrity, player
@@ -124,6 +128,11 @@ func _init() -> void:
 	id = _next_id
 	_next_id += 1
 	ball.owner = self
+
+
+## The air this golfer's shot will fly through, fixed when the shot is struck.
+func air_phase(t: float) -> float:
+	return fposmod(t * 7.31 + float(maxi(eddy, 1)) * 13.7, 600.0)
 
 
 ## Fill in abilities from one overall skill number, 0 beginner .. 1 tour pro.

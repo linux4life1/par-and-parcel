@@ -281,6 +281,7 @@ func _cast_role(spec: Dictionary, taken: Array[int]) -> Dictionary:
 ## abilities come from the story's dice; joining uses the club's own code.
 func _new_character(spec: Dictionary) -> Dictionary:
 	var g := Golfer.new()
+	sim.tag_eddy(g)
 	g.kind = "public"
 	g.course = sim.course
 	g.roll_stats(float(spec.get("skill", 0.4)), rng)

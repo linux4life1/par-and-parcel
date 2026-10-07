@@ -150,6 +150,7 @@ func start_match(s: Sim, camera: CameraRig, offer: Dictionary) -> bool:
 	if not start(s, camera, 0, int(offer.holes)):
 		return false
 	var rival := Golfer.new()
+	s.tag_eddy(rival)
 	rival.kind = "lab"
 	rival.name = str(offer.rival)
 	rival.roll_stats(float(offer.skill), s.rng)
@@ -671,7 +672,7 @@ func _strike() -> void:
 				message = "The grass grabbed the club."
 		b.shot_wind = float(brand.get("wind", 1.0)) * float(mods.get("wind", 1.0))
 		b.dodge = sim.skills.bonus("luck")
-		b.air_seed = fposmod(sim.time * 7.31 + float(g.id) * 13.7, 600.0)
+		b.air_seed = g.air_phase(sim.time)
 		b.struck_from = lie
 		var from := b.pos
 		var lift_c := float(c.lift) * float(mods.get("lift", 1.0)) * float(lie_read.lift)

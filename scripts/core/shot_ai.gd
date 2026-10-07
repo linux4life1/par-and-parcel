@@ -284,7 +284,7 @@ static func strike(sim: Sim, g: Golfer) -> void:
 			heading = lerpf(pl.heading, heading, 0.94)
 		b.shot_wind = brand.get("wind", 1.0)
 		b.dodge = g.imagination * 0.45
-		b.air_seed = fposmod(sim.time * 7.31 + float(g.id) * 13.7, 600.0)
+		b.air_seed = g.air_phase(sim.time)
 		b.struck_from = lie
 		b.launch(speed, heading, loft, float(c.lift) * float(lr.lift), side, float(c.spin) * float(lr.spin))
 	g.strokes += 1

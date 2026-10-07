@@ -281,6 +281,7 @@ func due(limit: int) -> Array[Dictionary]:
 ## Turn a member record back into a golfer for today's round.
 func make_golfer(m: Dictionary) -> Golfer:
 	var g := Golfer.new()
+	sim.tag_eddy(g)
 	g.kind = "public"
 	g.course = sim.course
 	g.name = str(m.name)
