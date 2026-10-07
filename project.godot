@@ -30,6 +30,7 @@ window/vsync/vsync_mode=1
 
 renderer/rendering_method="forward_plus"
 rendering_device/driver.macos="metal"
+textures/vram_compression/import_etc2_astc=true
 rendering_device/driver.ios="metal"
 rendering_device/driver.windows="vulkan"
 rendering_device/driver.linuxbsd="vulkan"
