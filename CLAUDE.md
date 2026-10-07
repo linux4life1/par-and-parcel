@@ -37,10 +37,13 @@ the start screen. `--wind=mph` holds the wind for a screenshot or a round.
 Looking at the graphics: `--models=60` puts one of everything on cleared
 ground, `--look=<object number>` centres on the first object of a kind
 (8 is the clubhouse), `--pitch`, `--yaw`, `--nohud`, `--quality=0..3`.
-`--perf --frames=760` prints frame times.
+`--weeds=all` lays a west-to-east gradient of weeds over the course;
+`--ragetest[=toss]` gives one golfer a tantrum and follows them. Buildings
+face west: `--yaw=270` looks at their fronts. `--perf --frames=760` prints
+frame times.
 
 ```sh
-python3 tools/make_foliage.py       # repaint the leaf, needle, frond and grass atlas
+python3 tools/make_foliage.py       # repaint the leaf, needle, frond, grass and weed atlas (2 by 3 cells)
 python3 tools/make_sounds.py        # remake every sound effect, voice and ambience loop (needs oggenc)
 python3 tools/make_sounds.py facilities   # only the burp, flush, slurp and bottle
 python3 tools/make_sounds.py bar          # only the bottle opened at the bar
@@ -166,9 +169,22 @@ Issuer ID, which only the owner has.
   `minf`, `maxi`, `float(...)`.
 - Do not rebuild an `ImmediateMesh` every frame. It stalled frames by 100 ms
   on Metal. Use a pooled `MultiMesh` (see ball tracers in `world_view.gd`).
-- `shot.sh` opens a real window on the owner's screen. Keep those runs few.
-  An unfocused window is throttled by macOS, so frame timings from it are
-  not trustworthy.
+- **`shot.sh` and `perf.sh` open a real window on the owner's screen, and
+  Stage Manager rearranges their desktop every time.** Take screenshots on
+  the Linux box instead (`./linux.sh shot out.png [switches]`, nothing
+  appears on the Mac), and open a Mac window only for a frame-time
+  measurement that needs Metal, announced beforehand. An unfocused window is
+  throttled by macOS, so frame timings from it are not trustworthy.
+- The per-tile data texture (wet, health, weeds) refreshes one row a frame
+  and uploads when it wraps, so a screenshot that changes those needs
+  `--frames` past the map height (200 is safe). Objects and terrain paint
+  update at once.
+- Figures animate from the delta the world view passes them, which is zero
+  while paused and scaled by game speed. Pass real frame time to a pose and
+  people walk in place when the game is paused.
+- The foliage atlas is 2 by 3 cells (`Surfaces.ATLAS_COLS/ROWS`); the
+  foliage and grass shaders, `Flora._cell` and `atlas_means` all assume it.
+  The two weed cells are drawn in their painted colours, not tinted.
 - `Label3D` with `fixed_size` still scales with its parent node.
 - `visibility_range` margins leave a gap where neither level of detail shows
   if the camera lands inside the margin. Trees use none.
