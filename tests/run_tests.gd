@@ -46,6 +46,7 @@ func _ready() -> void:
 	_test_paths()
 	_test_personalities()
 	_test_facilities()
+	_test_bar_and_vending()
 	_test_membership()
 	_test_stories()
 	_test_hole_lab()
@@ -470,7 +471,7 @@ func _test_collisions() -> void:
 	for bio: Dictionary in db.biomes:
 		var probe := Course.new(8, 8)
 		probe.biome = bio
-		for o in range(1, Defs.O.LAMP + 1):
+		for o in range(1, Defs.O_NAMES.size()):
 			var kind := probe.kind_of(o)
 			if not Solids.data().kinds.has(kind) and Defs.O_COST[o] > 0 and not (o in [Defs.O.BRIDGE, Defs.O.PUTTING_GREEN, Defs.O.HOME_SITE, Defs.O.TENNIS]):
 				missing.append("%s/%s" % [bio.id, kind])
@@ -2489,3 +2490,93 @@ func _test_planner() -> void:
 	var pp := ShotAI.plan(sim, pro, hole)
 	check(ShotAI._spot_cost(sim, hole, Vector2(c.tile_center(50, 80).x, c.tile_center(50, 80).z), 1.35) > ShotAI._spot_cost(sim, hole, Vector2(c.tile_center(50, 80).x, c.tile_center(50, 80).z), 0.55), "trouble weighs more on a thoughtful golfer than on a duffer")
 	check(float(dp.dist) > 0.0 and float(pp.dist) > 0.0, "both still have a shot to play")
+
+
+func _test_bar_and_vending() -> void:
+	print("-- the vending machine and the bar")
+	var sim := _sim("three_holes", 23)
+	var holes := sim.course.holes
+	var gr := sim.visitors.add_group("public", 3, 0.5)
+	for m in gr.members:
+		m.persona = {}
+		m.thirst = 0.8
+		m.hunger = 0.7
+		m.bladder = 0.0
+	gr.hole_i = 1
+	for m in gr.members:
+		m.pos = holes[0].pin
+	var mid := holes[0].pin.lerp(holes[1].tee, 0.5)
+	var t := sim.course.tile_of(mid.x, mid.z)
+	sim.course.guard = false
+	for dx in 3:
+		sim.course.set_terrain(t.x + dx, t.y, Defs.T.ROUGH)
+		sim.course.set_object(t.x + dx, t.y, Defs.O.NONE)
+	sim.course.guard = true
+	# the machine on its own
+	check(sim.place_object(t.x, t.y, Defs.O.VENDING) == 1, "a vending machine goes up")
+	check(sim.visitors.plan_stop(gr).get("kind", "") == "vending", "a hungry, thirsty group with nothing better stops at it")
+	var money := sim.economy.money
+	var mood := gr.members[0].satisfaction
+	sim.visitors.serve(gr, "vending")
+	var took := sim.economy.money - money
+	print("   three golfers at the machine: %s taken, mood %.1f to %.1f" % [Defs.money(took), mood, gr.members[0].satisfaction])
+	check(gr.members[0].thirst == 0.0 and gr.members[0].hunger == 0.0, "it answers thirst and hunger both")
+	check(is_equal_approx(took, 33.0) and gr.members[0].satisfaction > mood, "at $11 a head, and they feel a little better for it")
+	# a snack bar next to it wins
+	for m in gr.members:
+		m.thirst = 0.8
+		m.hunger = 0.7
+	check(sim.place_object(t.x + 1, t.y, Defs.O.SNACK_BAR) == 1 and sim.visitors.plan_stop(gr).get("kind", "") == "snack", "with a snack bar beside it, the stand gets the trade")
+	# the bar
+	check(sim.place_object(t.x + 2, t.y, Defs.O.BAR) == 1, "a bar goes up")
+	var drinker := gr.members[0]
+	drinker.persona = {"bar": 1.7}
+	for m in gr.members:
+		m.thirst = 0.8
+		m.hunger = 0.0
+	check(drinker.need_for("bar") > drinker.need_for("drink"), "a golfer with a taste for it wants the bar more than a soft drink")
+	var pro := sim.visitors.add_group("tournament", 1, 0.9)
+	pro.members[0].thirst = 0.9
+	check(pro.members[0].need_for("bar") == 0.0, "a pro in a tournament never does")
+	var think0 := drinker.think_mult()
+	var spread0 := drinker.spread()
+	var walk0 := drinker.walk_speed()
+	money = sim.economy.money
+	mood = drinker.satisfaction
+	var heard := [0]      # a list, so the lambda can count into it
+	sim.sound.connect(func(id: String, _pos: Vector3, _power: float) -> void:
+		if id == "bottle":
+			heard[0] += 1)
+	sim.visitors.serve(gr, "bar")
+	print("   a round of drinks: %s taken, %d bottles opened, mood %.1f to %.1f, drunk %.2f, thinks %.2fx, spread %.2fx" % [
+		Defs.money(sim.economy.money - money), heard[0], mood, drinker.satisfaction, drinker.drunk, drinker.think_mult(), drinker.spread() / spread0])
+	check(heard[0] == 3 and is_equal_approx(sim.economy.money - money, 42.0), "every drinker pops a bottle and pays $14")
+	check(drinker.drunk > 0.3 and drinker.satisfaction > mood + 3.0, "and is drunk and much happier")
+	check(drinker.think_mult() > think0 and drinker.spread() > spread0 * 1.2 and drinker.walk_speed() < walk0, "a drinker takes longer over a shot, sprays it and dawdles")
+	# the good gets better, the little annoyances slide off, the big ones land harder
+	var sober := sim.visitors.make_golfer("public", 0.5)
+	sober.persona = {}
+	var tipsy := sim.visitors.make_golfer("public", 0.5)
+	tipsy.persona = {}
+	tipsy.drunk = 1.0
+	sober.satisfaction = 50.0
+	tipsy.satisfaction = 50.0
+	sober.feel(2.0)
+	tipsy.feel(2.0)
+	check(tipsy.satisfaction > sober.satisfaction, "a drinker enjoys the good things more")
+	sober.feel(-0.5)
+	tipsy.feel(-0.5)
+	check(tipsy.satisfaction > sober.satisfaction, "and shrugs off a small gripe")
+	var s0 := sober.satisfaction
+	var t0 := tipsy.satisfaction
+	sober.feel(-10.0)
+	tipsy.feel(-10.0)
+	check(t0 - tipsy.satisfaction > s0 - sober.satisfaction, "but a real blow hits them harder")
+	# it wears off
+	for i in 60 * 240:
+		sim.visitors._tick_golfer(drinker, 1.0 / 60.0)
+	check(drinker.drunk < 0.05, "and four minutes later it has worn off (drunk %.2f)" % drinker.drunk)
+	var am := sim.visitors.amenity_counts()
+	check(int(am.vending) == 1 and int(am.bar) == 1, "the club counts its machine and its bar")
+	check(db.sounds.sounds.has("bottle") and FileAccess.file_exists("res://assets/sounds/bottle_1.ogg"), "the bottle has its sound")
+	check(Defs.O_BUILDING[Defs.O.BAR] and not Defs.O_BUILDING[Defs.O.VENDING] and Defs.O_LIGHT[Defs.O.BAR] > 0.0, "the bar is a lit building; the machine is not")

@@ -42,7 +42,8 @@ ground, `--look=<object number>` centres on the first object of a kind
 ```sh
 python3 tools/make_foliage.py       # repaint the leaf, needle, frond and grass atlas
 python3 tools/make_sounds.py        # remake every sound effect, voice and ambience loop (needs oggenc)
-python3 tools/make_sounds.py facilities   # only the burp, flush and slurp
+python3 tools/make_sounds.py facilities   # only the burp, flush, slurp and bottle
+python3 tools/make_sounds.py bar          # only the bottle opened at the bar
 python3 -I tools/fetch_music.py     # download the CC0 music again (checksummed)
 python3 -I tools/fetch_textures.py  # download the CC0 ground and building textures again
 ```
@@ -238,7 +239,7 @@ Issuer ID, which only the owner has.
   (`ffmpeg -i x.ogg -lavfi showspectrumpic x.png`), then say plainly that
   the owner has to judge it by ear.
 - Test runs are muted (`--shot` or `--exit`); pass `--sound` to hear one.
-  `--demo=sound` plays all 47 effects and reads the bus meters, which work
+  `--demo=sound` plays all 51 effects and reads the bus meters, which work
   even when muted. `--soundcheck` prints Sound-bus peaks for the golf sounds
   and voices at four zooms, and `--soundlog` prints announced-against-played
   counts at exit.

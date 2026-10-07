@@ -146,11 +146,27 @@ func brand_of(cat: String) -> Dictionary:
 
 
 func spread() -> float:
-	return lerpf(0.105, 0.022, accuracy) * (1.0 + bonus_spread)
+	# drink loosens the swing in every direction
+	return lerpf(0.105, 0.022, accuracy) * (1.0 + bonus_spread) * (1.0 + drunk * 0.9)
 
 
 func walk_speed() -> float:
-	return 6.0 + pace * 1.5
+	return (6.0 + pace * 1.5) * (1.0 - drunk * 0.25)
+
+
+## How much longer than usual this golfer takes over a shot: a drinker
+## dawdles, lines it up twice and tells a story in between.
+func think_mult() -> float:
+	return 1.0 + drunk * 1.2
+
+
+## How much this golfer fancies a drink at the bar, from their personality
+## (`bar` in data/personalities.json; 1 is ordinary). Pros in a tournament
+## and the player never do.
+func bar_taste() -> float:
+	if kind == "player" or (group != null and group.kind == "tournament"):
+		return 0.0
+	return float(persona.get("bar", 1.0))
 
 
 ## Share of normal power available from a lie.
@@ -191,6 +207,11 @@ func need_for(kind: String) -> float:
 			return maxf(hunger, thirst * 0.6)
 		"drink":
 			return thirst
+		"vending":
+			# a machine answers either need, but nobody is excited about it
+			return maxf(hunger, thirst) * 0.85
+		"bar":
+			return thirst * bar_taste()
 	return 0.0
 
 
@@ -204,6 +225,15 @@ func feel(delta: float, text: String = "", tag: String = "") -> void:
 		delta *= k
 		delta *= float(persona.get("pos", 1.0)) if delta > 0.0 else float(persona.get("neg", 1.0))
 	delta *= mood_good if delta > 0.0 else mood_bad
+	if drunk > 0.0:
+		# Drink makes the good things better and the small annoyances slide
+		# off, but anything that really goes wrong lands twice as hard.
+		if delta > 0.0:
+			delta *= 1.0 + drunk * 0.35
+		elif delta > -1.0:
+			delta *= 1.0 - drunk * 0.6
+		else:
+			delta *= 1.0 + drunk * 0.5
 	satisfaction = clampf(satisfaction + delta, 0.0, 100.0)
 	if tag != "":
 		gripes[tag] = float(gripes.get(tag, 0.0)) + delta

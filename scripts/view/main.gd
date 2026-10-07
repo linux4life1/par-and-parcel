@@ -523,7 +523,7 @@ func _apply_test_args() -> void:
 				if sim.course.in_bounds(tx, ty):
 					sim.course.objects[ty * cw + tx] = 0
 		var k := 0
-		for o in range(1, Defs.O.LAMP + 1):
+		for o in range(1, Defs.O_NAMES.size()):
 			if o == Defs.O.CLUBHOUSE or o == Defs.O.BRIDGE:
 				continue
 			var tx := t0.x + 5 + (k % 6) * 4

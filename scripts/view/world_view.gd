@@ -442,6 +442,21 @@ static func glass() -> StandardMaterial3D:
 	return m
 
 
+## The lit front of a vending machine: a cool white lightbox, faintly on by
+## day and bright after dark (see _show_night).
+static func vend_glow() -> StandardMaterial3D:
+	if _mats.has("vend_glow"):
+		return _mats["vend_glow"]
+	var m := StandardMaterial3D.new()
+	m.albedo_color = Color(0.86, 0.92, 0.98)
+	m.roughness = 0.25
+	m.emission_enabled = true
+	m.emission = Color(0.78, 0.9, 1.0)
+	m.emission_energy_multiplier = 0.35
+	_mats["vend_glow"] = m
+	return m
+
+
 ## The glass of a lamp: pale by day, glowing at night.
 static func lamp_glow() -> StandardMaterial3D:
 	if _mats.has("lamp_glow"):
@@ -574,6 +589,82 @@ static func _built(kind: String) -> Array:
 				[_box(0.95, 2.0, 0.12), Vector3(0.95, 1.3, -1.62), paint(Color(0.6, 0.25, 0.35), 0.4)],
 				[_box(3.2, 0.4, 0.1), Vector3(0, 2.55, -1.62), glass()],
 			]
+		"o26":  # vending machine: a red cabinet, a lit window full of cans, a coin panel
+			var red := paint(Color(0.72, 0.1, 0.1), 0.35)
+			var dark := paint(Color(0.1, 0.1, 0.11), 0.5)
+			var steel := paint(Color(0.6, 0.62, 0.65), 0.3)
+			parts = [
+				[_box(0.96, 0.12, 0.88), Vector3(0, 0.06, 0.02), dark],
+				[_box(0.9, 1.78, 0.7), Vector3(0, 1.01, 0.05), red],
+				[_box(0.9, 0.06, 0.82), Vector3(0, 1.93, 0.0), dark],
+				# the frame round the window, and the side panel with the slot
+				[_box(0.08, 1.78, 0.12), Vector3(-0.44, 1.01, -0.36), red],
+				[_box(0.64, 0.12, 0.12), Vector3(-0.12, 1.86, -0.36), red],
+				[_box(0.64, 0.5, 0.12), Vector3(-0.12, 0.37, -0.36), dark],
+				[_box(0.3, 1.78, 0.12), Vector3(0.3, 1.01, -0.36), red],
+				# the lit back of the window, the cans in front of it, the lit header
+				[_box(0.56, 1.14, 0.03), Vector3(-0.12, 1.21, -0.285), vend_glow()],
+				[_box(0.62, 0.1, 0.01), Vector3(-0.12, 1.86, -0.425), vend_glow()],
+				[_box(0.4, 0.17, 0.02), Vector3(-0.12, 0.3, -0.425), paint(Color(0.22, 0.22, 0.24), 0.4)],
+				[_box(0.18, 0.3, 0.02), Vector3(0.3, 1.45, -0.425), steel],
+				[_box(0.03, 0.08, 0.01), Vector3(0.3, 1.5, -0.44), dark],
+			]
+			var cans := [Color(0.85, 0.12, 0.12), Color(0.12, 0.35, 0.8), Color(0.15, 0.6, 0.25), Color(0.95, 0.55, 0.1), Color(0.5, 0.2, 0.7), Color(0.95, 0.85, 0.2)]
+			for r in 4:
+				parts.append([_box(0.56, 0.02, 0.1), Vector3(-0.12, 0.7 + r * 0.27, -0.32), steel])
+				for col in 3:
+					var c: Color = cans[(r * 3 + col) % cans.size()]
+					parts.append([_cyl(0.045, 0.045, 0.13, 8), Vector3(-0.31 + col * 0.19, 0.78 + r * 0.27, -0.34), paint(c, 0.3)])
+			for k in 4:
+				parts.append([_box(0.1, 0.04, 0.02), Vector3(0.3, 1.02 + k * 0.08, -0.425), vend_glow()])
+		"o27":  # bar: an open-fronted pavilion with a counter, stools, bottles and a pint sign
+			var roof := PrismMesh.new()
+			roof.size = Vector3(6.8, 1.6, 6.0)
+			var polished := paint(Color(0.3, 0.17, 0.1), 0.25)
+			var leather := paint(Color(0.45, 0.1, 0.1), 0.5)
+			var steel := paint(Color(0.6, 0.62, 0.65), 0.3)
+			var amber := paint(Color(0.9, 0.55, 0.12), 0.2)
+			parts = [
+				[_box(6.2, 0.3, 5.2), Vector3(0, 0.15, 0.2), stone],
+				[_box(5.6, 2.6, 0.3), Vector3(0, 1.6, 2.2), dark_timber],
+				[_box(0.3, 2.6, 4.2), Vector3(-2.8, 1.6, 0.3), dark_timber],
+				[_box(0.3, 2.6, 4.2), Vector3(2.8, 1.6, 0.3), dark_timber],
+				[roof, Vector3(0, 3.7, 0.2), slate],
+				[_box(6.9, 0.18, 0.2), Vector3(0, 2.95, -2.85), timber],
+				# a timber awning out over the stools, on two posts with lanterns
+				[_box(6.4, 0.08, 1.7), Vector3(0, 2.72, -3.55), timber, Basis(Vector3(1, 0, 0), -0.18)],
+				[_cyl(0.08, 0.08, 2.6, 8), Vector3(-2.9, 1.3, -4.2), timber],
+				[_cyl(0.08, 0.08, 2.6, 8), Vector3(2.9, 1.3, -4.2), timber],
+				[_sphere(0.11, 8, 4), Vector3(-2.9, 2.45, -4.2), lamp_glow()],
+				[_sphere(0.11, 8, 4), Vector3(2.9, 2.45, -4.2), lamp_glow()],
+				# the counter, its polished top, and two taps
+				[_box(4.6, 1.05, 0.7), Vector3(0, 0.82, -1.6), dark_timber],
+				[_box(4.8, 0.08, 0.86), Vector3(0, 1.38, -1.6), polished],
+				[_cyl(0.03, 0.03, 0.3, 6), Vector3(0.7, 1.55, -1.5), steel],
+				[_box(0.05, 0.14, 0.05), Vector3(0.7, 1.77, -1.5), paint(Color(0.1, 0.1, 0.1), 0.4)],
+				[_cyl(0.03, 0.03, 0.3, 6), Vector3(1.1, 1.55, -1.5), steel],
+				[_box(0.05, 0.14, 0.05), Vector3(1.1, 1.77, -1.5), paint(Color(0.1, 0.1, 0.1), 0.4)],
+				# the back bar: a warm lit panel behind two shelves of bottles
+				[_box(4.4, 1.0, 0.03), Vector3(0, 1.95, 2.03), lamp_glow()],
+				[_box(4.4, 0.06, 0.35), Vector3(0, 1.5, 1.88), timber],
+				[_box(4.4, 0.06, 0.35), Vector3(0, 2.0, 1.88), timber],
+				# the sign on the gable: a pint with a head on it
+				[_box(1.8, 0.6, 0.1), Vector3(0, 3.5, -2.88), paint(Color(0.08, 0.3, 0.16), 0.5)],
+				[_box(1.9, 0.7, 0.06), Vector3(0, 3.5, -2.85), paint(Color(0.9, 0.85, 0.7), 0.5)],
+				[_cyl(0.11, 0.09, 0.3, 10), Vector3(0, 3.45, -2.97), amber],
+				[_cyl(0.12, 0.12, 0.07, 10), Vector3(0, 3.63, -2.97), white],
+			]
+			var bottles := [Color(0.65, 0.4, 0.12), Color(0.12, 0.4, 0.2), Color(0.3, 0.12, 0.08), Color(0.85, 0.8, 0.7), Color(0.55, 0.12, 0.15)]
+			for row in 2:
+				for k in 9:
+					var bc: Color = bottles[(k + row * 2) % bottles.size()]
+					parts.append([_cyl(0.045, 0.05, 0.3, 6), Vector3(-1.9 + k * 0.475, 1.68 + row * 0.5, 1.88), paint(bc, 0.2)])
+					parts.append([_cyl(0.018, 0.03, 0.09, 6), Vector3(-1.9 + k * 0.475, 1.87 + row * 0.5, 1.88), paint(bc, 0.2)])
+			for k in 4:
+				var sx := -1.5 + k * 1.0
+				parts.append([_cyl(0.21, 0.21, 0.07, 10), Vector3(sx, 0.78, -2.35), leather])
+				parts.append([_cyl(0.04, 0.04, 0.72, 6), Vector3(sx, 0.39, -2.35), steel])
+				parts.append([_cyl(0.17, 0.17, 0.03, 10), Vector3(sx, 0.25, -2.35), steel])
 		"o12":  # bridge
 			parts = [[_box(5.3, 0.22, 5.3), Vector3(0, 0.56, 0), timber]]
 			for sx: float in [-2.45, 2.45]:
@@ -1305,6 +1396,7 @@ func _show_night() -> void:
 		lamp.light_energy = float(pair[1]) * dark
 	lamp_glow().emission_energy_multiplier = 7.0 * dark
 	glass().emission_energy_multiplier = 1.8 * dark
+	vend_glow().emission_energy_multiplier = 0.35 + 3.0 * dark
 
 
 func _frame_world(delta: float) -> void:
@@ -1717,6 +1809,16 @@ func _rebuild_objects() -> void:
 		elif o == Defs.O.HOTEL or o == Defs.O.TENNIS or o == Defs.O.DRIVING_RANGE:
 			energy = 4.0
 			height = 6.0
+		elif o == Defs.O.VENDING:
+			# the cold spill of a lit front, no more
+			energy = 1.1
+			height = 1.4
+			at += Vector3(0.0, 0.0, -0.9)
+			lamp.light_color = Color(0.8, 0.9, 1.0)
+		elif o == Defs.O.BAR:
+			energy = 3.2
+			height = 2.8
+			at += Vector3(0.0, 0.0, -1.2)
 		lamp.position = at + Vector3(0.0, height, 0.0)
 		lamp.omni_range = reach * 1.2
 		lamp.omni_attenuation = 0.55

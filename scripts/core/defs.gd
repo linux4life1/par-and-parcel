@@ -24,7 +24,7 @@ enum O {
 	NONE, OAK, PINE, BUSH, FLOWERS, BENCH, DRINK_STAND, RESTROOM, CLUBHOUSE,
 	SNACK_BAR, BALL_WASHER, BOULDER, BRIDGE, CART_BARN, PUTTING_GREEN, DRIVING_RANGE,
 	FOUNTAIN, HOME_SITE, HOUSE, LANDMARK, TENNIS, HOTEL, MARINA, AIRSTRIP,
-	FLOODLIGHT, LAMP,
+	FLOODLIGHT, LAMP, VENDING, BAR,
 }
 
 # WATER is the liquid hazard of the biome: water in most places, lava on the
@@ -64,21 +64,21 @@ const O_NAMES: Array[String] = [
 	"None", "Oak tree", "Pine tree", "Bush", "Flower bed", "Bench", "Drink stand", "Restroom", "Clubhouse",
 	"Snack bar", "Ball washer", "Boulder", "Bridge", "Cart barn", "Putting green", "Driving range",
 	"Fountain", "Home site", "House", "Landmark", "Tennis courts", "Resort hotel", "Marina", "Airstrip",
-	"Floodlight", "Lamp post",
+	"Floodlight", "Lamp post", "Vending machine", "Bar",
 ]
-const O_COST: Array[int] = [0, 30, 25, 10, 20, 40, 400, 500, 0, 700, 60, 15, 120, 1500, 900, 2000, 350, 400, 0, 2500, 3000, 12000, 8000, 20000, 450, 60]
-const O_UPKEEP: Array[int] = [0, 0, 0, 0, 1, 0, 25, 20, 0, 40, 2, 0, 2, 60, 30, 70, 8, 0, 0, 25, 60, 200, 120, 300, 14, 2]
-const O_SCENERY: Array[float] = [0.0, 1.0, 0.8, 0.5, 1.6, 0.4, 0.0, 0.0, 0.0, 0.0, 0.2, 0.6, 0.5, 0.0, 0.5, 0.0, 3.0, 0.0, -0.4, 6.0, 0.3, 0.0, 1.5, -0.5, -0.2, 0.3]
+const O_COST: Array[int] = [0, 30, 25, 10, 20, 40, 400, 500, 0, 700, 60, 15, 120, 1500, 900, 2000, 350, 400, 0, 2500, 3000, 12000, 8000, 20000, 450, 60, 150, 1200]
+const O_UPKEEP: Array[int] = [0, 0, 0, 0, 1, 0, 25, 20, 0, 40, 2, 0, 2, 60, 30, 70, 8, 0, 0, 25, 60, 200, 120, 300, 14, 2, 4, 45]
+const O_SCENERY: Array[float] = [0.0, 1.0, 0.8, 0.5, 1.6, 0.4, 0.0, 0.0, 0.0, 0.0, 0.2, 0.6, 0.5, 0.0, 0.5, 0.0, 3.0, 0.0, -0.4, 6.0, 0.3, 0.0, 1.5, -0.5, -0.2, 0.3, -0.1, 0.2]
 ## Buildings: golfers walk around them, and they survive lava bombs.
 const O_BUILDING: Array[bool] = [
 	false, false, false, false, false, false, true, true, true,
 	true, false, false, false, true, false, true, false, false, true, true,
-	false, true, true, false, false, false,
+	false, true, true, false, false, false, false, true,
 ]
 ## Holes the course needs before a resort building can go up (0 for none).
-const O_MIN_HOLES: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 10, 6, 10, 0, 0]
+const O_MIN_HOLES: Array[int] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 6, 10, 6, 10, 0, 0, 0, 0]
 ## How far each object throws light after dark, in metres (0 for none).
-const O_LIGHT: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 9.0, 9.0, 26.0, 11.0, 0.0, 0.0, 0.0, 10.0, 0.0, 14.0, 0.0, 0.0, 7.0, 0.0, 16.0, 22.0, 10.0, 0.0, 44.0, 15.0]
+const O_LIGHT: Array[float] = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 9.0, 9.0, 26.0, 11.0, 0.0, 0.0, 0.0, 10.0, 0.0, 14.0, 0.0, 0.0, 7.0, 0.0, 16.0, 22.0, 10.0, 0.0, 44.0, 15.0, 3.0, 10.0]
 ## Model kinds that are plants and rocks: each one stands a little off the
 ## middle of its tile, at its own size and turn (see plant_offset and friends).
 const PLANT_KINDS: Array[String] = ["oak", "pine", "bush", "birch", "scots", "gorse", "palm", "cactus", "scrub", "deadtree", "fern",

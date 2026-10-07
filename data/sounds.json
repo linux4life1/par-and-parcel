@@ -59,6 +59,12 @@
       "pitch": 0.06,
       "gap": 0.3
     },
+    "bottle": {
+      "files": ["bottle_1", "bottle_2"],
+      "db": -9,
+      "pitch": 0.05,
+      "gap": 0.3
+    },
     "strike_sand": {
       "files": [
         "strike_sand_1",
