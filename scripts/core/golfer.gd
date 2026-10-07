@@ -82,6 +82,7 @@ var holes_played := 0
 var sat_at_tee := 60.0
 var gripes_at_tee := {}
 var tantrum := false
+var drunk := 0.0                # 0 sober .. 1 legless; set at the bar, wears off over the round
 var vip := ""                   # commissioner, heiress or investor
 var last_kind := -1             # the kind of hole they played last
 var last_par := 0
