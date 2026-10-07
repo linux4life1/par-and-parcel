@@ -393,7 +393,7 @@ func _holes(body: VBoxContainer) -> Callable:
 		down.add_theme_font_size_override("font_size", 12)
 		h2.add_child(down)
 		var view := UIKit.button("View", func() -> void:
-			hud.rig.center_on(hole.tee.lerp(hole.pin, 0.5), clampf(hole.length * 1.1, 80.0, 500.0)), "Move the camera to this hole")
+			hud.rig.center_on(hole.point_along(0.5, sim.course), clampf(hole.length * 1.1, 80.0, 500.0)), "Move the camera to this hole")
 		view.add_theme_font_size_override("font_size", 12)
 		h2.add_child(view)
 		var close := UIKit.button("X", func() -> void:

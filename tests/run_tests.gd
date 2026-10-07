@@ -53,6 +53,10 @@ func _ready() -> void:
 	_test_hole_lab()
 	_test_club_life()
 	_test_gallery()
+	# After the long sims. A golfer's id is a process-wide counter, and eddy
+	# seeds are derived from it, so a test that makes golfers earlier changes
+	# every later round.
+	_test_dogleg()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -488,12 +492,12 @@ func _test_collisions() -> void:
 func _light_hole(sim: Sim, hole: Hole) -> int:
 	var course := sim.course
 	var placed := 0
-	var dir := (hole.pin - hole.tee)
-	dir.y = 0.0
-	var side := Vector3(-dir.z, 0.0, dir.x).normalized()
 	var n := maxi(2, int(hole.length / 35.0) + 1)
 	for k in n + 1:
-		var p := hole.tee.lerp(hole.pin, float(k) / n)
+		var t := float(k) / n
+		var p := hole.point_along(t)
+		var dir2 := hole.direction_at(t)
+		var side := Vector3(-dir2.y, 0.0, dir2.x)
 		for off: float in [14.0, -14.0, 20.0, -20.0, 9.0, -9.0]:
 			var q := p + side * off
 			var tile := course.tile_of(q.x, q.z)
@@ -2505,6 +2509,154 @@ func _test_planner() -> void:
 	var pp := ShotAI.plan(sim, pro, hole)
 	check(ShotAI._spot_cost(sim, hole, Vector2(c.tile_center(50, 80).x, c.tile_center(50, 80).z), 1.35) > ShotAI._spot_cost(sim, hole, Vector2(c.tile_center(50, 80).x, c.tile_center(50, 80).z), 0.55), "trouble weighs more on a thoughtful golfer than on a duffer")
 	check(float(dp.dist) > 0.0 and float(pp.dist) > 0.0, "both still have a shot to play")
+
+
+func _expert(sim: Sim) -> Golfer:
+	var g := Golfer.new()
+	g.kind = "lab"
+	g.skill = 0.82
+	g.power = lerpf(0.74, 1.06, 0.82)
+	g.accuracy = 0.82
+	g.imagination = 0.9
+	g.putting = 0.55
+	for cat: Dictionary in sim.db.categories:
+		g.brands[cat.id] = sim.db.brands[0]
+	g.ball.set_def(sim.db.balls[0])
+	g.begin_hole()
+	return g
+
+
+func _trees_between(course: Course, a: Vector2, b: Vector2) -> int:
+	var d := b - a
+	var n := d.length()
+	if n < 1.0:
+		return 0
+	d = d.normalized()
+	var count := 0
+	var s := 6.0
+	while s < n:
+		var q := a + d * s
+		var i := course.index_at(q.x, q.y)
+		if i >= 0 and Defs.is_tree(course.objects[i]):
+			count += 1
+		s += Defs.TILE
+	return count
+
+
+func _test_dogleg() -> void:
+	print("-- par follows the fairway")
+	var sim := _sim("sandbox", 11)
+	var c := sim.course
+	var sx := 130
+	for ty in range(25, 96):
+		for tx in range(sx - 2, sx + 3):
+			var si := ty * c.w + tx
+			c.terrain[si] = Defs.T.FAIRWAY
+			c.objects[si] = 0
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var gi := (30 + dy) * c.w + (sx + dx)
+			c.terrain[gi] = Defs.T.GREEN
+			c.objects[gi] = 0
+	c.terrain[90 * c.w + sx] = Defs.T.TEE
+	var tee_t := Vector2i(70, 90)
+	var pin_t := Vector2i(42, 60)
+	for ty in range(48, 102):
+		for tx in range(32, 82):
+			var i := ty * c.w + tx
+			c.terrain[i] = Defs.T.ROUGH
+			c.objects[i] = 0
+	for ty in range(60, 91):
+		for tx in range(68, 73):
+			c.terrain[ty * c.w + tx] = Defs.T.FAIRWAY
+	for tx in range(42, 73):
+		for ty in range(58, 63):
+			c.terrain[ty * c.w + tx] = Defs.T.FAIRWAY
+	for dy in range(-3, 4):
+		for dx in range(-3, 4):
+			if dx * dx + dy * dy <= 10:
+				c.terrain[(pin_t.y + dy) * c.w + (pin_t.x + dx)] = Defs.T.GREEN
+	c.terrain[tee_t.y * c.w + tee_t.x] = Defs.T.TEE
+	c.objects[tee_t.y * c.w + tee_t.x] = 0
+	c.revision += 1
+	var tee := c.tile_center(tee_t.x, tee_t.y)
+	var pin := c.tile_center(pin_t.x, pin_t.y)
+	var hole := sim.add_hole(tee, pin)
+	var chord := hole.straight_length()
+	print("   dogleg straight %.0f m (%d yd), along the fairway %.0f m (%d yd), par %d" % [chord, Defs.yards(chord), hole.length, Defs.yards(hole.length), hole.par])
+	check(chord <= Hole.PAR_3, "the straight line across a 30 by 28 dogleg is a par 3 distance (%.0f m)" % chord)
+	check(hole.par == 4 and hole.length > Hole.PAR_3 and hole.length <= Hole.PAR_4, "a 30 by 28 tile dogleg is a par 4 (%d yd)" % Defs.yards(hole.length))
+	var bend := c.tile_center(tee_t.x, pin_t.y)
+	var mid := hole.point_along(0.5)
+	var across := hole.tee.lerp(hole.pin, 0.5)
+	check(Vector2(mid.x, mid.z).distance_to(Vector2(bend.x, bend.z)) < 40.0, "the line of play goes round the corner")
+	check(Vector2(mid.x, mid.z).distance_to(Vector2(bend.x, bend.z)) < Vector2(across.x, across.z).distance_to(Vector2(bend.x, bend.z)), "and not across the rough in the corner")
+	var straight_hole := sim.add_hole(c.tile_center(sx, 90), c.tile_center(sx, 30))
+	check(straight_hole.par == 4 and absf(straight_hole.length - 300.0) < 2.0, "a straight 60-tile hole is still a 300 m par 4 (%.1f m)" % straight_hole.length)
+	check(c.set_object(tee_t.x, pin_t.y, Defs.O.FLOODLIGHT), "a floodlight can stand at the corner")
+	var share := hole.lit_share(c)
+	check(share > 0.12, "night lighting is measured along the fairway, not the chord (%d%% lit)" % int(share * 100.0))
+	var spot := hole.point_along(0.35)
+	var st := c.tile_of(spot.x, spot.z)
+	check(c.set_object(st.x, st.y, Defs.O.BENCH), "a bench can stand on the line of play")
+	var benches := sim.stories._objects_along(hole, Defs.O.BENCH, 1)
+	check(benches >= 1, "story checks follow the fairway (%d)" % benches)
+	var expert := _expert(sim)
+	expert.ball.place(c.on_ground(hole.tee.x, hole.tee.z))
+	var open_plan := ShotAI.plan(sim, expert, hole)
+	var open_target: Vector3 = open_plan.target
+	check(open_target.distance_to(hole.pin) < 15.0, "with the corner open an expert goes for the green (%.0f m short)" % open_target.distance_to(hole.pin))
+	var oaks := 0
+	for ty in range(pin_t.y, tee_t.y + 1):
+		for tx in range(pin_t.x, tee_t.x + 1):
+			var oi := ty * c.w + tx
+			if c.terrain[oi] == Defs.T.ROUGH or c.terrain[oi] == Defs.T.DEEP_ROUGH:
+				c.objects[oi] = Defs.O.OAK
+				oaks += 1
+	c.revision += 1
+	c.objects_touched()
+	expert.ball.place(c.on_ground(hole.tee.x, hole.tee.z))
+	var blocked := ShotAI.plan(sim, expert, hole)
+	var blocked_target: Vector3 = blocked.target
+	var pin_trees := _trees_between(c, Vector2(hole.tee.x, hole.tee.z), Vector2(hole.pin.x, hole.pin.z))
+	var aim_trees := _trees_between(c, Vector2(hole.tee.x, hole.tee.z), Vector2(blocked_target.x, blocked_target.z))
+	print("   corner of %d oaks: expert aims %.0f m from the pin, %d trees on the aim and %d on the chord" % [oaks, blocked_target.distance_to(hole.pin), aim_trees, pin_trees])
+	check(blocked_target.distance_to(hole.pin) > 40.0 and aim_trees < pin_trees, "an expert does not drive through a tree-filled corner")
+	hole.record(4)
+	check(int(hole.tally.get("0", 0)) == 1, "a 4 on the par 4 is even")
+	var modern := Sim.from_dict(db, JSON.parse_string(JSON.stringify(sim.to_dict())), gear)
+	var mh: Hole = modern.course.holes[0]
+	check(mh.par == 4 and int(mh.tally.get("0", 0)) == 1, "a save remembers the par the scores were played against")
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var course_d: Dictionary = raw.course
+	var hs: Array = course_d.holes
+	var hd: Dictionary = hs[0]
+	hd.erase("par")
+	hd["tally"] = {"0": 1}
+	hd["plays"] = 1
+	var legacy := Sim.from_dict(db, raw, gear)
+	var lh: Hole = legacy.course.holes[0]
+	check(lh.par == 4 and int(lh.tally.get("-1", 0)) == 1, "an old save remeasures the dogleg and the old even par becomes a birdie")
+	var tools := BuildTools.new()
+	tools.sim = sim
+	tools.mode = "terrain"
+	check(tools.hint().contains("1 tile ≈ 5.5 yd."), "the build tools show the scale")
+	tools.mode = "hole"
+	tools._tee = hole.tee
+	tools.hover = hole.pin
+	var preview := tools.hint()
+	check(preview.contains("Par 4") and preview.contains("yd") and preview.contains("1 tile ≈ 5.5 yd."), "laying out a hole previews par and yardage (%s)" % preview.replace("\n", " "))
+	var tutor := FileAccess.get_file_as_string("res://data/tutorial.json")
+	check(tutor.contains("thirty-seven to fifty-five") and tutor.contains("five and a half") and not tutor.contains("eight to twelve"), "the tutorial gives the real scale of a tile")
+	for ty in range(pin_t.y - 2, tee_t.y + 3):
+		for tx in range(pin_t.x - 2, tee_t.x + 3):
+			var fi := ty * c.w + tx
+			c.terrain[fi] = Defs.T.FAIRWAY
+			c.objects[fi] = 0
+	c.revision += 1
+	sim.refresh_hole_lines()
+	check(hole.par == 3 and hole.length <= Hole.PAR_3, "painting the corner fairway shortens the hole to a par 3 (%d yd)" % Defs.yards(hole.length))
+	check(int(hole.tally.get("1", 0)) == 1, "the 4 already recorded becomes a bogey on the new par")
 
 
 func _test_bar_and_vending() -> void:

@@ -462,7 +462,7 @@ func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 	var hole := Hole.new()
 	hole.tee = on_ground(tee.x, tee.z)
 	hole.pin = on_ground(pin.x, pin.z)
-	hole.update_metrics()
+	hole.update_metrics(self)
 	holes.append(hole)
 	revision += 1
 	holes_changed.emit()
@@ -526,5 +526,9 @@ static func from_dict(d: Dictionary) -> Course:
 		c.hot = Marshalls.base64_to_raw(d.hot)
 	c.guard = true
 	for hd: Dictionary in d.holes:
-		c.holes.append(Hole.from_dict(hd))
+		var hole := Hole.from_dict(hd)
+		c.holes.append(hole)
+		# The ground is loaded, so par can follow the fairway. A save that
+		# already stored par only shifts the scorecard if the ground disagrees.
+		hole.update_metrics(c)
 	return c

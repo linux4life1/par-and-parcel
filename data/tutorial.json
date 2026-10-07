@@ -8,7 +8,7 @@
 		{"id": "tee", "title": "A tee box", "done": "tee", "target": "build",
 			"text": "Pick Tee box and the Small brush, then drag a little square on the grass near the clubhouse. Three or four tiles is plenty. Tee boxes are flat and golfers stand on them, so keep them clear of trees."},
 		{"id": "green", "title": "A green", "done": "green", "target": "build",
-			"text": "Now pick Green and paint a patch a good drive away: two hundred to three hundred yards, which is eight to twelve tiles. Give it some size; a Medium brush and a couple of drags. The pin goes in the middle."},
+			"text": "Now pick Green and paint a patch a good drive away: two hundred to three hundred yards, which is thirty-seven to fifty-five tiles. A tile is five metres, about five and a half yards. Give it some size; a Medium brush and a couple of drags. The pin goes in the middle."},
 		{"id": "fairway", "title": "The fairway", "done": "fairway", "target": "build",
 			"text": "Join them with Fairway. It does not have to be straight. A bend around the trees is a better hole than a corridor, and golfers notice."},
 		{"id": "hole", "title": "Lay out the hole", "done": "hole", "target": "holes",

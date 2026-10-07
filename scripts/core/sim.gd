@@ -72,6 +72,7 @@ var told_dark := false          # the player has been told why golfers leave at 
 var _slow := 0.0
 var _day := 0
 var _scenery := {}
+var _lines_rev := -1
 
 
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
@@ -145,6 +146,7 @@ func object_name(o: int) -> String:
 # ------------------------------------------------------------- the clock
 
 func step(dt: float) -> void:
+	refresh_hole_lines()
 	time += dt
 	clock = fposmod(clock + dt * clock_rate * 24.0 / Defs.CLOCK_DAY_SECONDS, 24.0)
 	visitors.step(dt)
@@ -409,6 +411,20 @@ func clubhouse_door() -> Vector3:
 	return course.on_ground(c.x, c.z - 9.0)
 
 
+## Remeasure any hole whose ground has changed, so par follows the fairway
+## as it is repainted. The fingerprint is the one the hole lab already uses.
+func refresh_hole_lines() -> void:
+	if _lines_rev == course.revision:
+		return
+	_lines_rev = course.revision
+	for hole in course.holes:
+		var sig := lab._signature(hole)
+		if sig == hole.line_sig and hole.route.size() >= 2:
+			continue
+		hole.update_metrics(course)
+		hole.line_sig = sig
+
+
 ## 0..1: how much there is to look at along a hole.
 func scenery_score(hole: Hole) -> float:
 	var cached: Array = _scenery.get(hole, [])
@@ -418,7 +434,7 @@ func scenery_score(hole: Hole) -> float:
 	var samples := 0
 	var steps := maxi(2, int(hole.length / 15.0))
 	for s in steps + 1:
-		var p := hole.tee.lerp(hole.pin, float(s) / steps)
+		var p := hole.point_along(float(s) / steps)
 		var tile := course.tile_of(p.x, p.z)
 		samples += 1
 		for ty in range(tile.y - 4, tile.y + 5):

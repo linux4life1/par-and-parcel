@@ -609,7 +609,7 @@ func _objects_along(hole: Hole, kind: int, reach: int) -> int:
 	var seen := {}
 	var steps := maxi(2, int(hole.length / Defs.TILE))
 	for s in steps + 1:
-		var p := hole.tee.lerp(hole.pin, float(s) / steps)
+		var p := hole.point_along(float(s) / steps)
 		var t := course.tile_of(p.x, p.z)
 		for dy in range(-reach, reach + 1):
 			for dx in range(-reach, reach + 1):
@@ -625,7 +625,7 @@ func _terrain_along(hole: Hole, kind: int, reach: int) -> int:
 	var seen := {}
 	var steps := maxi(2, int(hole.length / Defs.TILE))
 	for s in steps + 1:
-		var p := hole.tee.lerp(hole.pin, float(s) / steps)
+		var p := hole.point_along(float(s) / steps)
 		var t := course.tile_of(p.x, p.z)
 		for dy in range(-reach, reach + 1):
 			for dx in range(-reach, reach + 1):
