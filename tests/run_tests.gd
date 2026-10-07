@@ -28,6 +28,7 @@ func _ready() -> void:
 	_test_spin_wind_lies()
 	_test_seasons_and_scorecard()
 	_test_planner()
+	_test_tee_line()
 	_test_night()
 	_test_career()
 	_test_gamepad()
@@ -2489,3 +2490,163 @@ func _test_planner() -> void:
 	var pp := ShotAI.plan(sim, pro, hole)
 	check(ShotAI._spot_cost(sim, hole, Vector2(c.tile_center(50, 80).x, c.tile_center(50, 80).z), 1.35) > ShotAI._spot_cost(sim, hole, Vector2(c.tile_center(50, 80).x, c.tile_center(50, 80).z), 0.55), "trouble weighs more on a thoughtful golfer than on a duffer")
 	check(float(dp.dist) > 0.0 and float(pp.dist) > 0.0, "both still have a shot to play")
+
+
+## How far behind the tee marker a golfer stands, along the hole's line.
+func _behind_tee(hole: Hole, g: Golfer) -> float:
+	var ax := Group.tee_axes(hole)
+	return (g.pos - hole.tee).dot(ax[0])
+
+
+## The closest any two golfers from different parties stand.
+func _closest_pair(parties: Array) -> float:
+	var best := 1e9
+	for a in parties.size():
+		for b in parties.size():
+			if a >= b:
+				continue
+			for p in (parties[a] as Group).members:
+				for q in (parties[b] as Group).members:
+					best = minf(best, Vector2(p.pos.x - q.pos.x, p.pos.z - q.pos.z).length())
+	return best
+
+
+func _test_tee_line() -> void:
+	print("-- the line at the tee, shooting into people, and waiting")
+	var sim := _sim("three_holes", 21)
+	sim.open = false
+	sim.events.timer = 99999.0
+	var hole := sim.course.holes[0]
+	# three parties arrive one after another
+	var a := sim.visitors.add_group("public", 3, 0.5)
+	_run(sim, 6.0)
+	var b := sim.visitors.add_group("public", 2, 0.5)
+	_run(sim, 6.0)
+	var c := sim.visitors.add_group("public", 4, 0.5)
+	var guard := 0
+	var held := false
+	while guard < 60 * 240 and not (a.state == Group.S.PLAY and b.state == Group.S.QUEUE and c.state == Group.S.QUEUE):
+		sim.step(1.0 / 60.0)
+		guard += 1
+		# the first party's opening drive takes an age, so the line forms behind them
+		if not held and a.state == Group.S.PLAY and a.turn != null and a.turn.phase == Golfer.P.AIM:
+			a.turn.timer = 90.0
+			held = true
+	# the first party is on the tee; nobody from it stands on the box but the one hitting
+	check(a.state == Group.S.PLAY and hole.teeing_group == a, "the first party to arrive takes the tee")
+	var on_box := 0
+	for m in a.members:
+		if m != a.turn and Vector2(m.pos.x - hole.tee.x, m.pos.z - hole.tee.z).length() < 2.0:
+			on_box += 1
+	check(on_box == 0, "its partners stand clear of the tee box while one of them hits")
+	var ba := 0.0
+	for m in b.members:
+		ba += _behind_tee(hole, m) / b.members.size()
+	var ca := 0.0
+	for m in c.members:
+		ca += _behind_tee(hole, m) / c.members.size()
+	var gap := _closest_pair([a, b, c])
+	print("   party two waits %.1f m behind the tee, party three %.1f m; the closest two golfers from different parties stand %.2f m apart" % [ba, ca, gap])
+	check(b.state == Group.S.QUEUE and ba > 6.0 and ba < 11.0, "the second party waits in line well back of the tee")
+	check(c.state == Group.S.QUEUE and ca > ba + 3.0, "and the third party waits behind the second")
+	check(gap >= 0.9, "no two golfers from different parties stand on each other")
+	check(hole.line.size() == 2 and hole.line[0] == b and hole.line[1] == c, "the hole keeps the line in order of arrival")
+	# the first party tees off and the line moves up
+	if a.turn != null:
+		a.turn.timer = 0.1
+	guard = 0
+	while guard < 60 * 240 and b.state != Group.S.PLAY:
+		sim.step(1.0 / 60.0)
+		guard += 1
+	check(a.tee_done and b.state == Group.S.PLAY and hole.teeing_group == b, "when the first party has teed off, the second takes the tee")
+	guard = 0
+	while guard < 60 * 60 and not (b.turn != null and b.turn.phase == Golfer.P.AIM):
+		sim.step(1.0 / 60.0)
+		guard += 1
+	if b.turn != null:
+		b.turn.timer = 90.0
+	_run(sim, 10.0)
+	var ca2 := 0.0
+	for m in c.members:
+		ca2 += _behind_tee(hole, m) / c.members.size()
+	print("   after the shuffle party three waits %.1f m behind the tee" % ca2)
+	check(c.state == Group.S.QUEUE and ca2 < ca - 3.0 and ca2 > 6.0, "and the third party moves up to the front of the line")
+
+	# nobody shoots into people
+	var s2 := _sim("three_holes", 22)
+	s2.open = false
+	s2.events.timer = 99999.0
+	var h2 := s2.course.holes[0]
+	var x := s2.visitors.add_group("public", 1, 0.5)
+	guard = 0
+	while guard < 60 * 240 and not (x.state == Group.S.PLAY and x.turn != null and x.turn.phase == Golfer.P.AIM):
+		s2.step(1.0 / 60.0)
+		guard += 1
+	check(x.state == Group.S.PLAY and x.turn != null and x.turn.phase == Golfer.P.AIM, "a lone golfer gets to the tee and lines up a drive")
+	var hitter := x.turn
+	var heading: float = hitter.plan.heading
+	var dist: float = hitter.plan.dist
+	# a party lying in the fairway where the drive would land
+	var y := s2.visitors.add_group("public", 2, 0.5)
+	y.hole_i = 0
+	y.state = Group.S.PLAY
+	var landing := hitter.pos + Vector3(cos(heading), 0.0, sin(heading)) * (dist * 0.85)
+	for i in y.members.size():
+		var m := y.members[i]
+		m.pos = s2.course.on_ground(landing.x + i * 1.5, landing.z)
+		m.ball.place(m.pos)
+		m.hit_t = 1000.0          # flat out and going nowhere
+	_run(s2, 100.0)
+	check(not hitter.teed and not x.forced, "with people where the ball would land, a sober golfer holds the shot for a hundred seconds and more")
+	check(hitter.satisfaction < hitter.sat_at_tee, "and the wait costs them some cheer")
+	var behind := hitter.pos - Vector3(cos(heading), 0.0, sin(heading)) * 30.0
+	for m in y.members:
+		m.hit_t = 0.0
+		m.pos = s2.course.on_ground(behind.x, behind.z)
+		m.ball.place(m.pos)
+	_run(s2, 6.0)
+	check(hitter.teed, "once the fairway clears, the drive goes")
+	# a drunk does not look
+	var s3 := _sim("three_holes", 22)
+	s3.open = false
+	s3.events.timer = 99999.0
+	var x3 := s3.visitors.add_group("public", 1, 0.5)
+	x3.members[0].drunk = 1.0
+	guard = 0
+	while guard < 60 * 240 and not (x3.state == Group.S.PLAY and x3.turn != null and x3.turn.phase == Golfer.P.AIM):
+		s3.step(1.0 / 60.0)
+		guard += 1
+	var h3 := x3.turn
+	var y3 := s3.visitors.add_group("public", 2, 0.5)
+	y3.hole_i = 0
+	y3.state = Group.S.PLAY
+	var land3 := h3.pos + Vector3(cos(float(h3.plan.heading)), 0.0, sin(float(h3.plan.heading))) * (float(h3.plan.dist) * 0.85)
+	for i in y3.members.size():
+		var m := y3.members[i]
+		m.pos = s3.course.on_ground(land3.x + i * 1.5, land3.z)
+		m.ball.place(m.pos)
+		m.hit_t = 1000.0
+	_run(s3, 8.0)
+	check(h3.teed, "a drunk golfer swings away regardless")
+
+	# waiting wears on a golfer only after the first few seconds
+	var g := s2.visitors.make_golfer("public", 0.5)
+	g.persona = {}
+	g.patience = 0.5
+	g.satisfaction = 60.0
+	for i in 600:
+		s2.visitors.wait_on(g, 1.0 / 60.0, "tee", 5.0, false)
+	check(is_equal_approx(g.satisfaction, 60.0), "the first few seconds of a wait are free")
+	for i in 600:
+		s2.visitors.wait_on(g, 1.0 / 60.0, "tee", 25.0 + i / 60.0, false)
+	var lost := 60.0 - g.satisfaction
+	print("   ten seconds of waiting past the grace cost %.2f satisfaction" % lost)
+	check(lost > 0.15 and lost < 0.4, "after that, every second of waiting costs a little")
+	check(g.wait_said and g.thoughts.size() > 0 and str(g.thoughts[-1].text).begins_with("Waiting"), "and at half a minute they say so")
+	var seated := s2.visitors.make_golfer("public", 0.5)
+	seated.persona = {}
+	seated.patience = 0.5
+	seated.satisfaction = 60.0
+	for i in 600:
+		s2.visitors.wait_on(seated, 1.0 / 60.0, "tee", 25.0 + i / 60.0, true)
+	check(60.0 - seated.satisfaction < lost * 0.6, "a bench makes the wait easier")

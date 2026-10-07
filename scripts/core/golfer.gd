@@ -71,6 +71,7 @@ var scores: Array[int] = []
 var pars: Array[int] = []
 var paid := 0.0
 var waited := 0.0
+var wait_said := false          # complained about this hole's wait already
 var thirst := 0.0
 var hit_t := 0.0                # seconds left flat on the grass
 var swing_t := -1.0             # swing animation clock, -1 when idle
@@ -82,6 +83,7 @@ var holes_played := 0
 var sat_at_tee := 60.0
 var gripes_at_tee := {}
 var tantrum := false
+var drunk := 0.0                # 0 sober .. 1 legless; set at the bar, wears off over the round
 var vip := ""                   # commissioner, heiress or investor
 var last_kind := -1             # the kind of hole they played last
 var last_par := 0
@@ -249,6 +251,12 @@ func walk_to(target: Vector3, dt: float, course: Course, speed: float = 4.0) -> 
 ## along cart paths when they help. True on arrival.
 func travel(target: Vector3, dt: float, sim: Sim, speed: float, prefer_paths: bool = false) -> bool:
 	var cart := group != null and group.has_cart
+	# on the last few metres, step round anyone already standing there
+	if Vector2(pos.x - target.x, pos.z - target.z).length_squared() < 16.0:
+		var clear := sim.visitors.clear_spot(self, target)
+		if clear != target and route_goal.distance_squared_to(clear) > 0.0001:
+			route = PackedVector2Array()      # a new end point: plan the last steps again
+		target = clear
 	return Nav.advance(self, target, dt, sim, speed, cart, prefer_paths)
 
 
@@ -259,6 +267,7 @@ func begin_hole() -> void:
 	picked_up = false
 	mishit = false
 	waited = 0.0
+	wait_said = false
 	phase = P.IDLE
 	sat_at_tee = satisfaction
 	gripes_at_tee = gripes.duplicate()

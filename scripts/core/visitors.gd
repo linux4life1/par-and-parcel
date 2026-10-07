@@ -610,6 +610,53 @@ func serve(gr: Group, kind: String) -> void:
 				sim.sound.emit("flush", g.pos, 1.0)
 
 
+# ------------------------------------------------- waiting and standing room
+
+const WAIT_FREE := 12.0        # seconds of a wait nobody minds
+const WAIT_RATE := 0.025       # satisfaction lost a second after that, for an average temper
+const WAIT_GRUMBLE := 30.0     # when the first complaint is made
+
+## A golfer stood waiting: at the tee for the party ahead, or in the
+## fairway for the landing area to clear. `spell` is how long this wait
+## has gone on. The first few seconds are free; after that every second
+## costs a little, less for the patient, half as much on a bench. The
+## difficulty slider scales it through feel(), like every other gripe.
+func wait_on(g: Golfer, dt: float, where: String, spell: float, eased: bool) -> void:
+	var share := 0.5 if eased else 1.0
+	g.waited += dt * share
+	g.rd.waited = float(g.rd.waited) + dt * share
+	if spell <= WAIT_FREE:
+		return
+	g.feel(-WAIT_RATE * dt * (1.3 - g.patience) * share, "", "wait")
+	if spell > WAIT_GRUMBLE and not g.wait_said:
+		g.wait_said = true
+		var text := "Waiting on the tee again." if where == "tee" else "The group ahead is taking all day."
+		if g.satisfaction < 40.0:
+			text = "Is anyone running this place? We've been stood here for ever."
+		g.feel(0.0, text, "wait")
+
+
+## A spot to stand that is not on top of someone else: when `target` is
+## within 0.9 m of a golfer from another party who is standing still, the
+## spot is pushed out to 1.1 m from them, directly away. Deterministic, so
+## everyone agrees where everyone stands.
+func clear_spot(g: Golfer, target: Vector3) -> Vector3:
+	var out := target
+	for p in golfers:
+		if p == g or p.walking or (p.group != null and p.group == g.group):
+			continue
+		var dx := out.x - p.pos.x
+		var dz := out.z - p.pos.z
+		var d2 := dx * dx + dz * dz
+		if d2 >= 0.81:
+			continue
+		var d := sqrt(d2)
+		var away := Vector2(dx, dz) / d if d > 0.001 else Vector2(cos(p.facing + PI * 0.5), sin(p.facing + PI * 0.5))
+		out.x = p.pos.x + away.x * 1.1
+		out.z = p.pos.z + away.y * 1.1
+	return out
+
+
 func facility_near(kind: String, p: Vector3, radius: float) -> bool:
 	_refresh_amenities()
 	var spots: Array = facilities.get(kind, [])
@@ -805,8 +852,10 @@ func on_hole_done(g: Golfer, hole: Hole, hole_i: int, group: Group) -> void:
 			sim.feed.say("scenery", g, {"hole": n})
 	elif sc < 0.08:
 		g.feel(-0.8, "Hole %d is a bit bare." % n, "bare")
-	if g.waited > 60.0:
-		g.feel(-minf((g.waited - 60.0) / 30.0, 5.0), "Too much waiting around on hole %d." % n, "wait")
+	# Waiting already wore on them as it happened (wait_on); a hole that
+	# was mostly standing about leaves a sour note on top.
+	if g.waited > 90.0:
+		g.feel(-minf((g.waited - 90.0) / 45.0, 3.0), "Too much waiting around on hole %d." % n, "wait")
 		sim.feed.say("wait", g, {"hole": n})
 	g.waited = 0.0
 	_judge_design(g, hole, n)

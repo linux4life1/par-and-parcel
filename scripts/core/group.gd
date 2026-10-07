@@ -20,6 +20,12 @@ var has_cart := false      # rented a golf cart: quick on cart paths, easy on th
 var stop := {}             # a facility to visit on the way to the next tee
 var story := {}            # what brought these people out together
 
+const LINE_FIRST := 8.0    # metres behind the tee where the next party waits
+const LINE_GAP := 6.0      # and between parties further back
+const ARC_BACK := 3.4      # the teeing party's partners stand this far behind the marker
+const WAIT_LIMIT := 150.0  # seconds a sober golfer will hold a shot for people in the way
+const WAIT_PLAYER := 45.0  # when the only one in the way is the owner, standing still
+
 
 func step(dt: float, sim: Sim) -> void:
 	if members.is_empty():
@@ -64,22 +70,86 @@ func _to_tee(dt: float, sim: Sim) -> void:
 				sim.visitors.serve(self, str(stop.kind))
 				stop = {}
 		return
-	var back := hole.tee - hole.pin
-	back.y = 0.0
-	back = back.normalized()
-	var sidev := Vector3(-back.z, 0.0, back.x)
+	# Join the line for the tee and walk to our place in it. The party at
+	# the front walks straight on to the tee when it is free.
+	var k := hole.line_index(self, hole_i)
+	var tee_free := _tee_free(hole)
 	var all := true
 	for i in members.size():
 		var m := members[i]
 		if m.hit_t > 0.0:
 			all = false
 			continue
-		var spot := hole.tee + back * (3.0 + (i / 2) * 1.8) + sidev * ((i % 2) * 2.4 + 2.0 + (id % 3) * 2.5)
-		if not m.travel(spot, dt, sim, m.walk_speed(), true):
+		var spot := arc_spot(hole, i, members.size()) if (k == 0 and tee_free) else line_spot(sim, hole, k, i)
+		if not _settle(m, spot, hole, dt, sim, true):
 			all = false
 	if all:
 		state = S.QUEUE
 		wait = 0.0
+
+
+## True when nobody holds the tee, or whoever did has gone.
+func _tee_free(hole: Hole) -> bool:
+	var holder := hole.teeing_group
+	return holder == null or holder == self or holder.state == S.GONE or holder.state == S.LEAVING or holder.hole_i != hole_i
+
+
+## The tee-to-pin line reversed, flat, and the direction across it.
+static func tee_axes(hole: Hole) -> Array[Vector3]:
+	var back := hole.tee - hole.pin
+	back.y = 0.0
+	if back.length_squared() < 0.01:
+		back = Vector3(1, 0, 0)
+	back = back.normalized()
+	return [back, Vector3(-back.z, 0.0, back.x)]
+
+
+## Where member i of n stands while a partner tees off: a loose arc behind
+## and beside the marker, never on the box.
+static func arc_spot(hole: Hole, i: int, n: int) -> Vector3:
+	var ax := tee_axes(hole)
+	var off := i - (n - 1) * 0.5
+	return hole.tee + ax[0] * (ARC_BACK + absf(off) * 0.5) + ax[1] * (off * 1.7)
+
+
+## Where member i of the party at line position k waits: well back of the
+## tee along the hole's own line, parties one behind the other, each a
+## little to one side so two never share a spot. Where that runs off the
+## land or into water the line bends to the side instead.
+func line_spot(sim: Sim, hole: Hole, k: int, i: int) -> Vector3:
+	var ax := tee_axes(hole)
+	var c := sim.course
+	var dist := LINE_FIRST + LINE_GAP * k
+	var side := ((id % 3) - 1) * 0.6
+	var anchor := hole.tee + ax[0] * dist + ax[1] * side
+	if not _standable(c, anchor):
+		anchor = hole.tee + ax[1] * (6.0 + 4.0 * k) + ax[0] * 2.0
+		if not _standable(c, anchor):
+			anchor = hole.tee - ax[1] * (6.0 + 4.0 * k) + ax[0] * 2.0
+			if not _standable(c, anchor):
+				anchor = hole.tee + ax[0] * dist
+	var spot := anchor + ax[1] * ((i % 2) * 1.6 - 0.8) + ax[0] * ((i / 2) * 1.6)
+	return c.on_ground(spot.x, spot.z)
+
+
+static func _standable(c: Course, p: Vector3) -> bool:
+	var t := c.terrain_at(p.x, p.z)
+	if t < 0 or t == Defs.T.WATER:
+		return false
+	return c.locked[c.index_at(p.x, p.z)] == 0
+
+
+## Walk a golfer to a spot, or if they are already there, have them stand
+## facing the tee. Standing golfers do not re-plan a route every step.
+func _settle(m: Golfer, spot: Vector3, hole: Hole, dt: float, sim: Sim, prefer_paths: bool = false) -> bool:
+	var at := sim.visitors.clear_spot(m, spot)
+	if Vector2(m.pos.x - at.x, m.pos.z - at.z).length_squared() < 0.09 and not m.walking:
+		m.facing = atan2(hole.tee.z - m.pos.z, hole.tee.x - m.pos.x)
+		return true
+	var there := m.travel(spot, dt, sim, m.walk_speed(), prefer_paths)
+	if there:
+		m.facing = atan2(hole.tee.z - m.pos.z, hole.tee.x - m.pos.x)
+	return there
 
 
 func _queue(dt: float, sim: Sim) -> void:
@@ -87,18 +157,22 @@ func _queue(dt: float, sim: Sim) -> void:
 	if hole == null:
 		state = S.LEAVING
 		return
-	var holder := hole.teeing_group
-	if holder == null or holder == self or holder.state == S.GONE or holder.state == S.LEAVING:
+	var k := hole.line_index(self, hole_i)
+	if k == 0 and _tee_free(hole):
 		hole.teeing_group = self
+		hole.line.erase(self)
 		_begin_hole(sim, hole)
 	else:
 		wait += dt
 		# A bench by the tee makes the wait easier on everyone.
 		var seated := sim.visitors.facility_near("bench", hole.tee, 18.0)
-		for m in members:
-			var share := 0.5 if seated else 1.0
-			m.waited += dt * share
-			m.rd.waited = float(m.rd.waited) + dt * share
+		for i in members.size():
+			var m := members[i]
+			if m.hit_t > 0.0:
+				continue
+			# the line shuffles forward as the party ahead takes the tee
+			_settle(m, line_spot(sim, hole, k, i), hole, dt, sim)
+			sim.visitors.wait_on(m, dt, "tee", wait, seated)
 			if seated:
 				m.fatigue = maxf(0.0, m.fatigue - dt * 0.03)
 				if wait > 12.0 and not m.rd.has("sat"):
@@ -113,6 +187,7 @@ func _begin_hole(sim: Sim, hole: Hole) -> void:
 		hole.teeing_group = null
 		state = S.GONE
 		return
+	hole.line.erase(self)
 	var washer := sim.visitors.facility_near("washer", hole.tee, 18.0)
 	for m in members:
 		m.begin_hole()
@@ -161,11 +236,15 @@ func _play(dt: float, sim: Sim) -> void:
 		turn = _pick_turn(hole)
 		if turn != null:
 			turn.phase = Golfer.P.WALK
-	for m in members:
+	for i in members.size():
+		var m := members[i]
 		if m == turn or m.hit_t > 0.0:
 			continue
 		if tee_done and not m.done and m.phase != Golfer.P.WATCH and m.ball.state == Ball.S.REST:
 			m.travel(stance(m, hole), dt, sim, m.walk_speed())
+		elif not tee_done:
+			# partners wait in an arc behind the marker, off the box
+			_settle(m, arc_spot(hole, i, members.size()), hole, dt, sim)
 		else:
 			m.walking = false
 	if turn != null:
@@ -211,6 +290,9 @@ func _turn_step(dt: float, sim: Sim, hole: Hole) -> void:
 		Golfer.P.WALK:
 			if g.travel(stance(g, hole), dt, sim, g.walk_speed()):
 				g.plan = ShotAI.plan(sim, g, hole)
+				# a drunk decides now whether to bother looking down the fairway
+				if g.drunk > 0.3:
+					g.plan["reckless"] = sim.rng.randf() < g.drunk
 				g.phase = Golfer.P.AIM
 				g.timer = (0.6 + (1.0 - g.pace) * 1.3) * (0.6 if g.plan.putt else 1.0) * sim.crew.pace_factor(g.pos)
 				g.facing = g.plan.heading
@@ -218,16 +300,21 @@ func _turn_step(dt: float, sim: Sim, hole: Hole) -> void:
 			g.timer -= dt
 			if g.timer > 0.0:
 				return
-			if not g.plan.putt and g.plan.dist > 25.0 and _danger(sim, g):
+			var in_way := 0
+			if not g.plan.putt and g.plan.dist > 25.0 and not bool(g.plan.get("reckless", false)):
+				in_way = _danger(sim, g)
+			if in_way > 0:
+				# Nobody hits into people. The whole party waits, and the wait
+				# wears on them. Only a wait that never ends (a stuck golfer, or
+				# the owner stood in the fairway thinking) is given up on.
 				wait += dt
 				for m in members:
-					m.waited += dt
-					m.rd.waited = float(m.rd.waited) + dt
-				var limit := 25.0 + g.patience * 70.0
-				# A marshal keeps tempers in check, but nobody waits for ever.
-				if wait < limit or (wait < 150.0 and sim.crew.marshal_near(g.pos)):
+					sim.visitors.wait_on(m, dt, "fairway", wait, false)
+				var limit := WAIT_PLAYER if in_way == 2 else WAIT_LIMIT
+				if wait < limit:
 					return
 				forced = true
+				sim.feed.say("hit_into", g, {"hole": hole_i + 1})
 			g.phase = Golfer.P.SWING
 			g.timer = 0.6
 			g.swing_t = 0.0
@@ -245,21 +332,23 @@ func _turn_step(dt: float, sim: Sim, hole: Hole) -> void:
 			g.phase = Golfer.P.WALK
 
 
-## True when someone from another group is standing where this shot is
-## going. On the same hole a group only yields to players ahead of it, so
-## two groups can never end up each waiting for the other.
-func _danger(sim: Sim, g: Golfer) -> bool:
+## Who is standing where this shot is going: 0 nobody, 1 someone from
+## another group, 2 only the owner's golfer, stood still. On the same hole a
+## group only yields to players ahead of it, so two groups can never end up
+## each waiting for the other.
+func _danger(sim: Sim, g: Golfer) -> int:
 	var heading: float = g.plan.heading
 	var dir := Vector2(cos(heading), sin(heading))
-	# Patient golfers wait until nobody is anywhere near their landing area.
-	# Impatient ones decide the group ahead is "probably out of range".
-	var reach: float = g.plan.dist * (0.72 + 0.4 * g.patience) + 12.0
+	# Everyone waits until the landing area is clear; a careful golfer
+	# allows for a shot that flies further than meant, a marshal insists.
+	var reach: float = g.plan.dist * (0.95 + 0.25 * g.patience) + 14.0
 	if sim.crew.marshal_near(g.pos):
 		reach = g.plan.dist + 35.0
 	var hole := current_hole(sim)
 	var mine := 0.0
 	if hole != null:
 		mine = Vector2(g.pos.x - hole.pin.x, g.pos.z - hole.pin.z).length()
+	var found := 0
 	for p in sim.visitors.golfers:
 		if p.group == self or p.group == null:
 			continue
@@ -273,8 +362,12 @@ func _danger(sim: Sim, g: Golfer) -> bool:
 			var theirs := Vector2(p.pos.x - hole.pin.x, p.pos.z - hole.pin.z).length()
 			if theirs > mine - 6.0:
 				continue      # level with us or behind: not ours to wait for
-		return true
-	return false
+		if p.kind == "player" and not p.walking and p.swing_t < 0.0:
+			if found == 0:
+				found = 2
+			continue
+		return 1
+	return found
 
 
 func _resolve(sim: Sim, g: Golfer, hole: Hole) -> void:
@@ -344,6 +437,7 @@ func _finish_hole(sim: Sim, hole: Hole) -> void:
 
 func leave_hole(hole: Hole) -> void:
 	hole.groups.erase(self)
+	hole.line.erase(self)
 	if hole.teeing_group == self:
 		hole.teeing_group = null
 	turn = null
