@@ -30,17 +30,17 @@ else
 	printf '%s' "$APPLE_API_KEY" | tr -d '\r\n ' | base64 --decode > "$KEY_FILE"
 fi
 umask 022
-NOTARY="xcrun notarytool --key $KEY_FILE --key-id $APPLE_API_KEY_ID --issuer $APPLE_API_ISSUER"
+KEYARGS="--key $KEY_FILE --key-id $APPLE_API_KEY_ID --issuer $APPLE_API_ISSUER"
 
 notarize() {
 	# submit, wait, and on a rejection fetch Apple's log so the reason is in the output
-	OUT_TXT="$($NOTARY submit "$1" --wait 2>&1)" || true
+	OUT_TXT="$(xcrun notarytool submit "$1" $KEYARGS --wait 2>&1)" || true
 	printf '%s\n' "$OUT_TXT"
 	ID="$(printf '%s\n' "$OUT_TXT" | grep -Eo 'id: [0-9a-f-]{36}' | head -1 | awk '{print $2}')"
 	STATUS="$(printf '%s\n' "$OUT_TXT" | grep -E '^[[:space:]]*status:' | tail -1 | awk '{print $2}')"
 	if [ "$STATUS" != "Accepted" ]; then
 		echo "notarization of $1 ended with status '${STATUS:-unknown}'" >&2
-		[ -n "$ID" ] && $NOTARY log "$ID" 2>&1 || true
+		[ -n "$ID" ] && xcrun notarytool log "$ID" $KEYARGS 2>&1 || true
 		exit 1
 	fi
 }
