@@ -146,13 +146,14 @@ func step(dt: float) -> void:
 		hv -= Defs.T_WEAR[t] * wear
 		if drought and wv < 0.1:
 			hv -= 0.0006 * edt
-		# weeds
+		# weeds. A landmark nearby slows the sprout, the growth and the spread.
+		var calm := sim.weed_scale(i)
 		if wd <= 0.0:
-			if rng.randf() < weed_p * Defs.T_WEED[t] * (0.5 + wv) * (1.5 - hv * 0.5):
+			if rng.randf() < weed_p * Defs.T_WEED[t] * (0.5 + wv) * (1.5 - hv * 0.5) * calm:
 				wd = 0.06
 		else:
-			wd = minf(1.0, wd + 0.003 * sim.skills.mult("weed_growth") * edt)
-			if wd > 0.6 and rng.randf() < creep:
+			wd = minf(1.0, wd + 0.003 * sim.skills.mult("weed_growth") * edt * calm)
+			if wd > 0.6 and rng.randf() < creep * calm:
 				var ni := _neighbour(i, w, n, rng)
 				if ni >= 0 and Defs.T_WEED[course.terrain[ni]] > 0.0 and course.weeds[ni] <= 0.0:
 					course.weeds[ni] = 0.06

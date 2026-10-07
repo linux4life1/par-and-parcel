@@ -1,0 +1,6 @@
+{
+	"_about": "Area effects of landmark objects. object is a Defs.O value. radius is metres. mood is a one-time feeling on stepping inside. weeds multiplies how fast weeds sprout and spread in the circle (below 1 slows them). story is added to a story character's mood when a happy ending is decided, once per story.",
+	"kinds": [
+		{"object": 19, "name": "Landmark", "radius": 42, "mood": 2.5, "weeds": 0.35, "story": 8}
+	]
+}
