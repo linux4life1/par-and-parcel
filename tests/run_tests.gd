@@ -1985,6 +1985,19 @@ func _test_club_life() -> void:
 	var tantrums_before := int(sim.stats.tantrums)
 	sim.visitors._tantrum(angry)
 	check(angry.tantrum and int(sim.stats.tantrums) == tantrums_before + 1, "a furious golfer has a tantrum")
+	check(angry.rage_t > 3.0 and angry.swing_t < 0.0, "and acts it out on the spot for a few seconds")
+	var before_pos := angry.pos
+	var moved := angry.travel(angry.pos + Vector3(20.0, 0.0, 0.0), 0.5, sim, angry.walk_speed())
+	check(not moved and angry.pos.is_equal_approx(before_pos) and not angry.walking, "nobody storms anywhere until the fit is over")
+	check(angry.tossed or gr.members[1].hit_t > 0.0, "the club flies or a partner gets punched")
+	var calm := sim.visitors.make_golfer("public", 0.4)
+	var normal := calm.walk_speed()
+	calm.storming = true
+	check(calm.walk_speed() > normal * 1.3, "a golfer storming off walks a good deal faster")
+	calm.begin_hole()
+	angry.tossed = true
+	angry.begin_hole()
+	check(not angry.tossed, "and a thrown club is back in the bag by the next hole")
 	check(sim.wildlife.animals.size() >= 4, "there is wildlife on the course (%d animals)" % sim.wildlife.animals.size())
 	var a := sim.wildlife.animals[0]
 	var was := a.pos

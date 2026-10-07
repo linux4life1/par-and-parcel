@@ -63,6 +63,15 @@ float fbm(vec2 p) {
 	return textureLod(noise_tex, p * 0.03125, 0.0).b;
 }
 
+// Where the weeds are, as patches rather than an even sprinkle: the same
+// field in the grass shader decides where a dandelion stands, so the
+// standing weeds grow out of the ground patches. 0..1 coverage.
+float weed_patch(vec2 wp, float weeds) {
+	float wn = fbm(wp * 0.45) * 0.55 + vnoise(wp * 1.7 + 17.0) * 0.45;
+	float t = mix(0.80, 0.36, weeds);
+	return smoothstep(t, t + 0.10, wn) * step(0.02, weeds);
+}
+
 vec3 lin(vec3 c) {
 	return pow(c, vec3(2.2));
 }
@@ -277,12 +286,25 @@ void fragment() {
 	vec3 tired = mix(lin(vec3(0.52, 0.42, 0.22)), lin(vec3(0.70, 0.66, 0.30)), smoothstep(0.2, 0.7, health));
 	col = mix(col, tired, grass * (1.0 - smoothstep(0.25, 0.95, health)) * 0.85);
 
-	// weeds: dark clumps with the odd dandelion
-	vec2 cell = floor(wp * 1.4);
-	vec2 in_cell = fract(wp * 1.4) - 0.5 + (vec2(hash21(cell + 3.0), hash21(cell + 5.0)) - 0.5) * 0.4;
-	float speck = step(1.0 - weeds * 0.6, hash21(cell)) * (1.0 - smoothstep(0.2, 0.42, length(in_cell)));
-	vec3 weed_col = hash21(cell + 9.0) > 0.72 ? lin(vec3(0.95, 0.85, 0.20)) : lin(vec3(0.16, 0.30, 0.10));
-	col = mix(col, weed_col, speck * step(0.05, weeds) * min(grass * 1.4, 1.0));
+	// weeds: ragged patches of coarse, paler broadleaf growth over the
+	// turf, mottled, with the odd flower head close up (the standing
+	// dandelions and plantains are the grass shader's)
+	float patch = weed_patch(wp, weeds) * min(grass * 1.4, 1.0) * (1.0 - w_water) * (1.0 - w_bunker);
+	if (patch > 0.001) {
+		float px = fwidth(wp.x);
+		float close = 1.0 - smoothstep(0.03, 0.09, px);
+		// coarse, dark broadleaf growth, yellowing where it is thickest,
+		// mottled close up and rough-surfaced
+		float mottle = (vnoise(wp * 6.0 + 41.0) * 0.6 + vnoise(wp * 2.3 + 8.0) * 0.4) * close + 0.5 * (1.0 - close);
+		vec3 wl = mix(lin(vec3(0.30, 0.40, 0.14)), lin(vec3(0.50, 0.52, 0.20)), smoothstep(0.3, 1.0, weeds) * 0.7) * (0.6 + 0.8 * mottle);
+		// rosettes: darker hearts where the leaves meet
+		vec2 rc = floor(wp * 2.2);
+		vec2 rin = fract(wp * 2.2) - 0.5 + (vec2(hash21(rc + 3.0), hash21(rc + 5.0)) - 0.5) * 0.5;
+		float heart = (1.0 - smoothstep(0.08, 0.24, length(rin))) * step(0.3, hash21(rc)) * close;
+		wl *= 1.0 - 0.3 * heart;
+		col = mix(col, wl, patch * 0.85);
+		rough = mix(rough, 0.95, patch * 0.5);
+	}
 
 	// wet ground darkens, then puddles
 	float soak = step(0.01, grass + (1.0 - rough)) * (1.0 - step(0.01, emit)) * (1.0 - w_water);

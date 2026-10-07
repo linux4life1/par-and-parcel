@@ -421,6 +421,8 @@ func _tick_golfer(g: Golfer, dt: float) -> void:
 		g.cheer_t -= dt
 	if g.sulk_t > 0.0:
 		g.sulk_t -= dt
+	if g.rage_t > 0.0:
+		g.rage_t -= dt
 	if g.bubble_t > 0.0:
 		g.bubble_t -= dt
 	if g.kind == "player":
@@ -510,6 +512,15 @@ func _tantrum(g: Golfer) -> void:
 			if m != g and m.hit_t <= 0.0:
 				partner = m
 				break
+	# The fit itself: a few seconds of stamping and shouting on the spot
+	# (the view acts it out from rage_t), then either a punch or a club in
+	# the air, and more often than not a march to the car park.
+	g.rage_t = 3.4
+	g.swing_t = -1.0
+	g.walking = false
+	g.sulk_t = 0.0
+	g.cheer_t = 0.0
+	sim.sound.emit("groan", g.pos, 1.0)
 	if partner != null and sim.rng.randf() < 0.3:
 		partner.hit_t = 2.6
 		partner.feel(-10.0, "%s just punched me!" % g.name, "hit")
@@ -520,7 +531,7 @@ func _tantrum(g: Golfer) -> void:
 		sim.feed.say("tantrum_punch", partner, {"hole": n}, true)
 		sim.toast.emit("%s punched a playing partner on hole %d." % [g.name, n], "bad")
 	else:
-		g.swing_t = 0.0
+		g.tossed = true
 		g.bubble = "This club is going in the lake."
 		g.bubble_t = 3.5
 		g.bubble_mood = -1
@@ -532,6 +543,11 @@ func _tantrum(g: Golfer) -> void:
 				if sim.rng.randf() < 0.15:
 					sim.feed.say("tantrum_seen", other)
 	if sim.rng.randf() < 0.6:
+		g.storming = true
+		g.bubble = "I'm DONE with this place!"
+		g.bubble_t = 6.0
+		g.bubble_mood = -1
+		sim.feed.say("storm_off", g, {"hole": n}, true)
 		quit(g)
 
 

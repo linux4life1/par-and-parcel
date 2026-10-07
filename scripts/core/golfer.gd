@@ -76,6 +76,9 @@ var hit_t := 0.0                # seconds left flat on the grass
 var swing_t := -1.0             # swing animation clock, -1 when idle
 var cheer_t := 0.0
 var sulk_t := 0.0               # seconds left hanging the head after a bad hole
+var rage_t := 0.0               # seconds left of a tantrum: stamping, shouting, a club in the air
+var tossed := false             # the club went in the lake; nothing to carry until the next hole
+var storming := false           # walking off the course in a fury
 var slow_t := 0.5
 var hits_taken := 0
 var holes_played := 0
@@ -150,7 +153,7 @@ func spread() -> float:
 
 
 func walk_speed() -> float:
-	return 6.0 + pace * 1.5
+	return (6.0 + pace * 1.5) * (1.45 if storming else 1.0)
 
 
 ## Share of normal power available from a lie.
@@ -249,6 +252,10 @@ func walk_to(target: Vector3, dt: float, course: Course, speed: float = 4.0) -> 
 ## Walk to a target along a found path: round ponds, over bridges, and
 ## along cart paths when they help. True on arrival.
 func travel(target: Vector3, dt: float, sim: Sim, speed: float, prefer_paths: bool = false) -> bool:
+	if rage_t > 0.0:
+		# a tantrum is had on the spot; nobody storms anywhere until it is over
+		walking = false
+		return false
 	var cart := group != null and group.has_cart
 	return Nav.advance(self, target, dt, sim, speed, cart, prefer_paths)
 
@@ -259,6 +266,7 @@ func begin_hole() -> void:
 	teed = false
 	picked_up = false
 	mishit = false
+	tossed = false
 	waited = 0.0
 	phase = P.IDLE
 	sat_at_tee = satisfaction

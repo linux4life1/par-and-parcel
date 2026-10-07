@@ -1,8 +1,9 @@
 class_name GrassView
 extends Node3D
-## Standing grass in the rough near the camera. One patch of tufts is drawn
-## many times over the ground around the point being looked at; the shader
-## places each tuft on the land and decides whether grass grows there (see
+## Standing grass in the rough near the camera, and standing weeds wherever
+## the turf has gone to them. One patch of tufts is drawn many times over the
+## ground around the point being looked at; the shader places each tuft on
+## the land and decides whether grass or a weed grows there (see
 ## shaders/grass.gdshader). Nothing here is rebuilt when the course changes.
 
 const PATCH := 24.0            # metres along one side of a patch
@@ -98,7 +99,9 @@ func bind(terrain: TerrainView, course: Course, biome: Dictionary) -> void:
 	_terrain = terrain
 	_course = course
 	var growth: Array = biome.get("grass", [0.4, 1.0, 1.0])
-	_enabled = float(growth[2]) > 0.0 and (float(growth[0]) > 0.0 or float(growth[1]) > 0.0)
+	# weeds can stand anywhere, so the layer is always on; where the biome
+	# grows no standing grass only the weeds show
+	_enabled = true
 	material.set_shader_parameter("tile_tex", terrain.data_texture())
 	material.set_shader_parameter("height_tex", terrain.height_texture())
 	material.set_shader_parameter("map_size", Vector2(course.w, course.h))

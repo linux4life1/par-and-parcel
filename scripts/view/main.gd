@@ -300,6 +300,7 @@ var _season_day := -1
 
 var _fx_t := 0.0
 var _pose_pair: Array[Golfer] = []
+var _rager: Golfer = null
 
 
 func _process(delta: float) -> void:
@@ -328,6 +329,25 @@ func _process(delta: float) -> void:
 		if _pose_pair.size() >= 2:
 			_pose_pair[1].cheer_t = 1.0
 			_pose_pair[1].timer = maxf(_pose_pair[1].timer, 5.0)
+	if Game.args.has("ragetest"):
+		# --ragetest: the first golfer standing over a ball loses their temper
+		# (--ragetest=toss makes sure the club flies) and the camera stays on them
+		if _rager == null:
+			for g in Game.sim.visitors.golfers:
+				if not g.walking and g.swing_t < 0.0 and g.hit_t <= 0.0 and g.phase == Golfer.P.AIM and g.group != null:
+					_rager = g
+					g.persona = {}
+					g.satisfaction = 5.0
+					if str(Game.args.ragetest) == "toss" and g.group.members.size() > 1:
+						# a partner to punch is what makes the dice pick the punch
+						for m in g.group.members:
+							if m != g:
+								m.hit_t = 1.0
+					Game.sim.visitors._tantrum(g)
+					rig.follow = g
+					break
+		elif _rager.rage_t > 0.0:
+			_rager.timer = maxf(_rager.timer, 2.0)
 	if Game.args.has("cheertest") and Game.sim.tourney.gallery_hole >= 0:
 		# the gallery hears an ovation every couple of seconds
 		_fx_t -= delta
@@ -393,6 +413,8 @@ func _process(delta: float) -> void:
 #   --tourney=club --tourney_in=seconds --tourney_at=green|tee --crowd=N (a tournament under way, with its gallery)
 #   --fxtest=sand|spray|divot|grass|drops|splash|embers|smoke|dust (fire that burst at the camera's focus every second)
 #   --cheertest=ovation (the gallery hears it every 2.5 s) --cheerhold (arms stay up) --posetest (a sulk and a fist pump)
+#   --ragetest[=toss] (a golfer has a tantrum; the camera follows them off)
+#   --weeds=all|N (the course goes to weeds: a west-to-east gradient, or N random tiles)
 #   --day=N (jump to a day of the year: 0 March 1st, 168 the first of September)
 #   --stories=<id|1> (the Feed panel's Stories tab, starting that story first)
 #   --tutorial (start the guided first round) --demo=tutorial (drive it through every step)
@@ -429,6 +451,27 @@ func _apply_test_args() -> void:
 				var q2 := hole.tee + side * off - dir.normalized() * 4.0
 				var t2 := sim.course.tile_of(q2.x, q2.z)
 				sim.place_object(t2.x, t2.y, Defs.O.LAMP)
+	if a.has("weeds"):
+		# --weeds=all: the whole course goes to weeds, clean at the west edge
+		# and lost at the east, to judge every level in one picture;
+		# --weeds=N: N random tiles, from light to lost
+		sim.grounds.refresh_layout()
+		var tiles := sim.grounds.play_tiles
+		if not tiles.is_empty():
+			if str(a.weeds) == "all":
+				var x0 := sim.course.w
+				var x1 := 0
+				for i in tiles:
+					x0 = mini(x0, i % sim.course.w)
+					x1 = maxi(x1, i % sim.course.w)
+				for i in tiles:
+					sim.course.weeds[i] = clampf(float(i % sim.course.w - x0) / maxf(float(x1 - x0), 1.0), 0.0, 1.0)
+			else:
+				var wrng := RandomNumberGenerator.new()
+				wrng.seed = 7
+				var n := int(a.weeds)
+				for k in n:
+					sim.course.weeds[tiles[wrng.randi() % tiles.size()]] = lerpf(0.15, 1.0, float(k) / maxf(float(n - 1), 1.0))
 	if a.has("fast"):
 		Game.fast_forward(float(a.fast))
 	if a.has("shot"):

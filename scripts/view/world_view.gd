@@ -43,6 +43,8 @@ var _mound_changed := false
 var _clock := 0.0
 var _bubbles := {}             # golfer id -> Label3D
 var _carts := {}               # group id -> MeshInstance3D
+var _tosses: Array[Dictionary] = []   # clubs in the air after a tantrum: {node, from, vel, t, id}
+var _tossed := {}              # golfer id -> true once their club has been thrown this hole
 var _animals := {}             # Wildlife.Animal -> MeshInstance3D
 var _lod_scale := 1.0          # how far the detailed trees reach, by graphics preset
 var _lamps: Array = []         # [light, full energy] for everything that shines at night
@@ -1332,7 +1334,10 @@ func _frame_world(delta: float) -> void:
 	var k := lerpf(1.0, 1.45, smoothstep(22.0, 90.0, rig.dist)) * clampf(rig.dist / 210.0, 1.0, 3.0)
 	var a := Game.alpha
 	t0 = Time.get_ticks_usec()
-	_update_people(k, a, delta)
+	# People move at the simulation's pace: frozen when it is paused, and
+	# striding faster when it runs fast, or the legs slide under them.
+	var people_dt := 0.0 if Game.paused else delta * minf(float(Game.speed), 4.0)
+	_update_people(k, a, people_dt)
 	Game.prof("w.people", t0)
 	_update_extras(k, a)
 	t0 = Time.get_ticks_usec()
@@ -1373,7 +1378,9 @@ func _update_people(k: float, a: float, delta: float) -> void:
 		var putt: bool = g.plan.get("putt", false)
 		if g.swing_t >= 0.0 or g.phase == Golfer.P.AIM or g.phase == Golfer.P.SWING:
 			facing += PI * 0.5
-		fig.pose(g.prev.lerp(g.pos, a), facing, k, g.walking, g.swing_t, putt, g.hit_t, g.cheer_t, false, delta, g.sulk_t)
+		fig.pose(g.prev.lerp(g.pos, a), facing, k, g.walking, g.swing_t, putt, g.hit_t, g.cheer_t, false, delta, g.sulk_t, g.rage_t, g.storming, g.tossed)
+		_throw_club(g, fig, k)
+	_fly_clubs(delta)
 	for m in sim.crew.members:
 		var fig: PersonFig = _staff_figs.get(m.id)
 		if fig == null:
@@ -1391,6 +1398,62 @@ func _update_people(k: float, a: float, delta: float) -> void:
 			_people_root.add_child(fig)
 			_staff_figs[m.id] = fig
 		fig.pose(m.prev.lerp(m.pos, a), m.facing, k, m.walking, -1.0, false, m.hit_t, 0.0, m.state == 2, delta)
+
+
+## A club leaves a golfer's hands once their tantrum has wound up, and
+## sails off in the direction they are facing, tumbling, to lie where it
+## lands for a while. The simulation only says the golfer threw it
+## (`tossed`); where it goes is for show.
+func _throw_club(g: Golfer, fig: PersonFig, k: float) -> void:
+	if not g.tossed:
+		_tossed.erase(g.id)
+		return
+	if _tossed.has(g.id) or g.rage_t > 2.6 or g.rage_t <= 0.0:
+		return
+	_tossed[g.id] = true
+	var node := PersonFig.loose_club()
+	node.scale = Vector3.ONE * k
+	_people_root.add_child(node)
+	var hand := fig.position + Vector3(0.0, 1.5 * k, 0.0)
+	var dir := Vector3(cos(g.facing), 0.0, sin(g.facing))
+	var vel := (dir * 7.5 + Vector3(0.0, 7.0, 0.0)) * k
+	node.position = hand
+	_tosses.append({"node": node, "vel": vel, "t": 0.0, "spin": Vector3(9.0, 2.0, 5.5), "down": false})
+	sim.sound.emit("leaves", hand, 0.4)
+
+
+func _fly_clubs(delta: float) -> void:
+	var i := 0
+	while i < _tosses.size():
+		var c := _tosses[i]
+		var node: Node3D = c.node
+		c.t = float(c.t) + delta
+		if not bool(c.down):
+			var vel: Vector3 = c.vel
+			vel.y -= 9.8 * delta
+			node.position += vel * delta
+			var spin: Vector3 = c.spin
+			node.rotation += spin * delta
+			c.vel = vel
+			var off := sim.course.index_at(node.position.x, node.position.z) < 0
+			var ground := -100.0 if off else sim.course.height_at(node.position.x, node.position.z)
+			if node.position.y <= ground + 0.05 or ground < -50.0:
+				c.down = true
+				if ground < -50.0:
+					node.visible = false
+				else:
+					node.position.y = ground + 0.03
+					# lying flat, pointing the way it was going
+					node.rotation = Vector3(0.0, -atan2(vel.z, vel.x), PI * 0.5 + 0.1)
+					var t := sim.course.terrain_at(node.position.x, node.position.z)
+					sim.sound.emit("splash" if t == Defs.T.WATER else "land_soft", node.position, 0.5)
+					if t == Defs.T.WATER:
+						node.visible = false
+		elif float(c.t) > 14.0:
+			node.queue_free()
+			_tosses.remove_at(i)
+			continue
+		i += 1
 
 
 ## Thought bubbles, golf carts and wildlife.

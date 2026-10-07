@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Paints the foliage atlas used by trees, bushes and grass.
+"""Paints the foliage atlas used by trees, bushes, grass and weeds.
 
-Four 512 px cells in a 1024 px image, each a cluster on a clear background:
-  top left      a spray of broad leaves
-  top right     a conifer bough
-  bottom left   a palm frond
-  bottom right  a tuft of grass
+Six 512 px cells in a 1024 by 1536 image, each a cluster on a clear background:
+  row 0   a spray of broad leaves      a conifer bough
+  row 1   a palm frond                 a tuft of grass
+  row 2   a dandelion (leaves, flowers, seed clocks)   a plantain (broad leaves, seed spikes)
 
-Colours are kept near neutral green so each plant can tint its own leaves.
+The plant cells are kept near neutral green so each plant can tint its own
+leaves. The two weed cells are painted in their real colours (yellow
+flowers, white clocks, brown spikes) and drawn untinted.
 Pure standard library; run from anywhere:  python3 tools/make_foliage.py
 """
 import math
@@ -18,13 +19,16 @@ import zlib
 from array import array
 
 CELL = 512
-SIZE = CELL * 2
+COLS = 2
+ROWS = 3
+SIZE = CELL * COLS          # the row stride: the image's width
+HEIGHT = CELL * ROWS
 PAD = 5
 
-R = array("f", [0.0]) * (SIZE * SIZE)
-G = array("f", [0.0]) * (SIZE * SIZE)
-B = array("f", [0.0]) * (SIZE * SIZE)
-A = array("f", [0.0]) * (SIZE * SIZE)
+R = array("f", [0.0]) * (SIZE * HEIGHT)
+G = array("f", [0.0]) * (SIZE * HEIGHT)
+B = array("f", [0.0]) * (SIZE * HEIGHT)
+A = array("f", [0.0]) * (SIZE * HEIGHT)
 
 
 def put(i, r, g, b, a):
@@ -109,6 +113,28 @@ def stroke(cell, x0, y0, x1, y1, w0, w1, c0, c1):
             if a > 1.0:
                 a = 1.0
             put(row + ix, c0[0] + (c1[0] - c0[0]) * t, c0[1] + (c1[1] - c0[1]) * t, c0[2] + (c1[2] - c0[2]) * t, a)
+
+
+def disc(cell, x, y, radius, color, soft=0.5, shade=0.3):
+    """A filled disc, lit from the top left, with a soft edge: flower heads."""
+    cx, cy = cell
+    px, py, r = x * CELL, y * CELL, radius * CELL
+    x0 = int(max(PAD, px - r - 1))
+    x1 = int(min(CELL - PAD, px + r + 2))
+    y0 = int(max(PAD, py - r - 1))
+    y1 = int(min(CELL - PAD, py + r + 2))
+    cr, cg, cb = color
+    for iy in range(y0, y1):
+        row = (cy * CELL + iy) * SIZE + cx * CELL
+        dy = iy + 0.5 - py
+        for ix in range(x0, x1):
+            dx = ix + 0.5 - px
+            d = math.sqrt(dx * dx + dy * dy) / r
+            if d >= 1.0:
+                continue
+            a = min(1.0, (1.0 - d) / max(soft, 0.02))
+            tone = 1.0 - shade * d * d - 0.12 * (dx + dy) / r
+            put(row + ix, cr * tone, cg * tone, cb * tone, a)
 
 
 def green(rng, light=1.0):
@@ -258,11 +284,87 @@ def tuft(cell, rng):
     del order
 
 
+# ------------------------------------------------------------------ weeds
+
+def dandelion(cell, rng):
+    """A rosette of toothed leaves at the root, flower stalks rising from the
+    middle to a few yellow heads and a couple of white seed clocks."""
+    leaf_c = [(0.30, 0.44, 0.14), (0.34, 0.49, 0.16), (0.27, 0.41, 0.12), (0.38, 0.50, 0.19)]
+    # the rosette: leaves fan out from the root, the back ones darker
+    for back in (True, False):
+        n = 9 if back else 11
+        for i in range(n):
+            a = -math.pi * (0.08 + 0.84 * (i + rng.uniform(-0.3, 0.3)) / (n - 1))
+            ln = rng.uniform(0.26, 0.40) * (0.85 if back else 1.0)
+            c = leaf_c[rng.randrange(len(leaf_c))]
+            if back:
+                c = (c[0] * 0.72, c[1] * 0.74, c[2] * 0.72)
+            leaf(cell, 0.5 + rng.uniform(-0.03, 0.03), 0.975, a, ln, rng.uniform(0.08, 0.11), c, lobes=0.55, rib=0.3)
+    # stalks: a smooth hollow stem, slightly bowed, each with a head
+    heads = [(0.78, "clock"), (0.55, "flower"), (0.68, "flower"), (0.42, "bud"), (0.86, "flower")]
+    for k, (h, kind) in enumerate(heads):
+        sx = 0.5 + rng.uniform(-0.05, 0.05)
+        lean = rng.uniform(-0.3, 0.3)
+        ex = sx + lean * h
+        ey = 0.975 - h
+        mx = (sx + ex) * 0.5 + rng.uniform(-0.04, 0.04)
+        my = (0.975 + ey) * 0.5
+        stem = (0.46, 0.54, 0.27)
+        stem_d = (0.38, 0.45, 0.23)
+        stroke(cell, sx, 0.975, mx, my, 0.014, 0.011, stem_d, stem)
+        stroke(cell, mx, my, ex, ey, 0.011, 0.009, stem, stem)
+        if kind == "flower":
+            # a yellow head: a green calyx, a gold base, a ragged brighter top
+            disc(cell, ex, ey + 0.02, 0.022, (0.40, 0.50, 0.20), soft=0.5)
+            disc(cell, ex, ey + 0.006, 0.034, (0.84, 0.62, 0.08), soft=0.4)
+            for j in range(26):
+                aa = rng.random() * math.tau
+                rr = rng.uniform(0.022, 0.048)
+                stroke(cell, ex, ey, ex + math.cos(aa) * rr, ey + math.sin(aa) * rr * 0.7, 0.012, 0.004, (0.99, 0.84, 0.16), (0.95, 0.74, 0.08))
+        elif kind == "clock":
+            # the seed head: a thin, airy sphere of fine spokes
+            disc(cell, ex, ey, 0.03, (0.86, 0.86, 0.80), soft=1.0, shade=0.1)
+            for j in range(30):
+                aa = rng.random() * math.tau
+                rr = rng.uniform(0.034, 0.046)
+                stroke(cell, ex, ey, ex + math.cos(aa) * rr, ey + math.sin(aa) * rr, 0.003, 0.002, (0.80, 0.80, 0.74), (0.95, 0.95, 0.92))
+                disc(cell, ex + math.cos(aa) * rr, ey + math.sin(aa) * rr, 0.004, (0.96, 0.96, 0.93), soft=0.9, shade=0.0)
+        else:
+            disc(cell, ex, ey, 0.022, (0.45, 0.55, 0.22), soft=0.5)
+
+
+def plantain(cell, rng):
+    """Broad ribbed leaves close to the ground and tall thin seed spikes."""
+    leaf_c = [(0.26, 0.41, 0.15), (0.23, 0.37, 0.13), (0.30, 0.45, 0.17)]
+    for back in (True, False):
+        n = 6 if back else 7
+        for i in range(n):
+            a = -math.pi * (0.1 + 0.8 * (i + rng.uniform(-0.25, 0.25)) / (n - 1))
+            ln = rng.uniform(0.22, 0.34) * (0.85 if back else 1.0)
+            c = leaf_c[rng.randrange(len(leaf_c))]
+            if back:
+                c = (c[0] * 0.7, c[1] * 0.72, c[2] * 0.7)
+            leaf(cell, 0.5 + rng.uniform(-0.04, 0.04), 0.975, a, ln, rng.uniform(0.14, 0.19), c, lobes=0.0, rib=0.4)
+    for k in range(4):
+        sx = 0.5 + rng.uniform(-0.06, 0.06)
+        h = rng.uniform(0.55, 0.9)
+        lean = rng.uniform(-0.25, 0.25)
+        ex = sx + lean * h
+        ey = 0.975 - h
+        stem = (0.50, 0.52, 0.30)
+        stroke(cell, sx, 0.975, ex, ey + 0.14, 0.012, 0.008, (0.42, 0.44, 0.26), stem)
+        # the spike: a fat brown cylinder of seeds with a paler tip
+        stroke(cell, ex, ey + 0.14, ex + lean * 0.02, ey, 0.030, 0.024, (0.40, 0.26, 0.16), (0.55, 0.40, 0.26))
+        for j in range(18):
+            yy = ey + rng.uniform(0.0, 0.14)
+            stroke(cell, ex - 0.012, yy, ex + 0.014, yy + 0.003, 0.004, 0.004, (0.62, 0.50, 0.34), (0.35, 0.22, 0.14))
+
+
 def write_png(path):
     # Clear pixels take the average colour of their cell, so the edges of
     # leaves do not pick up a dark fringe when the image is scaled down.
-    for cy in range(2):
-        for cx in range(2):
+    for cy in range(ROWS):
+        for cx in range(COLS):
             sr = sg = sb = sw = 0.0
             for iy in range(CELL):
                 row = (cy * CELL + iy) * SIZE + cx * CELL
@@ -282,7 +384,7 @@ def write_png(path):
                     if A[row + ix] <= 0.0:
                         R[row + ix], G[row + ix], B[row + ix] = mr, mg, mb
     raw = bytearray()
-    for iy in range(SIZE):
+    for iy in range(HEIGHT):
         raw.append(0)
         row = iy * SIZE
         for ix in range(SIZE):
@@ -297,7 +399,7 @@ def write_png(path):
         return struct.pack(">I", len(data)) + body + struct.pack(">I", zlib.crc32(body) & 0xFFFFFFFF)
 
     png = b"\x89PNG\r\n\x1a\n"
-    png += chunk(b"IHDR", struct.pack(">IIBBBBB", SIZE, SIZE, 8, 6, 0, 0, 0))
+    png += chunk(b"IHDR", struct.pack(">IIBBBBB", SIZE, HEIGHT, 8, 6, 0, 0, 0))
     png += chunk(b"IDAT", zlib.compress(bytes(raw), 9))
     png += chunk(b"IEND", b"")
     with open(path, "wb") as fh:
@@ -310,9 +412,11 @@ def main():
     bough((1, 0), rng)
     frond((0, 1), rng)
     tuft((1, 1), rng)
+    dandelion((0, 2), rng)
+    plantain((1, 2), rng)
     cover = []
-    for cy in range(2):
-        for cx in range(2):
+    for cy in range(ROWS):
+        for cx in range(COLS):
             s = 0.0
             for iy in range(CELL):
                 row = (cy * CELL + iy) * SIZE + cx * CELL
@@ -320,8 +424,8 @@ def main():
                     s += A[row + ix]
             cover.append(round(s / (CELL * CELL), 2))
     print("coverage", cover)
-    for cy in range(2):
-        for cx in range(2):
+    for cy in range(ROWS):
+        for cx in range(COLS):
             sr = sg = sb = sw = 0.0
             for iy in range(CELL):
                 row = (cy * CELL + iy) * SIZE + cx * CELL

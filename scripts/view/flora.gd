@@ -113,10 +113,13 @@ static func _lin(c: Color) -> Color:
 	return c.srgb_to_linear()
 
 
-## Where a cell of the foliage atlas sits: Rect2 in UV space.
+## Where a cell of the foliage atlas sits: Rect2 in UV space. The atlas is
+## two cells wide and three tall (tools/make_foliage.py).
 static func _cell(cell: int) -> Rect2:
 	var inset := 0.006
-	return Rect2((cell % 2) * 0.5 + inset, (cell / 2) * 0.5 + inset, 0.5 - inset * 2.0, 0.5 - inset * 2.0)
+	var cw := 1.0 / Surfaces.ATLAS_COLS
+	var ch := 1.0 / Surfaces.ATLAS_ROWS
+	return Rect2((cell % Surfaces.ATLAS_COLS) * cw + inset, (cell / Surfaces.ATLAS_COLS) * ch + inset * ch / cw, cw - inset * 2.0, ch - inset * 2.0 * ch / cw)
 
 
 ## One solid rounded mass. Used for the shaded heart of a canopy (alpha 0

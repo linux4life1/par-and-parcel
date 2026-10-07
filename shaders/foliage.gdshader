@@ -10,7 +10,7 @@ render_mode cull_disabled, diffuse_burley, specular_schlick_ggx;
 
 uniform sampler2D atlas : source_color, filter_linear_mipmap_anisotropic, repeat_disable;
 uniform vec2 wind = vec2(1.0, 0.0);     // direction scaled by strength
-uniform vec3 cell_mean[4];               // average leaf colour in each quarter of the atlas
+uniform vec3 cell_mean[6];               // average leaf colour in each cell of the atlas (2 by 3)
 uniform float gain = 0.46;             // leaves are darker than they look in a painting
 uniform float autumn = 0.0;            // 0 summer .. 1 every broad-leaved tree has turned
 uniform float spring = 0.0;            // 1 at the start of the year: fresh, pale new leaves
@@ -45,8 +45,8 @@ void fragment() {
 		ALPHA = clamp(a, 0.0, 1.0);
 		ALPHA_SCISSOR_THRESHOLD = 0.42;
 		ALPHA_ANTIALIASING_EDGE = 0.3;
-		ALPHA_TEXTURE_COORDINATE = UV * 1024.0;
-		int cell = (UV.x >= 0.5 ? 1 : 0) + (UV.y >= 0.5 ? 2 : 0);
+		ALPHA_TEXTURE_COORDINATE = UV * vec2(1024.0, 1536.0);
+		int cell = (UV.x >= 0.5 ? 1 : 0) + int(floor(UV.y * 3.0)) * 2;
 		if (cell == 0 && (autumn > 0.001 || spring > 0.001)) {
 			// Broad leaves follow the season. Each tree turns at its own
 			// moment, most to gold and some to red, and in spring the new

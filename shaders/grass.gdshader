@@ -1,10 +1,12 @@
 shader_type spatial;
 render_mode cull_disabled, diffuse_burley, specular_disabled, world_vertex_coords;
-// Standing grass in the rough. The same patch of tufts is laid over the
-// ground around the camera; each tuft looks up the land beneath it, so it
-// sits on the terrain, grows only where rough grows, and takes the colour of
-// the ground it stands on. Painting or reshaping the course moves the grass
-// with no rebuilding.
+// Standing grass in the rough, and standing weeds anywhere. The same patch
+// of tufts is laid over the ground around the camera; each tuft looks up
+// the land beneath it, so it sits on the terrain, grows only where rough
+// grows, and takes the colour of the ground it stands on. Where the turf
+// has gone to weeds a tuft becomes a dandelion or a plantain instead, in
+// its own colours, on fairway and green as well as rough. Painting or
+// reshaping the course moves the grass with no rebuilding.
 
 uniform sampler2D atlas : source_color, filter_linear_mipmap, repeat_disable;
 uniform sampler2D tile_tex : filter_nearest, repeat_disable;
@@ -21,6 +23,8 @@ uniform float cloud_cover = 0.2;
 uniform vec3 season_grass = vec3(1.0);   // the season's tint, the same as the ground's
 uniform vec3 blade_mean = vec3(0.3, 0.35, 0.15);   // average colour of the grass picture
 uniform float gain = 1.0;
+uniform float weed_gain = 0.8;           // brightness of the painted weed colours
+uniform float weed_density = 1.0;        // 0 switches standing weeds off
 
 // must match the terrain shader, so grass ends where the turf does
 const float PRIORITY[10] = float[10](1.0, 1.12, 1.38, 1.5, 1.62, 1.32, 0.94, 1.58, 1.25, 1.05);
@@ -28,6 +32,8 @@ const float PRIORITY[10] = float[10](1.0, 1.12, 1.38, 1.5, 1.62, 1.32, 0.94, 1.5
 varying vec3 tint;
 varying float tip;
 varying vec3 ground_n;
+varying float kind;       // 0 a blade of grass, 1 a weed drawn in its painted colours
+varying float light;      // the ground's shading (relief, cloud, ownership) for a weed
 
 // Smooth noise is read from a small picture (tools/make_noise.py) rather
 // than computed: the same patterns for a fraction of the cost.
@@ -57,6 +63,13 @@ float land(vec2 wp) {
 	return textureLod(height_tex, (wp / tile_size + 0.5) / (map_size + 1.0), 0.0).r;
 }
 
+// must match the terrain shader, so the standing weeds grow out of its patches
+float weed_patch(vec2 wp, float weeds) {
+	float wn = fbm(wp * 0.45) * 0.55 + vnoise(wp * 1.7 + 17.0) * 0.45;
+	float t = mix(0.80, 0.36, weeds);
+	return smoothstep(t, t + 0.10, wn) * step(0.02, weeds);
+}
+
 void vertex() {
 	vec3 origin = MODEL_MATRIX[3].xyz;
 	vec2 wp = origin.xz;
@@ -64,10 +77,12 @@ void vertex() {
 	float grow = 0.0;
 	tint = pal_rough;
 	ground_n = vec3(0.0, 1.0, 0.0);
+	kind = 0.0;
+	light = 1.0;
 	vec2 tc = wp / tile_size;
 	float seed = hash21(wp * 1.37);
 	float dist = distance(origin.xz, CAMERA_POSITION_WORLD.xz);
-	if (tc.x > 0.5 && tc.y > 0.5 && tc.x < map_size.x - 0.5 && tc.y < map_size.y - 0.5 && seed <= growth.z && dist < fade.y) {
+	if (tc.x > 0.5 && tc.y > 0.5 && tc.x < map_size.x - 0.5 && tc.y < map_size.y - 0.5 && seed <= max(growth.z, weed_density) && dist < fade.y) {
 		// how much rough and deep rough lies here, measured as the terrain does
 		vec2 tp = tc
 			+ (vnoise2(wp * 0.055 + 23.0) - 0.5) * 0.8
@@ -99,6 +114,8 @@ void vertex() {
 		float total = 0.0;
 		float w_rough = 0.0;
 		float w_deep = 0.0;
+		float w_green = 0.0;
+		float w_soft = 0.0;      // any turf weeds can grow in
 		for (int k = 0; k < 10; k++) {
 			float v = pow(cov[k] * PRIORITY[k], 12.0);
 			total += v;
@@ -106,15 +123,38 @@ void vertex() {
 				w_rough = v;
 			} else if (k == 6) {
 				w_deep = v;
+			} else if (k == 2) {
+				w_green = v;
+			}
+			if (k <= 3 || k == 6) {
+				w_soft += v;
 			}
 		}
 		w_rough /= total;
 		w_deep /= total;
+		w_green /= total;
+		w_soft /= total;
 		float turf = w_rough + w_deep;
 		float health = data.y;
-		grow = (growth.x * w_rough + growth.y * w_deep) * smoothstep(0.35, 0.8, turf) * (1.0 - smoothstep(0.15, 0.5, bare));
-		grow *= mix(0.6, 1.0, smoothstep(0.2, 0.8, health));
-		grow *= 1.0 - smoothstep(fade.x, fade.y, dist);
+		float weeds = data.z;
+		float far = 1.0 - smoothstep(fade.x, fade.y, dist);
+		// A weed where the ground has a weed patch and this tuft's own dice
+		// say so: more of them as the infestation thickens. Mown ground
+		// keeps them short.
+		float patch = weed_patch(wp, weeds) * smoothstep(0.4, 0.75, w_soft) * (1.0 - smoothstep(0.15, 0.5, bare));
+		float weedy = step(hash21(wp * 2.11 + 7.0), patch * (0.2 + 0.55 * weeds) * weed_density);
+		if (weedy > 0.5 && seed <= weed_density) {
+			kind = 1.0;
+			grow = (0.42 + 0.45 * weeds) * mix(1.0, 0.55, w_green) * far;
+			// which weed, and where it sits in the atlas: the bottom row
+			float which = hash21(wp * 0.53 + 2.0);
+			vec2 cell_o = vec2(which > 0.62 ? 0.5 : 0.0, 2.0 / 3.0);
+			UV = cell_o + vec2(0.006, 0.004) + UV2 * vec2(0.5 - 0.012, 1.0 / 3.0 - 0.008);
+		} else if (seed <= growth.z) {
+			grow = (growth.x * w_rough + growth.y * w_deep) * smoothstep(0.35, 0.8, turf) * (1.0 - smoothstep(0.15, 0.5, bare));
+			grow *= mix(0.6, 1.0, smoothstep(0.2, 0.8, health));
+			grow *= far;
+		}
 
 		// Everything below only matters where a tuft actually stands.
 		if (grow >= 0.02) {
@@ -134,24 +174,29 @@ void vertex() {
 			tint = (c_rough * w_rough + c_deep * w_deep) / max(turf, 0.001);
 			vec3 tired = mix(pow(vec3(0.52, 0.42, 0.22), vec3(2.2)), pow(vec3(0.70, 0.66, 0.30), vec3(2.2)), smoothstep(0.2, 0.7, health));
 			tint = mix(tint, tired, (1.0 - smoothstep(0.25, 0.95, health)) * 0.85);
-			tint *= 1.0 - 0.3 * data.x;
 			// each tuft a touch lighter or darker than its neighbours
 			tint *= 0.86 + 0.3 * hash21(wp * 0.71 + 3.0);
+			// the shading the ground has here: wet, hollow or crest, cloud, land not owned
+			float shade = 1.0 - 0.3 * data.x;
 			float ring = land(wp + vec2(3.0, 0.0) * tile_size) + land(wp - vec2(3.0, 0.0) * tile_size)
 				+ land(wp + vec2(0.0, 3.0) * tile_size) + land(wp - vec2(0.0, 3.0) * tile_size);
 			float relief = clamp(0.5 + (h0 - ring * 0.25) * 0.22, 0.0, 1.0);
-			tint *= mix(0.6, 1.3, relief);
+			shade *= mix(0.6, 1.3, relief);
 			float cl = fbm((wp + cloud_offset) * 0.0042);
 			float edge = 0.78 - cloud_cover * 0.62;
-			tint *= 1.0 - 0.36 * smoothstep(edge - 0.07, edge + 0.07, cl);
+			shade *= 1.0 - 0.36 * smoothstep(edge - 0.07, edge + 0.07, cl);
+			tint *= shade;
+			light = shade * (0.9 + 0.2 * hash21(wp * 0.71 + 3.0));
 			if (lock > 0.001) {
 				vec3 dull = vec3(dot(tint, vec3(0.33))) * 0.52;
 				tint = mix(tint, dull, smoothstep(0.3, 0.7, lock) * 0.8);
+				light *= 1.0 - smoothstep(0.3, 0.7, lock) * 0.5;
 			}
 
 			vec3 rel = VERTEX - origin;
 			rel.y *= grow;
-			rel.xz *= mix(0.6, 1.0, min(grow * 1.5, 1.0));
+			// grass cards narrow as they shorten; a weed keeps its spread
+			rel.xz *= kind > 0.5 ? (0.55 + 0.5 * grow) : mix(0.6, 1.0, min(grow * 1.5, 1.0));
 			// lean and shiver in the wind, from the tips
 			float strength = length(wind);
 			float phase = TIME * (1.6 + strength * 0.25) + wp.x * 0.35 + wp.y * 0.27;
@@ -174,8 +219,13 @@ void fragment() {
 	ALPHA = clamp(a, 0.0, 1.0);
 	ALPHA_SCISSOR_THRESHOLD = 0.4;
 	ALPHA_ANTIALIASING_EDGE = 0.3;
-	ALPHA_TEXTURE_COORDINATE = UV * 1024.0;
-	ALBEDO = tint * season_grass * clamp(blade.rgb / blade_mean, 0.0, 2.2) * gain * mix(0.9, 1.12, tip);
+	ALPHA_TEXTURE_COORDINATE = UV * vec2(1024.0, 1536.0);
+	if (kind > 0.5) {
+		// a weed in the colours it was painted, lit as the ground is
+		ALBEDO = blade.rgb * light * weed_gain * mix(0.88, 1.06, tip);
+	} else {
+		ALBEDO = tint * season_grass * clamp(blade.rgb / blade_mean, 0.0, 2.2) * gain * mix(0.9, 1.12, tip);
+	}
 	NORMAL = normalize((VIEW_MATRIX * vec4(ground_n, 0.0)).xyz);
 	ROUGHNESS = 0.95;
 	AO_LIGHT_AFFECT = 0.0;

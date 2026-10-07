@@ -235,6 +235,11 @@
   "tantrum_punch": [
     "My playing partner just PUNCHED me on hole {hole} of {course}. Over a gimme."
   ],
+  "storm_off": [
+    "Walked off {course} at hole {hole}. Did not finish. Will not be back.",
+    "Left my scorecard on the tee at {hole} and kept walking. Enough.",
+    "Stormed off {course} today. The car park was the best hole on the property."
+  ],
   "tantrum_seen": [
     "Just watched a grown adult throw a full golf bag into the lake at {course}. Incredible scenes."
   ],

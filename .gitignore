@@ -2,3 +2,4 @@
 *.translation
 /build/
 .DS_Store
+/.claude/worktrees/

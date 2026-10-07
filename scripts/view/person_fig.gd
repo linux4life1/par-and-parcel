@@ -259,15 +259,7 @@ func build(shirt: Color, pants: Color, skin: Color, hat: Color, prop: String, cr
 	match prop:
 		"club", "flag":
 			_has_club = true
-			var steel := _mat(Color(0.82, 0.84, 0.88), 0.25, 0.85)
-			_add(club, _rod(0.007, 0.01, 0.98), steel, Vector3(0, -0.47, 0))
-			_add(club, _rod(0.015, 0.013, 0.24), _mat(Color(0.1, 0.1, 0.1), 0.9), Vector3(0, -0.08, 0))     # grip
-			if prop == "flag":
-				_add(club, _block(Vector3(0.02, 0.26, 0.4)), _mat(Color(0.95, 0.8, 0.1), 0.8), Vector3(0, -0.84, 0.2))
-			else:
-				# an iron's head: a blade angled off the hosel
-				_add(club, _rod(0.011, 0.011, 0.06), steel, Vector3(0, -0.94, 0))
-				_add(club, _block(Vector3(0.095, 0.05, 0.022)), steel, Vector3(0.045, -0.972, 0), Vector3.ONE, Vector3(0, 0, 0.12))
+			_build_club(club, prop == "flag")
 		"mower":
 			var red := _mat(Color(0.78, 0.13, 0.1), 0.45, 0.3)
 			var tyre := _mat(Color(0.08, 0.08, 0.08), 0.9)
@@ -315,13 +307,36 @@ func build(shirt: Color, pants: Color, skin: Color, hat: Color, prop: String, cr
 
 ## Set the figure's position and strike the pose that matches what the
 ## person is doing right now.
-func pose(at: Vector3, facing: float, k: float, walking: bool, swing_t: float, putt: bool, hit_t: float, cheer_t: float, working: bool, dt: float, sulk_t: float = 0.0) -> void:
+## An iron (or the marshal's flag) on its own, for a club seen flying
+## through the air after a tantrum. The grip end is at the origin and the
+## head hangs a metre below it, as it does in a golfer's hands.
+static func loose_club() -> Node3D:
+	var fig := PersonFig.new()
+	var node := Node3D.new()
+	fig._build_club(node, false)
+	return node
+
+
+func _build_club(into: Node3D, flag: bool) -> void:
+	var steel := _mat(Color(0.82, 0.84, 0.88), 0.25, 0.85)
+	_add(into, _rod(0.007, 0.01, 0.98), steel, Vector3(0, -0.47, 0))
+	_add(into, _rod(0.015, 0.013, 0.24), _mat(Color(0.1, 0.1, 0.1), 0.9), Vector3(0, -0.08, 0))     # grip
+	if flag:
+		_add(into, _block(Vector3(0.02, 0.26, 0.4)), _mat(Color(0.95, 0.8, 0.1), 0.8), Vector3(0, -0.84, 0.2))
+	else:
+		# an iron's head: a blade angled off the hosel
+		_add(into, _rod(0.011, 0.011, 0.06), steel, Vector3(0, -0.94, 0))
+		_add(into, _block(Vector3(0.095, 0.05, 0.022)), steel, Vector3(0.045, -0.972, 0), Vector3.ONE, Vector3(0, 0, 0.12))
+
+
+func pose(at: Vector3, facing: float, k: float, walking: bool, swing_t: float, putt: bool, hit_t: float, cheer_t: float, working: bool, dt: float, sulk_t: float = 0.0, rage_t: float = 0.0, storming: bool = false, tossed: bool = false) -> void:
 	t += dt
 	position = at
 	scale = Vector3.ONE * k
 	rotation.y = lerp_angle(rotation.y, -facing, 1.0 - exp(-dt * 14.0))
 	var ease_k := 1.0 - exp(-dt * 12.0)
 	_stride = lerpf(_stride, 1.0 if walking else 0.0, 1.0 - exp(-dt * 9.0))
+	club.visible = _has_club and not tossed
 
 	# targets for every joint, then blend toward them
 	var lean := 0.0             # spine forward
@@ -343,19 +358,22 @@ func pose(at: Vector3, facing: float, k: float, walking: bool, swing_t: float, p
 	var shake := 0.0            # the head, side to side
 
 	if _stride > 0.02:
-		var ph := t * 9.5
+		# storming off is the same walk with the volume up: a faster, longer
+		# stride, arms pumping, head down and forward
+		var stomp := 1.35 if storming else 1.0
+		var ph := t * (12.5 if storming else 9.5)
 		var s := sin(ph) * _stride
-		leg_fwd_l = s * 0.62
-		leg_fwd_r = -s * 0.62
-		knee_l = -maxf(0.0, -cos(ph + 0.6)) * 0.95 * _stride
-		knee_r = -maxf(0.0, cos(ph + 0.6)) * 0.95 * _stride
-		arm_fwd_l = -s * 0.5
-		arm_fwd_r = s * 0.5
-		elbow_l = 0.35 * _stride + 0.12
-		elbow_r = 0.35 * _stride + 0.12
-		bob = absf(cos(ph)) * 0.035 * _stride
-		lean = 0.07 * _stride
-		twist = s * 0.12
+		leg_fwd_l = s * 0.62 * stomp
+		leg_fwd_r = -s * 0.62 * stomp
+		knee_l = -maxf(0.0, -cos(ph + 0.6)) * 0.95 * _stride * stomp
+		knee_r = -maxf(0.0, cos(ph + 0.6)) * 0.95 * _stride * stomp
+		arm_fwd_l = -s * 0.5 * (1.9 if storming else 1.0)
+		arm_fwd_r = s * 0.5 * (1.9 if storming else 1.0)
+		elbow_l = 0.35 * _stride + 0.12 + (0.5 if storming else 0.0)
+		elbow_r = 0.35 * _stride + 0.12 + (0.5 if storming else 0.0)
+		bob = absf(cos(ph)) * 0.035 * _stride * stomp
+		lean = (0.22 if storming else 0.07) * _stride
+		twist = s * (0.2 if storming else 0.12)
 	else:
 		lean = 0.02 + sin(t * 1.7) * 0.012
 		arm_fwd_l = sin(t * 1.3) * 0.03
@@ -379,6 +397,35 @@ func pose(at: Vector3, facing: float, k: float, walking: bool, swing_t: float, p
 			hinge = sin(clampf(absf(turn) / amp, 0.0, 1.0) * PI * 0.5) * 1.25 * (-1.0 if turn < 0.0 else 0.6)
 			twist = turn * 0.3
 			lean -= clampf(turn, 0.0, 2.0) * 0.2
+	elif rage_t > 0.0:
+		# the tantrum: stamping one foot then the other, arms thrown about,
+		# the head shaking; for the first stretch the club is wound up
+		# behind the shoulder, then it is gone (the world view throws it)
+		var f := t * 13.0
+		var st := sin(f * 0.5)
+		leg_fwd_l = maxf(st, 0.0) * 0.8
+		leg_fwd_r = maxf(-st, 0.0) * 0.8
+		knee_l = -maxf(st, 0.0) * 1.5
+		knee_r = -maxf(-st, 0.0) * 1.5
+		bob = absf(st) * 0.09
+		if tossed and rage_t > 2.6:
+			# winding up: right arm back over the shoulder, left arm out
+			arm_fwd_r = -2.6
+			arm_fwd_l = 1.2
+			arm_in = -0.1
+			elbow_r = 1.4
+			elbow_l = 0.3
+			lean = -0.22
+			twist = 0.5
+		else:
+			arm_fwd_l = 1.7 + sin(f) * 1.1
+			arm_fwd_r = 1.7 + sin(f + 2.1) * 1.1
+			arm_in = -0.3
+			elbow_l = 0.9
+			elbow_r = 0.9
+			lean = -0.1 + sin(f * 0.5) * 0.12
+			twist = sin(f * 0.37) * 0.3
+		shake = sin(f * 0.7) * 0.55
 	elif cheer_t > 2.1:
 		# a hole in one: both arms up and jumping
 		arm_fwd_l = 2.9

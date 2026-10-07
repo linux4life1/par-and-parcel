@@ -126,11 +126,18 @@ static func picture(file: String) -> Texture2D:
 
 ## Average colour (linear) of the leaves in each quarter of a 2x2 atlas, so a
 ## shader can even them out and let each plant set its own colour.
+## The foliage atlas is a grid of square cells (tools/make_foliage.py).
+const ATLAS_COLS := 2
+const ATLAS_ROWS := 3
+
+
 static func atlas_means(file: String) -> PackedVector3Array:
 	var key := file + "|means"
 	if _tex.has(key):
 		return _tex[key]
-	var out := PackedVector3Array([Vector3.ONE, Vector3.ONE, Vector3.ONE, Vector3.ONE])
+	var out := PackedVector3Array()
+	for cell in ATLAS_COLS * ATLAS_ROWS:
+		out.append(Vector3.ONE)
 	var src: Texture2D = load(DIR + file)
 	if src != null:
 		var img := src.get_image()
@@ -143,12 +150,12 @@ static func atlas_means(file: String) -> PackedVector3Array:
 		img.convert(Image.FORMAT_RGBAF)
 		while img.get_width() > 32:
 			img.shrink_x2()
-		var half := img.get_width() / 2
-		for cell in 4:
+		var half := img.get_width() / ATLAS_COLS
+		for cell in ATLAS_COLS * ATLAS_ROWS:
 			var sum := Color(0, 0, 0, 0)
 			for y in half:
 				for x in half:
-					sum += img.get_pixel((cell % 2) * half + x, (cell / 2) * half + y)
+					sum += img.get_pixel((cell % ATLAS_COLS) * half + x, (cell / ATLAS_COLS) * half + y)
 			if sum.a > 0.0001:
 				out[cell] = Vector3(sum.r / sum.a, sum.g / sum.a, sum.b / sum.a)
 	_tex[key] = out
