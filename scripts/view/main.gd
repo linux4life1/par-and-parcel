@@ -415,6 +415,7 @@ func _process(delta: float) -> void:
 #   --cheertest=ovation (the gallery hears it every 2.5 s) --cheerhold (arms stay up) --posetest (a sulk and a fist pump)
 #   --ragetest[=toss] (a golfer has a tantrum; the camera follows them off)
 #   --weeds=all|N (the course goes to weeds: a west-to-east gradient, or N random tiles)
+#   --tee=N (centre on hole N's tee box)
 #   --day=N (jump to a day of the year: 0 March 1st, 168 the first of September)
 #   --stories=<id|1> (the Feed panel's Stories tab, starting that story first)
 #   --tutorial (start the guided first round) --demo=tutorial (drive it through every step)
@@ -586,6 +587,12 @@ func _apply_test_args() -> void:
 		var at := sim.course.objects.find(want)
 		if at >= 0:
 			rig.center_on(sim.course.tile_center(at % sim.course.w, at / sim.course.w), float(a.get("zoom", "60")))
+			rig.dist = rig.target_dist
+	if a.has("tee"):
+		# --tee=N centres on hole N's tee box (1-based), at --zoom
+		var hi := clampi(int(a.tee) - 1, 0, sim.course.holes.size() - 1)
+		if hi >= 0 and hi < sim.course.holes.size():
+			rig.center_on(sim.course.holes[hi].tee, float(a.get("zoom", "40")))
 			rig.dist = rig.target_dist
 	if a.has("yaw"):
 		rig.yaw = deg_to_rad(float(a.yaw))

@@ -1982,6 +1982,7 @@ func _test_club_life() -> void:
 	# tantrums and wildlife
 	var gr := sim.visitors.add_group("public", 2, 0.3)
 	var angry := gr.members[0]
+	var partner := gr.members[1]      # taken now: a quitter leaves the group
 	angry.persona = {}
 	angry.satisfaction = 10.0
 	var tantrums_before := int(sim.stats.tantrums)
@@ -1991,7 +1992,7 @@ func _test_club_life() -> void:
 	var before_pos := angry.pos
 	var moved := angry.travel(angry.pos + Vector3(20.0, 0.0, 0.0), 0.5, sim, angry.walk_speed())
 	check(not moved and angry.pos.is_equal_approx(before_pos) and not angry.walking, "nobody storms anywhere until the fit is over")
-	check(angry.tossed or gr.members[1].hit_t > 0.0, "the club flies or a partner gets punched")
+	check(angry.tossed or partner.hit_t > 0.0, "the club flies or a partner gets punched")
 	var calm := sim.visitors.make_golfer("public", 0.4)
 	var normal := calm.walk_speed()
 	calm.storming = true

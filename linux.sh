@@ -11,7 +11,7 @@
 # --novsync; without a sound server the audio driver falls back to a dummy.
 cd "$(dirname "$0")"
 HOST="${LINUX_HOST:-mediaserver}"
-R='cd ~/parandparcel && export PATH=$HOME/opt/godot:$PATH DISPLAY=:21 TMPDIR=$HOME/simgolf-tmp && mkdir -p ~/parandparcel-tmp ~/parandparcel-shots'
+R='cd ~/parandparcel && export PATH=$HOME/opt/godot:$PATH DISPLAY=:21 TMPDIR=$HOME/parandparcel-tmp && mkdir -p ~/parandparcel-tmp ~/parandparcel-shots'
 MODE="${1:-all}"
 
 sync_project() {
