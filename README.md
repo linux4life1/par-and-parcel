@@ -92,6 +92,14 @@ the engine had a checkbox and we are not monsters. But if anyone ever tells
 you Macs are not for gaming, you may point at this repository and make a
 small noise.
 
+## First time
+
+Start Free Play and a coach walks you through it: paint a tee and a green,
+join them, lay out the hole, watch the first golfer pay for it, put up a
+drink stand, hire a greenkeeper, buy a parcel, and then go and play the
+hole yourself. It gets out of your way as soon as you have done each thing,
+and Menu, Tutorial brings it back.
+
 ## Installing
 
 **macOS.** Open the disk image, drag the game into Applications, done. The

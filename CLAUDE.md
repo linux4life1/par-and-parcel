@@ -69,6 +69,12 @@ Issuer ID, which only the owner has.
 
 ## Rules
 
+- **The tutorial watches the game, not the mouse** (`Tutorial._met`): a step
+  is done when the course shows it (tiles painted, a hole added, a golfer
+  paid, a greenkeeper hired). Text lives in `data/tutorial.json`. A new
+  panel the coach points at must be a toolbar key in `hud._tool_buttons`.
+  `--tutorial` starts it in a test run; `--demo=tutorial` drives it.
+
 - **The ball's physics and collisions are the game's own** (`ball.gd`,
   `solids.gd`, `data/solids.json`), deterministic, with no engine rigid
   bodies. The golfer AI simulates shots ahead with the same code. Anything

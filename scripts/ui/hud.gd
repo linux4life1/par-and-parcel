@@ -59,6 +59,7 @@ var play_panel: PanelContainer
 var play_title: Label
 var play_info: Label
 var play_advice: Label
+var tutorial: Tutorial
 var play_msg: Label
 var play_keys: Label
 var meter := UIKit.Meter.new()
@@ -81,6 +82,10 @@ func _ready() -> void:
 	_build_bottom()
 	_build_play_panel()
 	_build_modal()
+	tutorial = Tutorial.new()
+	tutorial.hud = self
+	root.add_child(tutorial)
+	root.move_child(tutorial, modal.get_index())   # above the panels, under the dialogs
 
 
 func bind(s: Sim) -> void:
@@ -101,6 +106,14 @@ func bind(s: Sim) -> void:
 	sim.tourney.finished.connect(_on_tournament_finished)
 	l_name.text = sim.course_name
 	set_overlay(0)
+	tutorial.bind(sim)
+
+
+## The guided first round: a card that says what to do next and moves on
+## when it sees it done.
+func start_tutorial() -> void:
+	close_dock()
+	tutorial.start()
 
 
 # ------------------------------------------------------------ status bar
@@ -680,6 +693,10 @@ func show_menu(again: bool = false) -> void:
 		["New game", func() -> void: show_scenarios()],
 		["Controls", func() -> void: show_controls()],
 		["Display and graphics", func() -> void: show_display()],
+		["Tutorial", func() -> void:
+			hide_modal()
+			Game.paused = _menu_was_paused
+			start_tutorial()],
 		["Quit to desktop", func() -> void: get_tree().quit()],
 	]
 	for it: Array in items:
@@ -793,7 +810,7 @@ func show_display() -> void:
 	modal_card.add_child(UIKit.label("SCREEN", 12, UIKit.ACCENT))
 	_chooser(modal_card, "Mode", ["Full screen", "Window"], 0 if Game.fullscreen else 1, func(i: int) -> void:
 		Game.set_fullscreen(i == 0)
-		show_display(), "Full screen owns the display, so frames go straight to it instead of through the desktop compositor. F11 switches too.")
+		show_display(), "Full screen owns the display, so frames go straight to it instead of through the desktop compositor. F11 switches too. Apple's overlay only shows Direct when the display runs at its default scaling, not a scaled resolution, and in the released build, which may cover the camera housing.")
 	# window size
 	var sizes := Game.window_sizes()
 	var size_names: Array[String] = []

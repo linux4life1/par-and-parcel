@@ -1,0 +1,31 @@
+{
+	"_about": "The guided first round. Each step shows a title and a few sentences, highlights a toolbar button ('target'), and waits for a condition the game can check ('done'): see Tutorial._met for the keys. 'ack' waits for the Got it button. 'skip' lets the step be passed over.",
+	"steps": [
+		{"id": "welcome", "title": "Your land", "done": "ack", "camera": "clubhouse",
+			"text": "The bright square is yours. The dark ground round it is for sale. You have a clubhouse, a pond nobody asked for, and $30,000.\n\nThere are no holes yet. Let's build one. Drag the ground to move the map and scroll to zoom; the Camera bar at the bottom right does the same."},
+		{"id": "build", "title": "Open Build", "done": "build_open", "target": "build",
+			"text": "Everything you put on the ground starts in Build."},
+		{"id": "tee", "title": "A tee box", "done": "tee", "target": "build",
+			"text": "Pick Tee box and the Small brush, then drag a little square on the grass near the clubhouse. Three or four tiles is plenty. Tee boxes are flat and golfers stand on them, so keep them clear of trees."},
+		{"id": "green", "title": "A green", "done": "green", "target": "build",
+			"text": "Now pick Green and paint a patch a good drive away: two hundred to three hundred yards, which is eight to twelve tiles. Give it some size; a Medium brush and a couple of drags. The pin goes in the middle."},
+		{"id": "fairway", "title": "The fairway", "done": "fairway", "target": "build",
+			"text": "Join them with Fairway. It does not have to be straight. A bend around the trees is a better hole than a corridor, and golfers notice."},
+		{"id": "hole", "title": "Lay out the hole", "done": "hole", "target": "holes",
+			"text": "Open Holes and press New hole. Click the tee, then click the green. Par comes from the length. The moment it exists, test golfers play it to find out what kind of hole you have made."},
+		{"id": "paid", "title": "The only price", "done": "paid", "target": "",
+			"text": "Golfers are on their way from the car park. Watch one play your hole. When they walk off the green they pay what the hole was worth to them, and that is the only price in this game. A hole they enjoy pays. A dull one does not.\n\nIf you are impatient, 2x at the top speeds the day up."},
+		{"id": "facility", "title": "Something to drink", "done": "facility", "target": "build",
+			"text": "Thirsty golfers are grumpy golfers, and grumpy golfers pay less. In Build, under On the course, pick a Drink stand and put it near the tee. Facilities pay for themselves and lift the mood of everyone who passes."},
+		{"id": "staff", "title": "A greenkeeper", "done": "staff", "target": "staff",
+			"text": "Grass grows, and weeds come with it. Open Staff and hire a Greenkeeper. Unhappy golfers trample the rough and the weeds spread faster, and weeds make golfers unhappy, so the greenkeeper is the difference between a course and a meadow."},
+		{"id": "land", "title": "More land", "done": "land", "target": "build", "skip": true,
+			"text": "The dark ground is for sale by the parcel. In Build, press Buy land, then click a greyed-out parcel. Each costs a little more than the last. Buy one toward where your second hole will go. Or skip this for now."},
+		{"id": "clubhouse", "title": "The clubhouse rule", "done": "ack", "target": "build",
+			"text": "The starter clubhouse allows three holes. Under Clubhouse in Build there is a checklist for the next step up: money, members, a course rating. Members are golfers who loved their round and came back. That is the whole game: build holes they love, and a club grows round them."},
+		{"id": "play", "title": "Play it yourself", "done": "play", "target": "play", "skip": true,
+			"text": "Press Play a Round and pick your hole. Space starts the marker up the bar, Space again sets the power where you stop it, and Space once more as it comes back to the line. Early hooks, late slices, no second goes. Esc leaves the round."},
+		{"id": "done", "title": "That's the tour", "done": "ack", "target": "goals",
+			"text": "Goals shows what to chase, Feed shows what the golfers are saying, and Menu, Tutorial brings this back any time.\n\nBuild something people would drive an hour for."}
+	]
+}

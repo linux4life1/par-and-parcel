@@ -7,6 +7,7 @@ config_version=5
 [application]
 
 config/name="Par & Parcel"
+config/use_custom_user_dir=true
 config/custom_user_dir_name="ParAndParcel"
 config/icon="res://icon.png"
 config/description="A modern course-builder, management sim and golf game."

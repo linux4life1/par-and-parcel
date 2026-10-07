@@ -251,9 +251,6 @@ func _on_sim_changed() -> void:
 	elif Game.args.has("shot") and not Game.args.has("clockrun"):
 		sim.clock = 15.0
 		sim.clock_rate = 0.0
-	if sim.course.holes.is_empty() and sim.time < 1.0 and not Game.args.has("shot") and not Game.args.has("exit"):
-		# a fresh start on empty land
-		hud.show_toast("This land is yours and there is not a hole on it yet. Open Build to paint a tee and a green, then Holes to lay out the first hole. The Build panel also sells the land round you.", "info", 16.0)
 	if play.active():
 		play.state = PlayMode.S.OFF
 		rig.locked = false
@@ -271,6 +268,13 @@ func _on_sim_changed() -> void:
 	volcano.bind(sim, rig, terrain)
 	tools.bind(sim)
 	hud.bind(sim)
+	var fresh := sim.course.holes.is_empty() and sim.time < 1.0
+	var scripted_run := Game.args.has("shot") or Game.args.has("exit")
+	if Game.args.has("tutorial") or (fresh and not Game.tutorial_done and not scripted_run and str(sim.scenario.def.get("mode", "free")) == "free"):
+		# the first time on empty land, the coach walks through the first hole
+		hud.start_tutorial()
+	elif fresh and not scripted_run:
+		hud.show_toast("This land is yours and there is not a hole on it yet. Open Build to paint a tee and a green, then Holes to lay out the first hole. The Build panel also sells the land round you.", "info", 16.0)
 	desk.bind(sim, rig)
 	_autosave_month = -1
 	sim.match_accepted.connect(func(offer: Dictionary) -> void:
@@ -386,6 +390,7 @@ func _process(delta: float) -> void:
 #   --cheertest=ovation (the gallery hears it every 2.5 s) --cheerhold (arms stay up) --posetest (a sulk and a fist pump)
 #   --day=N (jump to a day of the year: 0 March 1st, 168 the first of September)
 #   --stories=<id|1> (the Feed panel's Stories tab, starting that story first)
+#   --tutorial (start the guided first round) --demo=tutorial (drive it through every step)
 #   --soundcheck --soundlog (see sound_desk.gd)
 #   Without --shot the game opens its normal full-size window; add --exit to quit after --frames.
 #   --play=hole --overlay=0..3 --staff=N --demo=name --perf=1
@@ -849,6 +854,57 @@ func _run_demo(delta: float) -> void:
 					hud.panels._skill_pick = "frugal"
 					hud.rebuild_dock()
 				print("DEMO opened ", names[i])
+		"tutorial":
+			# Do what each step asks, through the game's own calls, and watch
+			# the coach move on. Fast-forward the course where it has to wait.
+			var tut := hud.tutorial
+			if tut == null or not tut.running:
+				if _demo_step == 0:
+					_demo_step = 1
+					print("DEMO tutorial finished: running %s, remembered %s" % [str(tut != null and tut.running), str(Game.tutorial_done)])
+				return
+			var id := str(tut.step().get("id", ""))
+			if id != _demo_mem.get("last", ""):
+				if _demo_mem.has("last"):
+					print("DEMO tutorial: '%s' done, now '%s'" % [str(_demo_mem.last), id])
+				_demo_mem["last"] = id
+				_demo_t = 0.0
+			if _demo_t < 0.5:
+				return
+			# each step's action once; only the wait for a paying golfer repeats
+			if str(_demo_mem.get("acted", "")) == id and id != "paid":
+				if _demo_t > 2.0 and not _demo_mem.has("why_" + id):
+					_demo_mem["why_" + id] = true
+					print("DEMO tutorial: still on '%s' after 2 s; dock '%s', tool '%s', holes %d, tees %d" % [id, hud.dock_name, tools.mode, Game.sim.course.holes.size(), Game.sim.course.terrain.count(Defs.T.TEE)])
+				return
+			_demo_mem["acted"] = id
+			var c := Game.sim.course
+			var cb := c.clubhouse
+			match id:
+				"welcome", "clubhouse":
+					_click_button_named("Got it", 0)
+				"build":
+					_click_button_named("Build", 0)
+				"tee":
+					Game.sim.paint(cb.x + 6, cb.y - 2, 1, Defs.T.TEE)
+				"green":
+					Game.sim.paint(cb.x + 6, cb.y - 44, 2, Defs.T.GREEN)
+				"fairway":
+					for k in range(4, 42, 2):
+						Game.sim.paint(cb.x + 6, cb.y - k, 1, Defs.T.FAIRWAY)
+				"hole":
+					Game.sim.add_hole(c.tile_center(cb.x + 6, cb.y - 2), c.tile_center(cb.x + 6, cb.y - 44))
+				"paid":
+					for i in 600:
+						Game.sim.step(1.0 / 60.0)
+				"facility":
+					Game.sim.place_object(cb.x + 9, cb.y - 2, Defs.O.DRINK_STAND)
+				"staff":
+					Game.sim.hire("greenkeeper")
+				"land", "play":
+					_click_button_named("Skip this step", 0)
+				"done":
+					_click_button_named("Finish", 0)
 		"play":
 			# say what the golfer is told before and after each shot
 			if play.state != _demo_play_state:

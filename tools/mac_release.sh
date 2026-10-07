@@ -58,6 +58,12 @@ if ! plutil -lint -s "$PLIST" >/dev/null 2>&1; then
 	plutil -lint -s "$PLIST" || { echo "Info.plist is still not valid" >&2; exit 1; }
 	echo "== mended the ampersand in Info.plist"
 fi
+# Let full screen cover the whole display, camera housing included. Kept
+# out of that strip, the window cannot be sent straight to the display and
+# macOS composites it; with this key it can, provided the display runs at
+# its default scaling.
+/usr/libexec/PlistBuddy -c "Add :NSPrefersDisplaySafeAreaCompatibilityMode bool false" "$PLIST" 2>/dev/null \
+	|| /usr/libexec/PlistBuddy -c "Set :NSPrefersDisplaySafeAreaCompatibilityMode false" "$PLIST"
 
 # Hardened runtime with the two exceptions a GDScript Godot game needs.
 ENT="$WORK/entitlements.plist"

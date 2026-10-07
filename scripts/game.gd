@@ -33,6 +33,7 @@ var fullscreen := true         # own the whole screen, so frames go straight to 
 var window_size := Vector2i.ZERO   # the window's size in pixels when not full screen; zero fits the screen
 var render_lines := 0          # lines the 3D picture is drawn at: 0 lets the preset decide, -1 is the window's own
 var ui_scale := 1.0            # the interface's size, on top of the window's own scaling
+var tutorial_done := false     # the guided first round has been finished or put away
 var difficulty := 2            # the difficulty slider, 0 relaxed .. 4 brutal; a new game starts on it
 var vol_music := 0.75          # 0 to 1
 var vol_sound := 0.8
@@ -70,6 +71,7 @@ func _ready() -> void:
 		window_size = Vector2i(int(saved.get_value("graphics", "window_w", 0)), int(saved.get_value("graphics", "window_h", 0)))
 		render_lines = int(saved.get_value("graphics", "render_lines", 0))
 		ui_scale = clampf(float(saved.get_value("graphics", "ui_scale", 1.0)), 0.8, 1.1)
+		tutorial_done = bool(saved.get_value("game", "tutorial_done", false))
 		vol_music = clampf(float(saved.get_value("audio", "music", 0.75)), 0.0, 1.0)
 		vol_sound = clampf(float(saved.get_value("audio", "sound", 0.8)), 0.0, 1.0)
 	if args.has("holdrate"):
@@ -243,6 +245,15 @@ func set_render_lines(lines: int) -> void:
 	cfg.set_value("graphics", "render_lines", lines)
 	cfg.save(SETTINGS_PATH)
 	quality_changed.emit()
+
+
+## Remember that the guided first round was finished or put away.
+func set_tutorial_done(done: bool) -> void:
+	tutorial_done = done
+	var cfg := ConfigFile.new()
+	cfg.load(SETTINGS_PATH)
+	cfg.set_value("game", "tutorial_done", done)
+	cfg.save(SETTINGS_PATH)
 
 
 ## How big the interface is drawn, 0.8 to 1.1 of its usual size. Remembered.
