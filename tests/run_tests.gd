@@ -2807,6 +2807,23 @@ func _test_pace() -> void:
 	hd.erase("play_times")
 	var legacy := Sim.from_dict(db, saved, gear)
 	check(legacy.course.holes[0].play_times.is_empty(), "an old save, with no times, has no pace yet")
+	var fresh := sim.visitors.add_group("public", 1, 0.4)
+	check(fresh.hole_i == 0 and fresh.state == Group.S.TO_TEE and not holes[0].line.has(fresh), "a new party starts at the clubhouse, off hole 1's clock")
+	fresh.step(3.0, sim)
+	check(holes[0].line.has(fresh) and absf(fresh.hole_time) < 0.001, "hole 1's clock stays off until the party has joined the tee line")
+	fresh.step(2.0, sim)
+	check(absf(fresh.hole_time - 2.0) < 0.001, "once they are in the line, the walk to the tee counts (%.2f)" % fresh.hole_time)
+	var on_it := sim.visitors.add_group("public", 1, 0.4)
+	on_it.hole_i = 0
+	on_it.state = Group.S.PLAY
+	on_it.hole_time = 9.0
+	var later := sim.visitors.add_group("public", 1, 0.4)
+	later.hole_i = 2
+	later.state = Group.S.PLAY
+	later.hole_time = 4.0
+	sim.remove_hole(0)
+	check(on_it.state == Group.S.TO_TEE and absf(on_it.hole_time) < 0.001, "removing the hole they were on starts the next one from zero")
+	check(later.hole_i == 1 and absf(later.hole_time - 4.0) < 0.001, "a party further along keeps the time on the hole they are still playing")
 
 
 func _test_bar_and_vending() -> void:
