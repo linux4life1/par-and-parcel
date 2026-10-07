@@ -19,6 +19,7 @@ var last_hole := -1        # stop after this hole index, -1 for the whole course
 var has_cart := false      # rented a golf cart: quick on cart paths, easy on the feet
 var stop := {}             # a facility to visit on the way to the next tee
 var story := {}            # what brought these people out together
+var hole_time := 0.0       # sim seconds on the current hole, waiting included
 
 const LINE_FIRST := 8.0    # metres behind the tee where the next party waits
 const LINE_GAP := 6.0      # and between parties further back
@@ -31,6 +32,8 @@ func step(dt: float, sim: Sim) -> void:
 	if members.is_empty():
 		state = S.GONE
 		return
+	if _timing(sim):
+		hole_time += dt
 	match state:
 		S.TO_TEE:
 			_to_tee(dt, sim)
@@ -40,6 +43,20 @@ func step(dt: float, sim: Sim) -> void:
 			_play(dt, sim)
 		S.LEAVING:
 			_leave(dt, sim)
+
+
+## Hole 1 starts once the party is already in the tee line, so the walk from
+## the clubhouse door is not part of it. Later holes count from the moment
+## the party heads there, including the walk from the previous green.
+func _timing(sim: Sim) -> bool:
+	if state == S.QUEUE or state == S.PLAY:
+		return true
+	if state != S.TO_TEE:
+		return false
+	if hole_i != 0:
+		return true
+	var hole := current_hole(sim)
+	return hole != null and hole.line.has(self)
 
 
 func current_hole(sim: Sim) -> Hole:
@@ -423,6 +440,8 @@ static func drop_spot(course: Course, b: Ball) -> Vector3:
 
 
 func _finish_hole(sim: Sim, hole: Hole) -> void:
+	hole.note_time(hole_time)
+	hole_time = 0.0
 	for m in members:
 		sim.visitors.on_hole_done(m, hole, hole_i, self)
 	sim.visitors.story_tick(self, hole_i)

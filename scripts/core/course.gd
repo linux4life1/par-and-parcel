@@ -499,6 +499,47 @@ func open_count() -> int:
 	return n
 
 
+## Sim seconds a round takes, adding the recent average of each open hole
+## that has been timed. Drafts are left out.
+func round_time() -> float:
+	var s := 0.0
+	for hole in holes:
+		if hole.open and not hole.play_times.is_empty():
+			s += hole.average_time()
+	return s
+
+
+## Every open hole has been timed at least once.
+func times_complete() -> bool:
+	if open_count() == 0:
+		return false
+	for hole in holes:
+		if hole.open and hole.play_times.is_empty():
+			return false
+	return true
+
+
+## The open hole that is clearly the slowest, or -1 when nothing stands out.
+func bottleneck() -> int:
+	var best := -1
+	var second := -1.0
+	var top := -1.0
+	for i in holes.size():
+		var hole: Hole = holes[i]
+		if not hole.open or hole.play_times.is_empty():
+			continue
+		var a := hole.average_time()
+		if a > top:
+			second = top
+			top = a
+			best = i
+		elif a > second:
+			second = a
+	if best < 0 or second < 0.0 or top < second * 1.15:
+		return -1
+	return best
+
+
 ## Open or close a hole and tell the views, so the draft markers update.
 func set_open(hole: Hole, on: bool) -> void:
 	if hole.open == on:

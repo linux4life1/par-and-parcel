@@ -1168,6 +1168,8 @@ func on_hole_removed(i: int) -> void:
 			continue
 		if gr.hole_i == i:
 			gr.turn = null
+			# The time already spent was on the hole that just went away.
+			gr.hole_time = 0.0
 			for m in gr.members:
 				untrack(m.ball)
 				m.phase = Golfer.P.IDLE
