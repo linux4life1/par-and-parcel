@@ -37,7 +37,7 @@ check. **Basic** works but is thin. **Not yet** is planned.
 | Draft holes | Built | A hole laid out by hand starts closed. Test plays it with the lab golfers and marks where their tee shots stopped. Open lets the public on. Generated holes, and saves that never stored the flag, stay open. |
 | Undo | Not yet | Bulldoze and repaint instead. No refunds. |
 | Waste areas | Built | Sandy scrub, cheaper to paint than a bunker and not raked. The price, the care and how much trouble it is to land in are in `data/ground.json`. The lie, in `data/lies.json`, sits between the rough and a bunker. It is not a hazard: no penalty stroke, and it does not make the hole a water hole. |
-| Streams | Built | A one-tile line, drawn by dragging. It follows the ground downhill and will not run uphill, and it is not flattened into a pond. A ball in it is a penalty, the same as water, and drops nearby. The shot picker already prices it as water, so golfers carry it. A bridge is the crossing for carts and walkers. Colours are in each biome's palette. |
+| Streams | Built | A one-tile line, drawn by dragging. It follows the ground downhill and will not run uphill, and it is not flattened into a pond. The drag remembers the last tile it accepted, so a tile refused for being higher is not painted by the next move. A tee cannot be placed on it. A ball in it is a penalty, the same as water, and drops nearby; the golfer calls it a stream. On a volcano it is still water: drawn as water, it splashes, a ball can skip it, and the lot beside it gets the water view. The shot picker already prices it as water, so golfers carry it. A bridge is the crossing for carts and walkers. Colours are in each biome's palette. |
 | Pot bunkers | Not yet | |
 
 ### Run the club

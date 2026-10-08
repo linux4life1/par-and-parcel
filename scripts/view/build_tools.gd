@@ -280,6 +280,8 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		_down = true
 		_last_tile = Vector2i(-999, -999)
+		if mode == "terrain" and terrain_type == Defs.T.STREAM:
+			sim.stream_drag_begin()
 		_tick = 0.0
 		var p: Vector3 = hover
 		_level = p.y
@@ -468,8 +470,9 @@ func _click_hole(p: Vector3) -> void:
 	var course := sim.course
 	var tile := course.tile_of(p.x, p.z)
 	if _tee == null:
-		if course.terrain_at(p.x, p.z) == Defs.T.WATER:
-			sim.toast.emit("A tee can't go in the %s." % sim.terrain_name(Defs.T.WATER).to_lower(), "bad")
+		var ground := course.terrain_at(p.x, p.z)
+		if Defs.is_liquid(ground):
+			sim.toast.emit("A tee can't go in the %s." % sim.terrain_name(ground).to_lower(), "bad")
 			return
 		if not course.can_build(tile.x, tile.y):
 			_warn("You can't put a tee there.")

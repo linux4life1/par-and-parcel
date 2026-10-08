@@ -946,6 +946,7 @@ func touch_landmark(g: Golfer) -> bool:
 ## Paint terrain with a round brush. Returns tiles changed, or -1 if broke.
 func paint(tx: int, ty: int, radius: int, t: int) -> int:
 	if t == Defs.T.STREAM:
+		stream_drag_begin()
 		var one: Array[Vector2i] = [Vector2i(tx, ty)]
 		return paint_stream(one)
 	var unit := float(terrain_price(t))
@@ -963,13 +964,31 @@ func paint(tx: int, ty: int, radius: int, t: int) -> int:
 	return n
 
 
-## Draw a stream along a drag. One tile wide, downhill only. The price is
-## the stream's price in the data, once per tile that actually changes.
+## The height of the last tile accepted on the stream drag in progress.
+var _stream_have := false
+var _stream_h := 0.0
+
+
+## A new drag forgets the last stream, so the first tile is always taken.
+func stream_drag_begin() -> void:
+	_stream_have = false
+
+
+## Draw a stream along a drag. One tile wide, downhill only. Each call is
+## one move of the mouse, and it is judged against the last tile this drag
+## accepted, including the first tile of the new line. The price is the
+## stream's price in the data, once per tile that actually changes.
 func paint_stream(tiles: Array[Vector2i]) -> int:
 	var unit := float(terrain_price(Defs.T.STREAM))
 	if not economy.can_afford(unit):
 		return -1
-	var n := course.lay_stream(tiles)
+	var follow := 1.0e20
+	if _stream_have:
+		follow = _stream_h
+	var n := course.lay_stream(tiles, follow)
+	if course.stream_took:
+		_stream_have = true
+		_stream_h = course.stream_held
 	if n > 0:
 		economy.spend("construction", n * unit + course.clear_cost)
 	return n

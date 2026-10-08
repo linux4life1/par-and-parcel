@@ -188,16 +188,8 @@ vec3 terrain_color(int t, vec2 wp, float n, vec3 fine, float grain, out float ro
 		vec3 bush = pal[12] * vec3(0.62, 0.78, 0.48);
 		return mix(sand, bush, tuft * 0.65) * fine;
 	}
-	if (t == 13) {          // a stream: the same liquid as the hazard, in a narrow line
+	if (t == 13) {          // a stream is water in every biome, including a volcano
 		grass = 0.0;
-		if (lava > 0.5) {
-			rough = 0.75;
-			float flow = vnoise(wp * 0.35 + vec2(TIME * 0.08, TIME * 0.05));
-			float crust = vnoise(wp * 0.7 - vec2(TIME * 0.04, 0.0)) * 0.6 + vnoise(wp * 1.6 + flow * 2.5) * 0.4;
-			float hot = smoothstep(0.38, 0.72, crust + 0.2 * sin(TIME * 0.7 + flow * 6.0) + heat * 0.25);
-			emit = hot;
-			return mix(pal[13] * 0.35, pal[14], hot);
-		}
 		rough = 0.05;
 		return mix(pal[13], pal[14], wave(wp) * 0.55);
 	}
@@ -277,11 +269,15 @@ void fragment() {
 	float w_green = (wt[2] + wt[11]) / total;
 	float w_bunker = wt[4] / total;
 	float w_water = (wt[5] + wt[13]) / total;
-	float liquid = cov[5] + cov[13];
+	float w_hazard = wt[5] / total;
+	float w_brook = wt[13] / total;
 	float wet = data.x;
 	float health = data.y;
 	float weeds = data.z;
 	bool is_lava = lava > 0.5;
+	// A stream stays water on a volcano. Only the hazard tile is lava.
+	float wet_liquid = (is_lava ? 0.0 : cov[5]) + cov[13];
+	float wet_w = (is_lava ? 0.0 : w_hazard) + w_brook;
 
 	// --- edges that give the ground some depth ---
 	// a collar of slightly longer grass round every green
@@ -292,22 +288,20 @@ void fragment() {
 	float lip_out = (1.0 - w_bunker) * smoothstep(0.18, 0.38, cov[4]);
 	col *= 1.0 - 0.30 * lip_in;
 	col = mix(col, col * 1.12 + vec3(0.01), lip_out * 0.6);
-	// water: shallow at the shore, deep in the middle, with a line of foam
-	if (liquid < 0.01) {
-		// no hazard anywhere near: nothing to do
-	} else if (!is_lava) {
-		float depth = smoothstep(0.42, 0.95, liquid);
-		col = mix(col, col * mix(vec3(1.25, 1.3, 1.15), vec3(0.62, 0.7, 0.85), depth), w_water);
-		float shore = w_water * (1.0 - smoothstep(0.40, 0.50, liquid));
+	// water: shallow at the shore, deep in the middle, with a line of foam.
+	// On a volcano this is the stream. The lava lake is handled below.
+	if (wet_liquid > 0.01) {
+		float depth = smoothstep(0.42, 0.95, wet_liquid);
+		col = mix(col, col * mix(vec3(1.25, 1.3, 1.15), vec3(0.62, 0.7, 0.85), depth), wet_w);
+		float shore = wet_w * (1.0 - smoothstep(0.40, 0.50, wet_liquid));
 		float foam = shore * smoothstep(0.35, 0.75, vnoise(wp * 2.2 + vec2(TIME * 0.4, 0.0)) + 0.25 * sin(TIME * 1.3 + wp.x * 0.7));
 		col = mix(col, vec3(0.85, 0.9, 0.92), foam * 0.7);
 		rough = mix(rough, 0.5, foam);
-		// damp sand and mud just above the waterline
-		float bank = (1.0 - w_water) * smoothstep(0.16, 0.36, liquid);
+		float bank = (1.0 - wet_w) * smoothstep(0.16, 0.36, wet_liquid);
 		col = mix(col, col * vec3(0.62, 0.58, 0.5), bank * 0.6);
-	} else {
-		// scorched, glowing ground at the edge of the lava
-		float bank = (1.0 - w_water) * smoothstep(0.12, 0.36, liquid);
+	}
+	if (is_lava && cov[5] > 0.01) {
+		float bank = (1.0 - w_hazard) * smoothstep(0.12, 0.36, cov[5]);
 		col = mix(col, vec3(0.05, 0.03, 0.03), bank * 0.75);
 		emit += bank * 0.25;
 	}
@@ -458,16 +452,16 @@ void fragment() {
 	vec3 lumpy = normalize(n_w + vec3(bump.x, 0.0, -bump.y) * (1.0 - w_water));
 	NORMAL = normalize((VIEW_MATRIX * vec4(lumpy, 0.0)).xyz);
 	// ripples catch the light on open water
-	if (!is_lava && w_water > 0.5) {
+	if (wet_w > 0.5) {
 		float e = 0.35;
 		float hx = wave(wp + vec2(e, 0.0)) - wave(wp - vec2(e, 0.0));
 		float hz = wave(wp + vec2(0.0, e)) - wave(wp - vec2(0.0, e));
 		vec3 ripple = normalize(vec3(-hx * 0.9, 1.0, -hz * 0.9));
-		NORMAL = normalize(mix(NORMAL, (VIEW_MATRIX * vec4(ripple, 0.0)).xyz, w_water));
+		NORMAL = normalize(mix(NORMAL, (VIEW_MATRIX * vec4(ripple, 0.0)).xyz, wet_w));
 	}
 	col *= mix(vec3(1.0), season_grass, clamp(grass, 0.0, 1.0) * (1.0 - w_water));
 	ALBEDO = col;
 	ROUGHNESS = rough;
-	SPECULAR = mix(0.3, 0.6, w_water * (1.0 - lava));
+	SPECULAR = mix(0.3, 0.6, wet_w);
 	EMISSION = pal[14] * emit * (2.2 + heat * 2.0) * (overlay == 0 ? 1.0 : 0.0);
 }

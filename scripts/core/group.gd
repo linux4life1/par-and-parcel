@@ -407,7 +407,7 @@ func _resolve(sim: Sim, g: Golfer, hole: Hole) -> void:
 			var sunk := sim.course.terrain_at(b.pos.x, b.pos.z)
 			if sunk == Defs.T.STREAM:
 				g.feel(-2.5, "My ball is in the stream on hole %d." % n, "water")
-				sim.feed.say("water_ball", g, {"hole": n})
+				sim.feed.say("stream_ball", g, {"hole": n})
 			elif sim.is_lava():
 				g.feel(-2.5, "My ball melted in the lava on hole %d." % n, "water")
 				sim.feed.say("lava_ball", g, {"hole": n})

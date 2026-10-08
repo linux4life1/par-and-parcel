@@ -896,6 +896,37 @@ func _test_sounds() -> void:
 		hot.visitors._step_balls(1.0 / 60.0)
 	check(hot.is_lava() and int(said.get("sizzle", 0)) >= 1 and int(said.get("splash", 0)) == 0,
 		"a ball in the lava sizzles (%d sizzles, %d splashes, ball finished %s)" % [int(said.get("sizzle", 0)), int(said.get("splash", 0)), str(drop.pos)])
+	var brook_i := -1
+	for bi in hot.course.terrain.size():
+		if hot.course.locked[bi] == 0 and hot.course.hot[bi] == 0 and hot.course.terrain[bi] != Defs.T.WATER:
+			brook_i = bi
+			break
+	check(brook_i >= 0, "the volcano has a tile that can hold a stream")
+	if brook_i >= 0:
+		hot.course.terrain[brook_i] = Defs.T.STREAM
+		var brook_said := {}
+		hot.sound.connect(func(id: String, _pos: Vector3, _power: float) -> void: brook_said[id] = int(brook_said.get(id, 0)) + 1)
+		var brook_at := hot.course.tile_center(brook_i % hot.course.w, int(brook_i / hot.course.w))
+		var brook_ball := Ball.new()
+		brook_ball.pos = Vector3(brook_at.x - 0.6, hot.course.height_at(brook_at.x, brook_at.z) + 14.0, brook_at.z)
+		brook_ball.launch(2.0, 0.0, deg_to_rad(50.0), 0.0, 0.0, 0.0)
+		brook_ball.lava = true
+		hot.visitors.track_ball(brook_ball, hot.course.holes[0])
+		for _bi in 900:
+			hot.visitors._step_balls(1.0 / 60.0)
+		check(int(brook_said.get("splash", 0)) >= 1 and int(brook_said.get("sizzle", 0)) == 0, "a ball in a volcanic stream splashes, it does not sizzle")
+		var heat := Ball.new()
+		heat.lava = true
+		var over_stream := heat._air(hot.course, brook_i, Vector3.ZERO)
+		var over_lava := heat._air(hot.course, pool, Vector3.ZERO)
+		check(over_stream.y < 0.01 and over_lava.y > 0.5, "a stream on the volcano is not hot, and the lava is")
+		hot._lot_lava = true
+		var stream_add := hot._lot_cell(brook_i)
+		hot.course.terrain[brook_i] = Defs.T.WATER
+		var lava_add := hot._lot_cell(brook_i)
+		hot.course.terrain[brook_i] = Defs.T.ROUGH
+		var rough_add := hot._lot_cell(brook_i)
+		check(is_equal_approx(stream_add, rough_add + 22.0) and is_equal_approx(lava_add, rough_add), "a lot by a volcanic stream gets the water view, and a lot by the lava does not")
 	# materials: every one a ball can hit has a sound of its own
 	var mats := []
 	for m: String in Solids.data().materials:
@@ -1282,6 +1313,20 @@ func _test_biomes() -> void:
 		skip.step(1.0 / 60.0, lane, Vector3.ZERO, Vector3.ZERO, false)
 		n += 1
 	check(skip.state == Ball.S.WATER, "nothing skips across lava")
+	var brook_lane := _lane()
+	for bx in range(8, 12):
+		for by in 24:
+			brook_lane.terrain[by * 160 + bx] = Defs.T.STREAM
+	var hop := Ball.new()
+	hop.set_def(db.ball("skipper"))
+	hop.lava = true
+	hop.place(Vector3(10.0, 0.0, 60.0))
+	hop.launch(40.0, 0.0, deg_to_rad(6.0), 0.02, 0.0, 0.2)
+	var hopped := 0
+	while hop.moving() and hopped < 4000:
+		hop.step(1.0 / 60.0, brook_lane, Vector3.ZERO, Vector3.ZERO, false)
+		hopped += 1
+	check(hop.state != Ball.S.WATER and hop.pos.x > 60.0, "a ball can skip a stream on the volcano (finished at %.0f, %s)" % [hop.pos.x, str(hop.state)])
 
 
 func _test_land() -> void:
@@ -5109,6 +5154,8 @@ func _test_waste_stream() -> void:
 	var sim := _sim("sandbox", 6)
 	check(sim.terrain_price(Defs.T.WASTE) == int(waste_row["cost"]) and sim.terrain_price(Defs.T.WASTE) < int(bunker_row["cost"]), "a waste area costs what the data says, and less than a bunker")
 	check(sim.terrain_price(Defs.T.STREAM) == int(stream_row["cost"]) and sim.terrain_price(Defs.T.STREAM) < Defs.T_COST[Defs.T.WATER], "a stream costs what the data says, and less than a pond")
+	check(Defs.T_COST[Defs.T.WASTE] == int(waste_row["cost"]) and Defs.T_COST[Defs.T.STREAM] == int(stream_row["cost"]) and Defs.T_COST[Defs.T.BUNKER] == int(bunker_row["cost"]), "the price fallbacks in the terrain table match the data")
+	check(is_equal_approx(ShotAI.WASTE_TROUBLE_FALLBACK, float(waste_row["trouble"])), "the waste trouble fallback matches the data")
 	check(is_zero_approx(sim.terrain_care(Defs.T.WASTE)) and is_zero_approx(Defs.T_CARE[Defs.T.WASTE]) and is_zero_approx(Defs.T_WEAR[Defs.T.WASTE]), "a waste area is not raked and does not wear")
 	sim.economy.money = 5000.0
 	var purse := sim.economy.money
@@ -5183,6 +5230,67 @@ func _test_waste_stream() -> void:
 	for x in range(2, 8):
 		across.append(Vector2i(x, 1))
 	check(level.lay_stream(across) == across.size(), "a stream also runs across level ground")
+	sim.economy.money = 8000.0
+	var drag := sim.course
+	var row := 70
+	for vx in range(70, 76):
+		drag.heights[row * (drag.w + 1) + vx] = float(vx - 70) * 2.0
+		drag.heights[(row + 1) * (drag.w + 1) + vx] = float(vx - 70) * 2.0
+	var climb: Array[Vector2i] = []
+	for x in range(70, 74):
+		climb.append(Vector2i(x, row))
+	check(drag.tile_center(71, row).y > drag.tile_center(70, row).y + 0.5, "the next tile of the drag is uphill")
+	sim.stream_drag_begin()
+	for step_i in climb.size():
+		var seg: Array[Vector2i] = []
+		if step_i == 0:
+			seg.append(climb[step_i])
+		else:
+			seg = Course.tile_line(climb[step_i - 1], climb[step_i])
+		sim.paint_stream(seg)
+	var uphill_ok := drag.terrain[row * drag.w + 70] == Defs.T.STREAM
+	for x in range(71, 74):
+		if drag.terrain[row * drag.w + x] == Defs.T.STREAM:
+			uphill_ok = false
+	check(uphill_ok, "dragging uphill, one move at a time, paints only the first tile")
+	var low := row + 2
+	for vx in range(70, 76):
+		drag.heights[low * (drag.w + 1) + vx] = float(75 - vx) * 2.0
+		drag.heights[(low + 1) * (drag.w + 1) + vx] = float(75 - vx) * 2.0
+	var fall: Array[Vector2i] = []
+	for x in range(70, 74):
+		fall.append(Vector2i(x, low))
+	check(drag.tile_center(71, low).y < drag.tile_center(70, low).y - 0.5, "the next tile of the drag is downhill")
+	sim.stream_drag_begin()
+	for step_down in fall.size():
+		var seg_down: Array[Vector2i] = []
+		if step_down == 0:
+			seg_down.append(fall[step_down])
+		else:
+			seg_down = Course.tile_line(fall[step_down - 1], fall[step_down])
+		sim.paint_stream(seg_down)
+	var downhill_ok := true
+	for tile in fall:
+		if drag.terrain[tile.y * drag.w + tile.x] != Defs.T.STREAM:
+			downhill_ok = false
+	check(downhill_ok, "dragging downhill, one move at a time, paints every tile")
+	var dip := row + 4
+	for vy in [dip, dip + 1]:
+		drag.heights[vy * (drag.w + 1) + 70] = 4.0
+		drag.heights[vy * (drag.w + 1) + 71] = 4.0
+		drag.heights[vy * (drag.w + 1) + 72] = 12.0
+		drag.heights[vy * (drag.w + 1) + 73] = -8.0
+	var kink: Array[Vector2i] = [Vector2i(70, dip), Vector2i(71, dip), Vector2i(72, dip)]
+	check(drag.tile_center(71, dip).y > drag.tile_center(70, dip).y + 0.5 and drag.tile_center(72, dip).y < drag.tile_center(70, dip).y - 0.5, "after a rise the drag drops below the last accepted tile")
+	sim.stream_drag_begin()
+	for step_dip in kink.size():
+		var seg_dip: Array[Vector2i] = []
+		if step_dip == 0:
+			seg_dip.append(kink[step_dip])
+		else:
+			seg_dip = Course.tile_line(kink[step_dip - 1], kink[step_dip])
+		sim.paint_stream(seg_dip)
+	check(drag.terrain[dip * drag.w + 70] == Defs.T.STREAM and drag.terrain[dip * drag.w + 71] != Defs.T.STREAM and drag.terrain[dip * drag.w + 72] == Defs.T.STREAM, "a tile refused for being higher stays refused, and a lower tile after it is painted")
 	var by := 48
 	for ty in range(by - 1, by + 2):
 		for tx in range(36, 48):
@@ -5207,6 +5315,10 @@ func _test_waste_stream() -> void:
 	played.pin = course.tile_center(46, by)
 	party._resolve(sim, player, played)
 	check(player.strokes == 2, "a ball in a stream adds a penalty stroke")
+	check(player.thoughts.size() > 0 and str(player.thoughts[-1]["text"]).find("stream") >= 0, "the golfer calls it a stream")
+	var stream_post: Dictionary = sim.feed.posts[-1]
+	var stream_text := str(stream_post.get("text", ""))
+	check(str(stream_post.get("kind", "")) == "stream_ball" and stream_text.find("stream") >= 0 and stream_text.find("pond") < 0, "the feed uses the stream lines, not the pond lines")
 	check(course.terrain_at(player.ball.pos.x, player.ball.pos.z) != Defs.T.STREAM, "the drop is back on dry land")
 	check(player.ball.pos.distance_to(tee) < 25.0, "and the drop is nearby")
 	var a := course.tile_center(40, 40)
@@ -5271,4 +5383,17 @@ func _test_waste_stream() -> void:
 		if round.course.terrain[14 * round.course.w + x] != Defs.T.STREAM:
 			kept = false
 	check(kept, "a stream survives a save")
+	var tee_box := _sim("sandbox", 11)
+	tee_box.economy.money = 5000.0
+	check(tee_box.paint(20, 20, 0, Defs.T.STREAM) == 1, "a stream tile for the tee")
+	check(tee_box.paint(22, 20, 0, Defs.T.WATER) == 1, "a pond tile for the tee")
+	var tee_tool := BuildTools.new()
+	tee_tool.sim = tee_box
+	var tee_notes: Array[String] = []
+	tee_box.toast.connect(func(text: String, _kind: String) -> void: tee_notes.append(text))
+	tee_tool._click_hole(tee_box.course.tile_center(20, 20))
+	tee_tool._click_hole(tee_box.course.tile_center(22, 20))
+	check(tee_tool._tee == null and tee_box.course.terrain_at(tee_box.course.tile_center(20, 20).x, tee_box.course.tile_center(20, 20).z) == Defs.T.STREAM, "a tee cannot be placed on a stream")
+	check(tee_notes.size() == 2 and tee_notes[0].find("stream") >= 0 and tee_notes[1].find("water") >= 0, "the refusal names the stream and the water")
+	tee_tool.free()
 	check(round.course.holes.size() == pars.size(), "saving the new ground does not drop the old holes")

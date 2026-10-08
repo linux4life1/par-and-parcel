@@ -122,13 +122,18 @@ static func _spot_cost(sim: Sim, hole: Hole, pt: Vector2, care: float = 1.0) -> 
 	return f
 
 
+## Used only when data/ground.json has no trouble number. The test checks
+## that it still matches the file.
+const WASTE_TROUBLE_FALLBACK := 48.0
+
+
 ## What a waste area adds to a landing, from data/ground.json. It sits
 ## between the rough and a bunker, and it is not priced as water.
 static func _waste_trouble(sim: Sim) -> float:
 	var row: Dictionary = sim.db.ground.get("waste", {})
 	if row.has("trouble"):
 		return float(row["trouble"])
-	return 48.0
+	return WASTE_TROUBLE_FALLBACK
 
 
 ## Penalty for trees standing in the way. A low ball pays the full price;

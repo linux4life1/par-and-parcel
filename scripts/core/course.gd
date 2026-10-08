@@ -423,15 +423,23 @@ static func tile_line(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
 	return out
 
 
+## Height of the last tile this call accepted, and whether it accepted any.
+## A drag passes the previous call's height back in as `follow`.
+var stream_took := false
+var stream_held := 0.0
+
+
 ## Paint a one-tile stream along these tiles, in the order they were dragged.
-## The first tile is always taken. A later tile is taken only when its centre
-## is not higher than the last tile that was taken, so the line runs downhill
-## or flat and refuses to climb. The ground is not flattened.
-func lay_stream(tiles: Array[Vector2i]) -> int:
+## `follow` is the height of the last tile already accepted on this drag, or
+## a huge number when the drag has not accepted one yet. Every tile, including
+## the first, has to be no higher than that. The ground is not flattened.
+func lay_stream(tiles: Array[Vector2i], follow: float = 1.0e20) -> int:
 	var n := 0
 	clear_cost = 0.0
-	var have := false
-	var prev_h := 0.0
+	var have := follow < 1.0e19
+	var prev_h := follow
+	stream_took = false
+	stream_held = follow
 	var minx := 100000
 	var miny := 100000
 	var maxx := -1
@@ -453,6 +461,8 @@ func lay_stream(tiles: Array[Vector2i]) -> int:
 			n += 1
 		have = true
 		prev_h = h
+		stream_took = true
+		stream_held = h
 		minx = mini(minx, tile.x)
 		miny = mini(miny, tile.y)
 		maxx = maxi(maxx, tile.x)
