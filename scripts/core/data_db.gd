@@ -34,6 +34,7 @@ var litter: Dictionary = {}     # how litter gathers, and what a bin or a porter
 var slope: Dictionary = {}      # how the ground is read, and how the marks are drawn
 var debt: Dictionary = {}       # how a balance below zero meets a new arrival
 var preview: Dictionary = {}    # the par and yardage label while a hole is laid out
+var ground: Dictionary = {}     # waste and stream prices, and the waste lie's trouble
 var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
 var feed: Dictionary = {}
@@ -60,6 +61,8 @@ func _init() -> void:
 	sounds = _load("sounds")
 	music = _load("music")
 	lies = _load("lies")
+	Lie.bind(lies)
+	ground = _load("ground")
 	difficulty = _load("difficulty")
 	clubhouse = _load("clubhouse")
 	tutorial = _load("tutorial")

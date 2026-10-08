@@ -75,6 +75,7 @@ func _ready() -> void:
 	_test_slope()
 	_test_debt_welcome()
 	_test_close_structure()
+	_test_waste_stream()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -4233,7 +4234,8 @@ func _test_easy_and_album() -> void:
 func _test_firm() -> void:
 	print("-- firm fairway and a fast green")
 	var n := Defs.T_NAMES.size()
-	check(Defs.T.FIRM == n - 2 and Defs.T.FAST_GREEN == n - 1, "the firm fairway and the fast green sit at the end of the terrain list")
+	check(Defs.T.FIRM == 10 and Defs.T.FAST_GREEN == 11, "a firm fairway is terrain 10 and a fast green is terrain 11, so a save from before waste and streams still reads them")
+	check(Defs.T.WASTE > Defs.T.FAST_GREEN and Defs.T.STREAM > Defs.T.FAST_GREEN, "waste and streams were added after the firm fairway and the fast green")
 	var wide := true
 	var cols: Array[int] = [
 		Defs.T_COST.size(), Defs.T_CLEAR.size(), Defs.T_DECEL.size(), Defs.T_BOUNCE.size(),
@@ -5042,3 +5044,231 @@ func _test_storm_resign() -> void:
 	mem.on_depart(last)
 	check(not mem.roster.has(card), "the third strike resigns them")
 	check(Members.strike_limit(0) == 1 and Members.strike_limit(-3) == 1, "a resign strike count below 1 is raised to 1")
+
+
+func _lie_terms(t: int) -> Dictionary:
+	var table: Dictionary = db.lies.get("lies", {})
+	var row: Dictionary = table.get(Defs.T_KEYS[t], {})
+	return {
+		"spin": float(row.get("spin", 1.0)),
+		"mishit": float(row.get("mishit", 1.0)),
+		"power": Lie.terrain_power(t),
+		"spread": Lie.terrain_spread(t),
+	}
+
+
+func _lie_penalty(t: int) -> float:
+	var terms := _lie_terms(t)
+	var spin := float(terms["spin"])
+	var mishit := float(terms["mishit"])
+	var power := float(terms["power"])
+	var spread := float(terms["spread"])
+	return (1.0 - spin) + (mishit - 1.0) + (1.0 - power) + (spread - 1.0)
+
+
+## True when the walked line steps on a stream tile that has no bridge.
+func _through_stream(course: Course, from: Vector3, route: PackedVector2Array) -> bool:
+	var pts: Array[Vector2] = [Vector2(from.x, from.z)]
+	for wp in route:
+		pts.append(wp)
+	for i in range(pts.size() - 1):
+		var a := pts[i]
+		var b := pts[i + 1]
+		var steps := int(a.distance_to(b) / 2.0) + 1
+		for s in steps + 1:
+			var at := a.lerp(b, float(s) / float(steps))
+			if course.terrain_at(at.x, at.y) != Defs.T.STREAM:
+				continue
+			var tile := course.tile_of(at.x, at.y)
+			if course.objects[tile.y * course.w + tile.x] != Defs.O.BRIDGE:
+				return true
+	return false
+
+
+func _test_waste_stream() -> void:
+	print("-- waste areas and streams")
+	var rough := _lie_terms(Defs.T.ROUGH)
+	var waste := _lie_terms(Defs.T.WASTE)
+	var bunker := _lie_terms(Defs.T.BUNKER)
+	check(float(bunker["power"]) < float(waste["power"]) and float(waste["power"]) < float(rough["power"]), "a waste lie takes less off the strike than sand and more than the rough")
+	check(float(rough["spread"]) < float(waste["spread"]) and float(waste["spread"]) < float(bunker["spread"]), "a waste lie sprays more than the rough and less than a bunker")
+	check(float(rough["mishit"]) < float(waste["mishit"]) and float(waste["mishit"]) < float(bunker["mishit"]), "a clean strike from waste is harder than the rough and easier than sand")
+	check(float(rough["spin"]) < float(waste["spin"]) and float(waste["spin"]) < float(bunker["spin"]), "waste keeps more spin than the rough and less than a bunker")
+	var rough_p := _lie_penalty(Defs.T.ROUGH)
+	var waste_p := _lie_penalty(Defs.T.WASTE)
+	var bunker_p := _lie_penalty(Defs.T.BUNKER)
+	print("   lie penalty rough %.2f, waste %.2f, bunker %.2f" % [rough_p, waste_p, bunker_p])
+	check(rough_p < waste_p and waste_p < bunker_p, "the waste penalty sits between the rough and a bunker")
+	check(is_equal_approx(Lie.terrain_power(Defs.T.WASTE), Defs.T_LIE_POWER[Defs.T.WASTE]), "the waste power in the data matches the terrain table")
+	check(is_equal_approx(Lie.terrain_spread(Defs.T.WASTE), Defs.T_LIE_SPREAD[Defs.T.WASTE]), "the waste spread in the data matches the terrain table")
+	var golfer := Golfer.new()
+	check(golfer.lie_power(Defs.T.BUNKER) < golfer.lie_power(Defs.T.WASTE) and golfer.lie_power(Defs.T.WASTE) < golfer.lie_power(Defs.T.ROUGH), "the same golfer gets less out of sand than waste, and less out of waste than the rough")
+	var waste_row: Dictionary = db.ground.get("waste", {})
+	var stream_row: Dictionary = db.ground.get("stream", {})
+	var bunker_row: Dictionary = db.ground.get("bunker", {})
+	var sim := _sim("sandbox", 6)
+	check(sim.terrain_price(Defs.T.WASTE) == int(waste_row["cost"]) and sim.terrain_price(Defs.T.WASTE) < int(bunker_row["cost"]), "a waste area costs what the data says, and less than a bunker")
+	check(sim.terrain_price(Defs.T.STREAM) == int(stream_row["cost"]) and sim.terrain_price(Defs.T.STREAM) < Defs.T_COST[Defs.T.WATER], "a stream costs what the data says, and less than a pond")
+	check(is_zero_approx(sim.terrain_care(Defs.T.WASTE)) and is_zero_approx(Defs.T_CARE[Defs.T.WASTE]) and is_zero_approx(Defs.T_WEAR[Defs.T.WASTE]), "a waste area is not raked and does not wear")
+	sim.economy.money = 5000.0
+	var purse := sim.economy.money
+	check(sim.paint(8, 8, 0, Defs.T.WASTE) == 1, "one waste tile paints")
+	check(is_equal_approx(purse - sim.economy.money, float(sim.terrain_price(Defs.T.WASTE))), "painting it charges the data price")
+	var course := sim.course
+	var y := 30
+	for tx in range(20, 40):
+		course.set_terrain(tx, y, Defs.T.FAIRWAY)
+	course.set_terrain(35, y, Defs.T.WASTE)
+	var hole := course.add_hole(course.tile_center(22, y), course.tile_center(36, y))
+	check(not hole.touches_water(course), "a waste area beside the pin is not a water hazard")
+	var spot := course.tile_center(35, y)
+	var at := Vector2(spot.x, spot.z)
+	var i := y * course.w + 35
+	course.terrain[i] = Defs.T.WASTE
+	course.revision += 1
+	var cost_waste := ShotAI._spot_cost(sim, hole, at, 1.0)
+	course.terrain[i] = Defs.T.ROUGH
+	course.revision += 1
+	var cost_rough := ShotAI._spot_cost(sim, hole, at, 1.0)
+	course.terrain[i] = Defs.T.BUNKER
+	course.revision += 1
+	var cost_bunker := ShotAI._spot_cost(sim, hole, at, 1.0)
+	course.terrain[i] = Defs.T.WATER
+	course.revision += 1
+	var cost_water := ShotAI._spot_cost(sim, hole, at, 1.0)
+	course.terrain[i] = Defs.T.STREAM
+	course.revision += 1
+	var cost_stream := ShotAI._spot_cost(sim, hole, at, 1.0)
+	check(cost_rough < cost_waste and cost_waste < cost_bunker and cost_bunker < cost_water, "landing in waste costs more than the rough and less than a bunker, and it is not priced as water")
+	check(is_equal_approx(cost_stream, cost_water), "a stream is priced like water, so the existing carry logic takes it on")
+	course.terrain[i] = Defs.T.WASTE
+	var resting := Golfer.new()
+	resting.ball.place(spot)
+	resting.strokes = 2
+	var party := Group.new()
+	party._resolve(sim, resting, hole)
+	check(resting.strokes == 2, "a ball lying in a waste area does not take a penalty stroke")
+	check(not resting.gripes.has("bunker") and not resting.gripes.has("water"), "and it is not scored as a bunker or as water")
+	var sloped := Course.new(24, 8)
+	for vy in sloped.h + 1:
+		for vx in sloped.w + 1:
+			sloped.heights[vy * (sloped.w + 1) + vx] = float(vx) * 1.5
+	var down: Array[Vector2i] = []
+	for x in range(14, 5, -1):
+		down.append(Vector2i(x, 3))
+	check(sloped.lay_stream(down) == down.size(), "a downhill drag paints every tile of the stream")
+	var descended := true
+	var prev_h := sloped.tile_center(down[0].x, down[0].y).y
+	for tile in down:
+		if sloped.terrain[tile.y * sloped.w + tile.x] != Defs.T.STREAM:
+			descended = false
+		var h := sloped.tile_center(tile.x, tile.y).y
+		if h > prev_h + 0.02:
+			descended = false
+		prev_h = h
+	check(descended, "the painted stream runs downhill")
+	check(sloped.tile_center(14, 3).y > sloped.tile_center(6, 3).y + 5.0, "drawing the stream does not flatten the slope")
+	var up: Array[Vector2i] = []
+	for x in range(6, 15):
+		up.append(Vector2i(x, 5))
+	sloped.lay_stream(up)
+	check(sloped.terrain[5 * sloped.w + 6] == Defs.T.STREAM, "the low end of an uphill drag is painted")
+	var climbed := false
+	for x in range(7, 15):
+		if sloped.terrain[5 * sloped.w + x] == Defs.T.STREAM:
+			climbed = true
+	check(not climbed, "an uphill drag refuses the higher tiles")
+	var level := Course.new(12, 4)
+	var across: Array[Vector2i] = []
+	for x in range(2, 8):
+		across.append(Vector2i(x, 1))
+	check(level.lay_stream(across) == across.size(), "a stream also runs across level ground")
+	var by := 48
+	for ty in range(by - 1, by + 2):
+		for tx in range(36, 48):
+			course.set_terrain(tx, ty, Defs.T.FAIRWAY)
+		course.set_terrain(40, ty, Defs.T.STREAM)
+		for vx in range(36, 49):
+			course.heights[ty * (course.w + 1) + vx] = 0.0
+			course.heights[(ty + 1) * (course.w + 1) + vx] = 0.0
+	var player := Golfer.new()
+	var tee := course.tile_center(39, by)
+	player.ball.place(tee)
+	player.ball.launch(8.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+	var steps := 0
+	while player.ball.moving() and steps < 4000:
+		player.ball.step(1.0 / 60.0, course, Vector3.ZERO, Vector3.ZERO, false)
+		steps += 1
+	check(player.ball.state == Ball.S.WATER, "a ball that reaches a stream is in the penalty")
+	player.strokes = 1
+	var played := Hole.new()
+	played.par = 4
+	played.tee = course.tile_center(36, by)
+	played.pin = course.tile_center(46, by)
+	party._resolve(sim, player, played)
+	check(player.strokes == 2, "a ball in a stream adds a penalty stroke")
+	check(course.terrain_at(player.ball.pos.x, player.ball.pos.z) != Defs.T.STREAM, "the drop is back on dry land")
+	check(player.ball.pos.distance_to(tee) < 25.0, "and the drop is nearby")
+	var a := course.tile_center(40, 40)
+	var b := course.tile_center(60, 40)
+	for ty in range(10, 71):
+		course.terrain[ty * course.w + 50] = Defs.T.STREAM
+		course.objects[ty * course.w + 50] = 0
+	for ty in range(36, 45):
+		for tx in range(38, 63):
+			if course.terrain[ty * course.w + tx] != Defs.T.STREAM:
+				course.terrain[ty * course.w + tx] = Defs.T.ROUGH
+			if tx != 50:
+				course.objects[ty * course.w + tx] = 0
+	course.revision += 1
+	check(not sim.nav.clear_line(a, b), "a stream blocks the straight walk")
+	var around := sim.nav.path(a, b)
+	check(not _through_stream(course, a, around), "without a bridge the walk stays out of the water")
+	sim.economy.money = 5000.0
+	check(sim.place_object(50, 40, Defs.O.BRIDGE) == 1, "a bridge can be built on a stream")
+	check(sim.place_object(45, 40, Defs.O.BRIDGE) == 0, "and still not on dry land")
+	check(sim.place_object(35, y, Defs.O.BRIDGE) == 0, "nor on a waste area")
+	var crossed := sim.nav.path(a, b)
+	check(not _through_stream(course, a, crossed), "with a bridge the walk still stays out of the water")
+	var walker := Golfer.new()
+	walker.pos = a
+	var walked := 0
+	var used := false
+	var wet_feet := false
+	while not walker.travel(b, 1.0 / 60.0, sim, walker.walk_speed()) and walked < 8000:
+		var ti := course.index_at(walker.pos.x, walker.pos.z)
+		if ti >= 0 and course.terrain[ti] == Defs.T.STREAM:
+			if course.objects[ti] == Defs.O.BRIDGE:
+				used = true
+			else:
+				wet_feet = true
+		walked += 1
+	check(walker.pos.distance_to(b) < 1.0 and used and not wet_feet, "a walker crosses on the bridge and not through the stream")
+	var fresh := _sim("three_holes", 2)
+	var pars: Array[int] = []
+	var lens: Array[float] = []
+	for old in fresh.course.holes:
+		pars.append(old.par)
+		lens.append(old.length)
+	var loaded := Sim.from_dict(db, fresh.to_dict(), gear)
+	var same := loaded.course.holes.size() == pars.size()
+	for k in pars.size():
+		if loaded.course.holes[k].par != pars[k] or not is_equal_approx(loaded.course.holes[k].length, lens[k]):
+			same = false
+	check(same, "an old save keeps every hole's par and length")
+	var stray := 0
+	for cell in loaded.course.terrain:
+		if cell == Defs.T.WASTE or cell == Defs.T.STREAM:
+			stray += 1
+	check(stray == 0, "an old save has no waste or stream until someone paints them")
+	fresh.course.set_terrain(12, 12, Defs.T.WASTE)
+	for x in range(14, 20):
+		fresh.course.terrain[14 * fresh.course.w + x] = Defs.T.STREAM
+	var round := Sim.from_dict(db, fresh.to_dict(), gear)
+	check(round.course.terrain[12 * round.course.w + 12] == Defs.T.WASTE, "a waste area survives a save")
+	var kept := true
+	for x in range(14, 20):
+		if round.course.terrain[14 * round.course.w + x] != Defs.T.STREAM:
+			kept = false
+	check(kept, "a stream survives a save")
+	check(round.course.holes.size() == pars.size(), "saving the new ground does not drop the old holes")

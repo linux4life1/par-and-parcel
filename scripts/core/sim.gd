@@ -188,6 +188,36 @@ func terrain_name(t: int) -> String:
 	return Defs.T_NAMES[t]
 
 
+## What one tile of this paint costs. Waste, stream and bunker read
+## data/ground.json. Everything else keeps the table in Defs.
+func terrain_price(t: int) -> int:
+	var book: Dictionary = db.ground
+	var key := ""
+	if t == Defs.T.WASTE:
+		key = "waste"
+	elif t == Defs.T.STREAM:
+		key = "stream"
+	elif t == Defs.T.BUNKER:
+		key = "bunker"
+	else:
+		return Defs.T_COST[t]
+	var row: Dictionary = book.get(key, {})
+	if row.has("cost"):
+		return int(row["cost"])
+	return Defs.T_COST[t]
+
+
+## How much a greenkeeper cares about this ground. A waste area's care
+## is in the data, and it is zero: nobody rakes it.
+func terrain_care(t: int) -> float:
+	if t != Defs.T.WASTE:
+		return Defs.T_CARE[t]
+	var row: Dictionary = db.ground.get("waste", {})
+	if row.has("care"):
+		return float(row["care"])
+	return Defs.T_CARE[t]
+
+
 func object_name(o: int) -> String:
 	var over: Dictionary = biome.get("objects", {}).get(str(o), {})
 	return str(over.get("name", Defs.O_NAMES[o]))
@@ -817,7 +847,7 @@ func scenery_score(hole: Hole) -> float:
 				var i := ty * course.w + tx
 				if not course.is_closed(i):
 					total += Defs.O_SCENERY[course.objects[i]]
-				if course.terrain[i] == Defs.T.WATER:
+				if Defs.is_liquid(course.terrain[i]):
 					total += 0.25
 	var score := clampf(total / (samples * 9.0), 0.0, 1.0)
 	_scenery[hole] = [course.revision, score]
@@ -915,7 +945,10 @@ func touch_landmark(g: Golfer) -> bool:
 
 ## Paint terrain with a round brush. Returns tiles changed, or -1 if broke.
 func paint(tx: int, ty: int, radius: int, t: int) -> int:
-	var unit := float(Defs.T_COST[t])
+	if t == Defs.T.STREAM:
+		var one: Array[Vector2i] = [Vector2i(tx, ty)]
+		return paint_stream(one)
+	var unit := float(terrain_price(t))
 	if not economy.can_afford(unit):
 		return -1
 	var n := course.paint(tx, ty, radius, t)
@@ -927,6 +960,18 @@ func paint(tx: int, ty: int, radius: int, t: int) -> int:
 			var c := course.tile_center(tx, ty)
 			for i in 2:
 				course.smooth(c.x, c.z, (radius + 1.5) * Defs.TILE, 0.5)
+	return n
+
+
+## Draw a stream along a drag. One tile wide, downhill only. The price is
+## the stream's price in the data, once per tile that actually changes.
+func paint_stream(tiles: Array[Vector2i]) -> int:
+	var unit := float(terrain_price(Defs.T.STREAM))
+	if not economy.can_afford(unit):
+		return -1
+	var n := course.lay_stream(tiles)
+	if n > 0:
+		economy.spend("construction", n * unit + course.clear_cost)
 	return n
 
 
@@ -984,7 +1029,7 @@ func lot_value(tx: int, ty: int) -> float:
 				v += Defs.O_SCENERY[o] * 55.0
 			if o == Defs.O.HOUSE or o == Defs.O.HOME_SITE:
 				v -= 60.0
-			if course.terrain[i] == Defs.T.WATER and not is_lava():
+			if Defs.is_liquid(course.terrain[i]) and not (is_lava() and course.terrain[i] == Defs.T.WATER):
 				v += 22.0
 	var p := Vector2((tx + 0.5) * Defs.TILE, (ty + 0.5) * Defs.TILE)
 	for hole in course.holes:
@@ -1044,7 +1089,7 @@ func _lot_cell(i: int) -> float:
 	var a := 0.0 if course.is_closed(i) else Defs.O_SCENERY[o] * 55.0
 	if o == Defs.O.HOUSE or o == Defs.O.HOME_SITE:
 		a -= 60.0
-	if course.terrain[i] == Defs.T.WATER and not _lot_lava:
+	if Defs.is_liquid(course.terrain[i]) and not (_lot_lava and course.terrain[i] == Defs.T.WATER):
 		a += 22.0
 	return a
 

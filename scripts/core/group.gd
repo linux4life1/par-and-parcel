@@ -156,7 +156,7 @@ func line_spot(sim: Sim, hole: Hole, k: int, i: int) -> Vector3:
 
 static func _standable(c: Course, p: Vector3) -> bool:
 	var t := c.terrain_at(p.x, p.z)
-	if t < 0 or t == Defs.T.WATER:
+	if t < 0 or Defs.is_liquid(t):
 		return false
 	return c.locked[c.index_at(p.x, p.z)] == 0
 
@@ -404,7 +404,11 @@ func _resolve(sim: Sim, g: Golfer, hole: Hole) -> void:
 		Ball.S.WATER:
 			g.strokes += 1
 			g.rd.lost_balls = int(g.rd.lost_balls) + 1
-			if sim.is_lava():
+			var sunk := sim.course.terrain_at(b.pos.x, b.pos.z)
+			if sunk == Defs.T.STREAM:
+				g.feel(-2.5, "My ball is in the stream on hole %d." % n, "water")
+				sim.feed.say("water_ball", g, {"hole": n})
+			elif sim.is_lava():
 				g.feel(-2.5, "My ball melted in the lava on hole %d." % n, "water")
 				sim.feed.say("lava_ball", g, {"hole": n})
 			else:
@@ -439,7 +443,7 @@ static func drop_spot(course: Course, b: Ball) -> Vector3:
 		q = p + back * minf(2.0 + i * 2.0, l)
 		var t := course.terrain_at(q.x, q.z)
 		# on dry land, and on the club's own land
-		if t >= 0 and t != Defs.T.WATER and course.locked[course.index_at(q.x, q.z)] == 0:
+		if t >= 0 and not Defs.is_liquid(t) and course.locked[course.index_at(q.x, q.z)] == 0:
 			break
 	return course.on_ground(q.x, q.z)
 

@@ -116,7 +116,12 @@ func hint() -> String:
 	var body := ""
 	match mode:
 		"terrain":
-			body = "Drag to paint %s. %s per tile." % [sim.terrain_name(terrain_type).to_lower(), Defs.money(Defs.T_COST[terrain_type])]
+			if terrain_type == Defs.T.STREAM:
+				body = "Drag to draw a stream. It follows the ground downhill, one tile wide. %s per tile." % Defs.money(sim.terrain_price(Defs.T.STREAM))
+			elif terrain_type == Defs.T.WASTE:
+				body = "Drag to paint a waste area. Cheaper than a bunker, and nobody rakes it. %s per tile." % Defs.money(sim.terrain_price(Defs.T.WASTE))
+			else:
+				body = "Drag to paint %s. %s per tile." % [sim.terrain_name(terrain_type).to_lower(), Defs.money(sim.terrain_price(terrain_type))]
 		"sculpt":
 			body = "Hold the mouse button to %s the land. Hold Shift for fine control." % sculpt_mode
 			if (sculpt_mode == "raise" or sculpt_mode == "lower") and hover != null:
@@ -125,7 +130,7 @@ func hint() -> String:
 				body += " Slope under the brush: %s. %s" % [Slope.percent_text(float(read.get("percent", 0.0))), Slope.fair_line()]
 		"object":
 			if object_type == Defs.O.BRIDGE:
-				body = "Click %s to bridge it. %s a span." % [sim.terrain_name(Defs.T.WATER).to_lower(), Defs.money(Defs.O_COST[object_type])]
+				body = "Click the water or a stream to bridge it. %s a span." % Defs.money(Defs.O_COST[object_type])
 			else:
 				body = "Click to place: %s. %s each." % [sim.object_name(object_type).to_lower(), Defs.money(Defs.O_COST[object_type])]
 		"bulldoze":
@@ -150,6 +155,8 @@ func hint() -> String:
 func radius_m() -> float:
 	match mode:
 		"terrain", "bulldoze":
+			if mode == "terrain" and terrain_type == Defs.T.STREAM:
+				return Defs.TILE * 0.5
 			return (brush + 0.5) * Defs.TILE
 		"sculpt":
 			return (brush + 1.0) * Defs.TILE
@@ -309,7 +316,8 @@ func _apply() -> void:
 		return
 	var p: Vector3 = hover
 	var tile := sim.course.tile_of(p.x, p.z)
-	if tile == _last_tile:
+	var prev := _last_tile
+	if tile == prev:
 		return
 	_last_tile = tile
 	if (mode == "terrain" or mode == "object") and not sim.course.can_build(tile.x, tile.y):
@@ -317,7 +325,16 @@ func _apply() -> void:
 		return
 	match mode:
 		"terrain":
-			var painted := sim.paint(tile.x, tile.y, brush, terrain_type)
+			var painted := 0
+			if terrain_type == Defs.T.STREAM:
+				var line: Array[Vector2i] = []
+				if prev.x < -100:
+					line.append(tile)
+				else:
+					line = Course.tile_line(prev, tile)
+				painted = sim.paint_stream(line)
+			else:
+				painted = sim.paint(tile.x, tile.y, brush, terrain_type)
 			if painted < 0:
 				_warn_broke()
 			elif painted > 0:

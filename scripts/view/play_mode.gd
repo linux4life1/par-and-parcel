@@ -431,7 +431,7 @@ func _set_margins() -> void:
 				ease = 0.85
 			"wedges":
 				ease = 1.1
-		ease /= 0.6 + 0.4 * Defs.T_LIE_SPREAD[lie] * float(lie_read.get("spread", 1.0))
+		ease /= 0.6 + 0.4 * Lie.terrain_spread(lie) * float(lie_read.get("spread", 1.0))
 	else:
 		ease = 1.15
 	if power > 1.0:
@@ -667,7 +667,7 @@ func _strike() -> void:
 		lie_read = Lie.read(sim, g, aim)
 		var mods: Dictionary = shape().mods
 		var full := _full_speed()
-		var sig := g.spread() * bs * Defs.T_LIE_SPREAD[lie] * float(lie_read.spread) * 1.2
+		var sig := g.spread() * bs * Lie.terrain_spread(lie) * float(lie_read.spread) * 1.2
 		if pin_dist < 150.0 / Defs.YARDS:
 			# the Approach attribute tightens the scoring shots
 			sig *= maxf(0.35, 1.0 + sim.skills.bonus("approach"))
@@ -743,7 +743,9 @@ func _resolve() -> void:
 	match b.state:
 		Ball.S.WATER:
 			g.strokes += 1
-			message = "In the %s. One stroke penalty." % sim.terrain_name(Defs.T.WATER).to_lower()
+			var sunk := sim.course.terrain_at(b.pos.x, b.pos.z)
+			var word := sim.terrain_name(Defs.T.STREAM if sunk == Defs.T.STREAM else Defs.T.WATER)
+			message = "In the %s. One stroke penalty." % word.to_lower()
 			sim.player.lose_ball()
 			b.place(Group.drop_spot(sim.course, b))
 		Ball.S.OOB:

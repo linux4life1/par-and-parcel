@@ -1577,8 +1577,8 @@ func _fly_clubs(delta: float) -> void:
 					# lying flat, pointing the way it was going
 					node.rotation = Vector3(0.0, -atan2(vel.z, vel.x), PI * 0.5 + 0.1)
 					var t := sim.course.terrain_at(node.position.x, node.position.z)
-					sim.sound.emit("splash" if t == Defs.T.WATER else "land_soft", node.position, 0.5)
-					if t == Defs.T.WATER:
+					sim.sound.emit("splash" if Defs.is_liquid(t) else "land_soft", node.position, 0.5)
+					if Defs.is_liquid(t):
 						node.visible = false
 		elif float(c.t) > 14.0:
 			node.queue_free()
@@ -1733,7 +1733,7 @@ func _rebuild_stakes() -> void:
 					continue
 				var c := course.tile_center(tx, ty)
 				var edge := Vector3(c.x + s.x * Defs.TILE * 0.5, 0.0, c.z + s.y * Defs.TILE * 0.5)
-				if course.terrain_at(c.x, c.z) == Defs.T.WATER:
+				if Defs.is_liquid(course.terrain_at(c.x, c.z)):
 					continue
 				spots.append(Vector3(edge.x, course.height_at(edge.x, edge.z) + 0.55, edge.z))
 	var mm := _stakes.multimesh

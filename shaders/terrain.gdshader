@@ -25,7 +25,7 @@ uniform vec3 slope_c3 = vec3(0.45, 0.22, 0.16);
 uniform vec3 brush = vec3(0.0, 0.0, -1.0);   // x, z, radius; negative radius hides it
 uniform vec3 brush_color : source_color = vec3(1.0, 1.0, 1.0);
 uniform vec4 land_rect = vec4(0.0);          // x0, z0, x1, z1 of a highlighted land parcel
-uniform vec3 pal[13];               // linear colour per terrain type, then the hazard's second colour
+uniform vec3 pal[15];               // linear colour per terrain type, then the hazard's second colour
 uniform float lava = 0.0;           // 1 when the hazard is lava
 uniform float heat = 0.0;           // extra glow during an eruption
 uniform vec2 cloud_offset = vec2(0.0);
@@ -35,13 +35,13 @@ uniform vec3 season_grass = vec3(1.0);   // the season's tint on everything gras
 uniform sampler2DArray ground_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray ground_nor : filter_linear_mipmap, repeat_enable;
 uniform vec3 ground_mean[10];       // average colour of each layer
-uniform float layer_of[12];         // which layer each terrain type uses
-uniform float layer_size[12];       // metres one repeat of the texture covers
-uniform float layer_bump[12];       // how strongly its bumps catch the light
+uniform float layer_of[14];         // which layer each terrain type uses
+uniform float layer_size[14];       // metres one repeat of the texture covers
+uniform float layer_bump[14];       // how strongly its bumps catch the light
 
 // How strongly each surface claims the ground near its edge. Small features
 // get a boost so a one-tile bunker survives the smoothing as a round pit.
-const float PRIORITY[12] = float[12](1.0, 1.12, 1.38, 1.5, 1.62, 1.32, 0.94, 1.58, 1.25, 1.05, 1.16, 1.42);
+const float PRIORITY[14] = float[14](1.0, 1.12, 1.38, 1.5, 1.62, 1.32, 0.94, 1.58, 1.25, 1.05, 1.16, 1.42, 1.48, 1.88);
 
 varying vec3 wpos;
 varying float relief;
@@ -143,10 +143,10 @@ vec3 terrain_color(int t, vec2 wp, float n, vec3 fine, float grain, out float ro
 			float crust = vnoise(wp * 0.5 - vec2(TIME * 0.03, 0.0)) * 0.6 + vnoise(wp * 1.2 + flow * 2.5) * 0.4;
 			float hot = smoothstep(0.38, 0.72, crust + 0.2 * sin(TIME * 0.7 + flow * 6.0) + heat * 0.25);
 			emit = hot;
-			return mix(pal[5] * 0.35, pal[12], hot);
+			return mix(pal[5] * 0.35, pal[14], hot);
 		}
 		rough = 0.04;
-		return mix(pal[5], pal[12], wave(wp) * 0.6);
+		return mix(pal[5], pal[14], wave(wp) * 0.6);
 	}
 	if (t == 6) {           // deep rough: tussocky and uneven
 		grass = 0.35;
@@ -179,6 +179,28 @@ vec3 terrain_color(int t, vec2 wp, float n, vec3 fine, float grain, out float ro
 		rough = 0.72;
 		return pal[11] * (1.0 + 0.028 * a * grain + 0.028 * b) * (0.97 + 0.08 * n) * mix(vec3(1.0), fine, 0.45);
 	}
+	if (t == 12) {          // waste: sandy scrub, never raked
+		grass = 0.18;
+		rough = 0.96;
+		float scrub = vnoise(wp * 0.85) * 0.6 + vnoise(wp * 2.4 + 9.0) * 0.4;
+		float tuft = smoothstep(0.42, 0.72, scrub);
+		vec3 sand = pal[12] * (0.9 + 0.1 * vnoise(wp * 2.2));
+		vec3 bush = pal[12] * vec3(0.62, 0.78, 0.48);
+		return mix(sand, bush, tuft * 0.65) * fine;
+	}
+	if (t == 13) {          // a stream: the same liquid as the hazard, in a narrow line
+		grass = 0.0;
+		if (lava > 0.5) {
+			rough = 0.75;
+			float flow = vnoise(wp * 0.35 + vec2(TIME * 0.08, TIME * 0.05));
+			float crust = vnoise(wp * 0.7 - vec2(TIME * 0.04, 0.0)) * 0.6 + vnoise(wp * 1.6 + flow * 2.5) * 0.4;
+			float hot = smoothstep(0.38, 0.72, crust + 0.2 * sin(TIME * 0.7 + flow * 6.0) + heat * 0.25);
+			emit = hot;
+			return mix(pal[13] * 0.35, pal[14], hot);
+		}
+		rough = 0.05;
+		return mix(pal[13], pal[14], wave(wp) * 0.55);
+	}
 	grass = 0.7;            // rough: longer, patchier grass
 	float clump = vnoise(wp * 0.8) * 0.55 + vnoise(wp * 2.6) * 0.45;
 	vec3 dry = mix(vec3(1.0), vec3(1.12, 1.04, 0.78), smoothstep(0.45, 0.8, vnoise(wp * 0.013 + 5.0)));
@@ -207,8 +229,8 @@ void fragment() {
 	vec2 f = tp - base - 0.5;
 	vec3 wx = vec3(0.5 * (0.5 - f.x) * (0.5 - f.x), 0.75 - f.x * f.x, 0.5 * (0.5 + f.x) * (0.5 + f.x));
 	vec3 wy = vec3(0.5 * (0.5 - f.y) * (0.5 - f.y), 0.75 - f.y * f.y, 0.5 * (0.5 + f.y) * (0.5 + f.y));
-	float cov[12];
-	for (int k = 0; k < 12; k++) {
+	float cov[14];
+	for (int k = 0; k < 14; k++) {
 		cov[k] = 0.0;
 	}
 	vec3 data = vec3(0.0);
@@ -219,15 +241,15 @@ void fragment() {
 			vec4 d = texelFetch(tile_tex, c, 0);
 			float w = wx[i] * wy[j];
 			int raw = int(d.r * 255.0 + 0.5);
-			int t = min(raw & 63, 11);
+			int t = min(raw & 63, 13);
 			cov[t] += w;
 			lock += raw >= 128 ? w : 0.0;
 			data += d.gba * w;
 		}
 	}
-	float wt[12];
+	float wt[14];
 	float total = 0.0;
-	for (int k = 0; k < 12; k++) {
+	for (int k = 0; k < 14; k++) {
 		float v = pow(cov[k] * PRIORITY[k], 12.0);
 		wt[k] = v;
 		total += v;
@@ -237,7 +259,7 @@ void fragment() {
 	float grass = 0.0;
 	float emit = 0.0;
 	vec2 bump = vec2(0.0);
-	for (int k = 0; k < 12; k++) {
+	for (int k = 0; k < 14; k++) {
 		float w = wt[k] / total;
 		if (w > 0.004) {
 			float r_;
@@ -254,7 +276,8 @@ void fragment() {
 	}
 	float w_green = (wt[2] + wt[11]) / total;
 	float w_bunker = wt[4] / total;
-	float w_water = wt[5] / total;
+	float w_water = (wt[5] + wt[13]) / total;
+	float liquid = cov[5] + cov[13];
 	float wet = data.x;
 	float health = data.y;
 	float weeds = data.z;
@@ -270,21 +293,21 @@ void fragment() {
 	col *= 1.0 - 0.30 * lip_in;
 	col = mix(col, col * 1.12 + vec3(0.01), lip_out * 0.6);
 	// water: shallow at the shore, deep in the middle, with a line of foam
-	if (cov[5] < 0.01) {
+	if (liquid < 0.01) {
 		// no hazard anywhere near: nothing to do
 	} else if (!is_lava) {
-		float depth = smoothstep(0.42, 0.95, cov[5]);
+		float depth = smoothstep(0.42, 0.95, liquid);
 		col = mix(col, col * mix(vec3(1.25, 1.3, 1.15), vec3(0.62, 0.7, 0.85), depth), w_water);
-		float shore = w_water * (1.0 - smoothstep(0.40, 0.50, cov[5]));
+		float shore = w_water * (1.0 - smoothstep(0.40, 0.50, liquid));
 		float foam = shore * smoothstep(0.35, 0.75, vnoise(wp * 2.2 + vec2(TIME * 0.4, 0.0)) + 0.25 * sin(TIME * 1.3 + wp.x * 0.7));
 		col = mix(col, vec3(0.85, 0.9, 0.92), foam * 0.7);
 		rough = mix(rough, 0.5, foam);
 		// damp sand and mud just above the waterline
-		float bank = (1.0 - w_water) * smoothstep(0.16, 0.36, cov[5]);
+		float bank = (1.0 - w_water) * smoothstep(0.16, 0.36, liquid);
 		col = mix(col, col * vec3(0.62, 0.58, 0.5), bank * 0.6);
 	} else {
 		// scorched, glowing ground at the edge of the lava
-		float bank = (1.0 - w_water) * smoothstep(0.12, 0.36, cov[5]);
+		float bank = (1.0 - w_water) * smoothstep(0.12, 0.36, liquid);
 		col = mix(col, vec3(0.05, 0.03, 0.03), bank * 0.75);
 		emit += bank * 0.25;
 	}
@@ -446,5 +469,5 @@ void fragment() {
 	ALBEDO = col;
 	ROUGHNESS = rough;
 	SPECULAR = mix(0.3, 0.6, w_water * (1.0 - lava));
-	EMISSION = pal[12] * emit * (2.2 + heat * 2.0) * (overlay == 0 ? 1.0 : 0.0);
+	EMISSION = pal[14] * emit * (2.2 + heat * 2.0) * (overlay == 0 ? 1.0 : 0.0);
 }
