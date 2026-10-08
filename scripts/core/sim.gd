@@ -1503,6 +1503,7 @@ func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 func turn_price() -> float:
 	return float(db.turns.get("price", 0.0))
 
+
 func turn_cap() -> int:
 	return int(db.turns.get("max", 4))
 
@@ -1534,8 +1535,10 @@ func place_turn(hole: Hole, at: Vector3) -> String:
 		undo.commit()
 	return ""
 
+
 func tee_price() -> float:
 	return float(db.tees.get("price", 0.0))
+
 
 ## Place a middle or forward tee on a hole that is already laid out. An empty
 ## string means it is down; otherwise the reason it was refused.
@@ -1558,6 +1561,7 @@ func place_tee(hole: Hole, which: String, at: Vector3) -> String:
 	if started:
 		undo.commit()
 	return ""
+
 
 func remove_hole(i: int) -> void:
 	if i < 0 or i >= course.holes.size():

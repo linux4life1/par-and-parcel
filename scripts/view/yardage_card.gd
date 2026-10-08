@@ -24,6 +24,8 @@ var tee_px := Vector2.ZERO
 var pin_px := Vector2.ZERO
 ## Player-marked turning points, in picture pixels. Empty when the hole has none.
 var turn_px: Array[Vector2] = []
+## The stretch yards drawn between the tee, the stakes and the pin.
+var stretch_yards := PackedInt32Array()
 ## Middle and forward tees, when the hole has them. (-1, -1) otherwise.
 var middle_px := Vector2(-1.0, -1.0)
 var forward_px := Vector2(-1.0, -1.0)
@@ -337,6 +339,7 @@ func _yards(line: PackedVector2Array, ink: Color, gap: float) -> void:
 
 func _turn_marks(hole: Hole, col: Color, ink: Color) -> void:
 	turn_px.clear()
+	stretch_yards = PackedInt32Array()
 	var radius := float(_book.get("turn_dot", 2.2))
 	var glyph := maxi(int(_book.get("glyph", 1)), 1)
 	for m in hole.turns:
@@ -357,6 +360,7 @@ func _turn_marks(hole: Hole, col: Color, ink: Color) -> void:
 		var mid := spots[i].lerp(spots[i + 1], 0.5)
 		var at := _to_px(mid)
 		_number(int(round(at.x)), int(round(at.y)), parts[i], ink, glyph)
+		stretch_yards.append(parts[i])
 
 
 func _number(x: int, y: int, n: int, ink: Color, glyph: int) -> void:

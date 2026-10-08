@@ -171,6 +171,7 @@ func note_turn(hole: Hole, at: Vector3) -> void:
 		"at": [at.x, at.y, at.z],
 	}
 
+
 ## A middle or forward tee placed during this stroke. Undo removes it and
 ## refunds the charge; redo puts the same spot back.
 func note_tee(hole: Hole, which: String, at: Vector3, metres: float) -> void:
@@ -379,6 +380,7 @@ func _turn_intact(e: Dictionary, forward: bool) -> bool:
 		return not there
 	return there
 
+
 func _tee_intact(e: Dictionary, forward: bool) -> bool:
 	if not e.has("tee_set"):
 		return true
@@ -394,6 +396,7 @@ func _tee_intact(e: Dictionary, forward: bool) -> bool:
 	if forward:
 		return not hole.has_tee(which)
 	return hole.has_tee(which) and Vector2(cur.x - recorded.x, cur.z - recorded.z).length_squared() < 0.05
+
 
 func _apply_turn(e: Dictionary, forward: bool) -> bool:
 	if not e.has("turn_mark"):
@@ -414,6 +417,7 @@ func _apply_turn(e: Dictionary, forward: bool) -> bool:
 			return false
 	return true
 
+
 func _apply_tee(e: Dictionary, forward: bool) -> bool:
 	if not e.has("tee_set"):
 		return true
@@ -430,6 +434,7 @@ func _apply_tee(e: Dictionary, forward: bool) -> bool:
 	else:
 		hole.clear_set(which)
 	return true
+
 
 ## The hole this step added, matched by the details that were saved, wherever
 ## it now sits in the playing order.

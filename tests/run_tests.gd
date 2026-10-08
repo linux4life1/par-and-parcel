@@ -82,6 +82,7 @@ func _ready() -> void:
 	_test_yardage()
 	_test_turns()
 	_test_tee_sets()
+	_test_tee_and_stake()
 	_test_rating()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
@@ -6626,6 +6627,13 @@ func _test_turns() -> void:
 	var first_m := float(shown_yards[0]) / Defs.YARDS
 	check(shown_yards.size() == hole.turns.size() + 1 and shown_sum == Defs.yards(hole.length) and named_ok, "the printed yards add up to the hole (%s, %d against %d)" % [named, shown_sum, Defs.yards(hole.length)])
 	check(absf(first_m - float(first_snap["along"])) <= 1.0, "the first stretch is the stake's distance along the line (%.2f against %.2f)" % [first_m, float(first_snap["along"])])
+	card.ensure(c, hole)
+	var diagram_yards := card.stretch_yards
+	var diagram_same := diagram_yards.size() == shown_yards.size()
+	for diagram_i in diagram_yards.size():
+		if diagram_i >= shown_yards.size() or diagram_yards[diagram_i] != shown_yards[diagram_i]:
+			diagram_same = false
+	check(diagram_same and diagram_yards.size() == shown_yards.size(), "the yardage diagram draws those same printed yards")
 	var held := sim.economy.money
 	var near_tee := hole.point_along((gap * 0.5) / hole.length)
 	var why_tee := sim.place_turn(hole, near_tee)
@@ -6731,6 +6739,50 @@ func _test_turns() -> void:
 	print("  reroute left %d stake(s)" % hole.turns.size())
 	remove_child(hud)
 	hud.free()
+
+
+func _yards_add(hole: Hole) -> bool:
+	var total := 0
+	for yard in hole.turn_yards():
+		total += yard
+	return total == Defs.yards(hole.length)
+
+
+func _test_tee_and_stake() -> void:
+	print("-- tee and stake undo")
+	var sim := _sim("sandbox", 29)
+	var c := sim.course
+	for row in range(20, 70):
+		c.set_terrain(40, row, Defs.T.FAIRWAY)
+	c.set_terrain(40, 20, Defs.T.TEE)
+	c.set_terrain(40, 35, Defs.T.TEE)
+	for gy in range(-1, 2):
+		for gx in range(-1, 2):
+			c.set_terrain(40 + gx, 60 + gy, Defs.T.GREEN)
+	var hole := sim.add_hole(c.tile_center(40, 20), c.tile_center(40, 60))
+	check(hole != null, "a straight hole can take a middle tee and a stake")
+	if hole == null:
+		return
+	var tee_cost: float = sim.tee_price()
+	var stake_cost: float = sim.turn_price()
+	var purse := sim.economy.money
+	var why_tee := sim.place_tee(hole, "middle", c.tile_center(40, 35))
+	check(why_tee == "" and hole.has_tee("middle") and is_equal_approx(purse - sim.economy.money, tee_cost), "the middle tee goes down (%s)" % why_tee)
+	check(_yards_add(hole), "with the middle tee down, the printed stretches add up to the hole")
+	var stake_at := hole.point_along(0.62)
+	var why_stake := sim.place_turn(hole, stake_at)
+	check(why_stake == "" and hole.turns.size() == 1 and is_equal_approx(purse - sim.economy.money, tee_cost + stake_cost), "the stake goes down after the tee (%s)" % why_stake)
+	check(_yards_add(hole), "with the tee and the stake, the printed stretches add up to the hole")
+	var after_both := sim.economy.money
+	check(sim.undo.undo() and hole.turns.is_empty() and hole.has_tee("middle") and is_equal_approx(sim.economy.money, after_both + stake_cost), "undo takes the stake back and refunds it")
+	check(_yards_add(hole), "after the stake is undone, the printed stretches add up to the hole")
+	check(sim.undo.undo() and not hole.has_tee("middle") and hole.turns.is_empty() and is_equal_approx(sim.economy.money, purse), "undo takes the middle tee back and refunds it")
+	check(_yards_add(hole), "after both are undone, the printed stretches add up to the hole")
+	check(sim.undo.redo() and hole.has_tee("middle") and hole.turns.is_empty() and is_equal_approx(sim.economy.money, purse - tee_cost), "redo puts the middle tee back and charges it")
+	check(_yards_add(hole), "after the tee is redone, the printed stretches add up to the hole")
+	check(sim.undo.redo() and hole.has_tee("middle") and hole.turns.size() == 1 and is_equal_approx(sim.economy.money, purse - tee_cost - stake_cost), "redo puts the stake back and charges it")
+	check(_yards_add(hole), "after both are redone, the printed stretches add up to the hole")
+
 
 func _play_from(sim: Sim, hole: Hole, skill: float) -> Vector2:
 	var g := sim.visitors.make_golfer("public", skill)

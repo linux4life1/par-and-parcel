@@ -777,6 +777,8 @@ func refuse_turn(at: Vector3, on_line: float, gap: float, cap: int) -> String:
 		if absf(float(other["along"]) - along) < gap:
 			return "That turn is already marked."
 	return ""
+
+
 ## True when that set has been placed. The back tee always has.
 func has_tee(which: String) -> bool:
 	if which == "back":
@@ -954,6 +956,8 @@ func _remaining(at: Vector3) -> float:
 	if left < 0.0:
 		return 0.0
 	return left
+
+
 func to_dict() -> Dictionary:
 	var d := {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
