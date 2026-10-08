@@ -71,6 +71,7 @@ func _ready() -> void:
 	_test_firm()
 	_test_lights_gap_awards()
 	_test_length_scale()
+	_test_litter()
 	_test_slope()
 	_test_debt_welcome()
 	_test_close_structure()
@@ -3940,6 +3941,38 @@ func _test_course_file() -> void:
 	check(CourseFile.parse(JSON.stringify(month)).is_empty(), "an open_month layer of the wrong size is refused")
 	month_course["open_month"] = 1
 	check(CourseFile.parse(JSON.stringify(month)).is_empty(), "an open_month layer that is not a byte string is refused")
+	var cups: Dictionary = pack.duplicate(true)
+	var cups_course: Dictionary = cups.course
+	var short_litter := PackedByteArray()
+	short_litter.resize(4)
+	cups_course["litter"] = Marshalls.raw_to_base64(short_litter)
+	check(CourseFile.parse(JSON.stringify(cups)).is_empty(), "a litter layer of the wrong size is refused")
+	cups_course["litter"] = 1
+	check(CourseFile.parse(JSON.stringify(cups)).is_empty(), "a litter layer that is not a byte string is refused")
+	var boards: Dictionary = pack.duplicate(true)
+	var boards_course: Dictionary = boards.course
+	var short_repair := PackedByteArray()
+	short_repair.resize(4)
+	boards_course["repair"] = Marshalls.raw_to_base64(short_repair)
+	check(CourseFile.parse(JSON.stringify(boards)).is_empty(), "a repair layer of the wrong size is refused")
+	boards_course["repair"] = 1
+	check(CourseFile.parse(JSON.stringify(boards)).is_empty(), "a repair layer that is not a byte string is refused")
+	var layers: Dictionary = pack.duplicate(true)
+	var layers_course: Dictionary = layers.course
+	var ntiles := int(layers_course.w) * int(layers_course.h)
+	var litter := PackedFloat32Array()
+	litter.resize(ntiles)
+	litter.fill(0.0)
+	litter[0] = 0.75
+	layers_course["litter"] = Marshalls.raw_to_base64(litter.to_byte_array())
+	var repair := PackedByteArray()
+	repair.resize(ntiles)
+	repair.fill(0)
+	repair[1] = 1
+	layers_course["repair"] = Marshalls.raw_to_base64(repair)
+	check(not CourseFile.parse(JSON.stringify(layers)).is_empty(), "a litter layer of one float per tile and a repair layer of one byte per tile are accepted")
+	var brought := CourseFile.host(db, layers, gear, 4)
+	check(is_equal_approx(brought.course.litter[0], 0.75) and brought.course.repair[1] == 1, "a valid litter and repair pair is imported")
 	var dirty: Dictionary = pack.duplicate(true)
 	var dirty_holes: Array = dirty.course.holes
 	var dirty_h: Dictionary = dirty_holes[0]
@@ -4504,6 +4537,135 @@ func _test_length_scale() -> void:
 	sim.members.progress["power_cap"] = 1.8
 	var lab_g := sim.lab._test_golfer(HoleLab.CLASSES[0])
 	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")
+
+
+func _sell_at(sim: Sim, tile: int, n: int) -> void:
+	for _i in n:
+		var g := Golfer.new()
+		g.thirst = 1.0
+		g.persona = {}
+		g.satisfaction = 70.0
+		g.course = sim.course
+		var gr := Group.new()
+		gr.members.append(g)
+		gr.stop = {"kind": "drink", "tile": tile}
+		sim.visitors.serve(gr, "drink")
+
+
+func _test_litter() -> void:
+	print("-- litter and bins")
+	var sim := _sim("three_holes", 6)
+	var c := sim.course
+	c.guard = false
+	var spot := Vector2i(-1, -1)
+	for y in range(1, c.h - 1):
+		for x in range(1, c.w - 3):
+			var i0: int = y * c.w + x
+			var i2: int = i0 + 2
+			if c.locked[i0] != 0 or c.objects[i0] != 0 or c.hot[i0] != 0 or c.terrain[i0] != Defs.T.ROUGH:
+				continue
+			if c.locked[i2] != 0 or c.objects[i2] != 0 or c.hot[i2] != 0 or c.terrain[i2] != Defs.T.ROUGH:
+				continue
+			spot = Vector2i(x, y)
+			break
+		if spot.x >= 0:
+			break
+	check(spot.x >= 0, "there is rough for a stand and a bin")
+	check(sim.place_object(spot.x, spot.y, Defs.O.DRINK_STAND) == 1, "a drink stand goes up")
+	var ti := spot.y * c.w + spot.x
+	var show := float(sim.db.litter.get("show", 0.45))
+	sim.grounds.step(30.0)
+	check(c.litter[ti] == 0.0, "an unused stand stays clean")
+	_sell_at(sim, ti, 3)
+	check(c.litter[ti] >= show, "three sales at a stand leave litter you can see (%.2f)" % c.litter[ti])
+	c.litter.fill(0.0)
+	var noticed := Golfer.new()
+	noticed.thirst = 1.0
+	noticed.persona = {}
+	noticed.satisfaction = 80.0
+	noticed.course = c
+	c.litter[ti] = show + 0.1
+	var messy := Group.new()
+	messy.members.append(noticed)
+	messy.stop = {"kind": "drink", "tile": ti}
+	sim.visitors.serve(messy, "drink")
+	check(float(noticed.gripes.get("litter", 0.0)) < -1.0, "a golfer served at a littered stand minds it")
+	c.litter.fill(0.0)
+	check(sim.place_object(spot.x + 2, spot.y, Defs.O.BIN) == 1, "a bin goes up two tiles away")
+	_sell_at(sim, ti, 3)
+	check(c.litter[ti] < show, "the bin keeps those same three sales from showing (%.2f)" % c.litter[ti])
+	var piled := c.litter[ti]
+	sim.grounds.step(30.0)
+	check(is_equal_approx(c.litter[ti], piled), "the bin does not pick the litter up off the grass")
+	c.litter.fill(0.0)
+	c.litter[ti] = 0.8
+	c.weeds[ti] = 0.0
+	c.pests[ti] = 0.0
+	c.wet[ti] = 0.2
+	var g := Golfer.new()
+	g.persona = {}
+	g.satisfaction = 70.0
+	g.course = c
+	g.ball.pos = c.tile_center(spot.x, spot.y)
+	sim.visitors.react_to_lie(g, c.holes[0], 0)
+	check(float(g.gripes.get("litter", 0.0)) < -1.0, "a golfer minds the litter")
+	var porter := sim.crew.hire("porter")
+	check(porter != null, "a porter can be hired")
+	porter.pos = c.tile_center(spot.x, spot.y)
+	sim.crew._find_job(porter)
+	check(porter.target_i == ti, "and walks to the litter")
+	sim.crew._finish_job(porter)
+	check(c.litter[ti] < 0.05, "then picks it up")
+	c.litter[ti] = 0.6
+	c.repair[ti] = 1
+	var back := Course.from_dict(c.to_dict())
+	check(is_equal_approx(back.litter[ti], 0.6) and back.repair[ti] == 1, "a save keeps the litter and the broken window")
+	var old: Dictionary = c.to_dict()
+	old.erase("litter")
+	old.erase("repair")
+	var clean := Course.from_dict(old)
+	check(clean.litter[ti] == 0.0 and clean.repair[ti] == 0, "an older save without those layers loads clean")
+	var house := Vector2i(-1, -1)
+	for y in c.h:
+		for x in range(c.w - 1):
+			var i: int = y * c.w + x
+			var beside: int = i + 1
+			if i == ti or c.locked[i] != 0 or c.objects[i] != 0 or c.hot[i] != 0 or c.terrain[i] != Defs.T.ROUGH:
+				continue
+			if c.locked[beside] != 0 or c.objects[beside] != 0 or c.hot[beside] != 0:
+				continue
+			house = Vector2i(x, y)
+			break
+		if house.x >= 0:
+			break
+	check(house.x >= 0 and c.set_object(house.x, house.y, Defs.O.HOUSE), "a house stands on another rough tile")
+	var wi := house.y * c.w + house.x
+	var grass := wi + 1
+	var ball := Ball.new()
+	ball.pos = c.tile_center(house.x + 1, house.y)
+	ball.hit_tile = wi
+	ball.hit_mat = "wall"
+	ball.hit_speed = 20.0
+	ball.hit_obj = Defs.O.HOUSE
+	var smashed := false
+	for _attempt in 20:
+		sim.visitors._on_ricochet(ball)
+		if c.repair[wi] != 0:
+			smashed = true
+			break
+	check(smashed and c.repair[grass] == 0, "a hard shot into a house marks the building's tile, not the grass beside it")
+	porter.target_i = wi
+	sim.crew._finish_job(porter)
+	check(c.repair[wi] == 0, "the porter boards it")
+	c.litter.fill(0.0)
+	check(c.set_closed(spot.x, spot.y, true), "the stand can be switched off")
+	_sell_at(sim, ti, 3)
+	check(c.litter[ti] == 0.0, "a closed stand does not make litter")
+	check(c.set_closed(spot.x, spot.y, false), "the stand opens again")
+	c.litter.fill(0.0)
+	check(c.set_closed(spot.x + 2, spot.y, true), "the bin can be switched off")
+	_sell_at(sim, ti, 3)
+	check(c.litter[ti] >= show, "a closed bin does not cut new litter")
 
 
 func _test_slope() -> void:

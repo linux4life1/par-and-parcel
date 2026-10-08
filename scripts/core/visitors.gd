@@ -12,6 +12,7 @@ const GOOD_REASONS := {
 }
 const BAD_REASONS := {
 	"weeds": "Weeds everywhere.", "pests": "Gopher mounds all over the place.", "wet": "The course was a swamp.",
+	"litter": "Litter around the course.",
 	"wait": "Painfully slow play.", "hit": "I got hit by a golf ball.",
 	"hard": "Unfair, punishing holes.", "thirst": "Nowhere to buy a drink.", "rain": "Rained on all day.",
 	"greens_bad": "The greens were in terrible shape.", "water": "Lost too many balls in the water.",
@@ -624,7 +625,7 @@ func plan_stop(gr: Group) -> Dictionary:
 				var toward := (here - spot)
 				toward.y = 0.0
 				var front := spot + toward.normalized() * 4.0 if toward.length() > 0.1 else spot
-				best = {"kind": kind, "pos": sim.course.on_ground(front.x, front.z), "spot": spot, "timer": 4.0}
+				best = {"kind": kind, "pos": sim.course.on_ground(front.x, front.z), "spot": spot, "tile": sim.course.index_at(spot.x, spot.z), "timer": 4.0}
 	return best
 
 
@@ -633,10 +634,14 @@ func serve(gr: Group, kind: String) -> void:
 	var retail := sim.skills.mult("retail")
 	if not gr.story.is_empty():
 		gr.story.stopped = true
+	var served := 0
+	var tile := int(gr.stop.get("tile", -1))
 	for g in gr.members:
 		if g.need_for(kind) < 0.3:
 			continue
+		served += 1
 		g.rd.served = int(g.rd.served) + 1
+		_mind_litter(g, tile)
 		match kind:
 			"drink":
 				g.thirst = 0.0
@@ -688,6 +693,19 @@ func serve(gr: Group, kind: String) -> void:
 				sim.sound.emit("bottle", g.pos, 1.0)
 				if sim.rng.randf() < 0.15:
 					sim.feed.say("bar", g)
+	for _sale in served:
+		sim.grounds.drop_litter(tile)
+
+
+## A golfer being served notices the litter already around that stand.
+func _mind_litter(g: Golfer, tile: int) -> void:
+	var course := sim.course
+	if tile < 0 or tile >= course.litter.size():
+		return
+	var show := float(sim.db.litter.get("show", 0.45))
+	if course.litter[tile] < show:
+		return
+	g.feel(float(sim.db.litter.get("mood", -1.5)), "Litter around the stand.", "litter")
 
 
 # ------------------------------------------------- waiting and standing room
@@ -885,6 +903,8 @@ func react_to_lie(g: Golfer, hole: Hole, hole_i: int) -> void:
 	if course.pests[ti] > 0.4:
 		g.feel(-1.5, "Gopher mounds all over hole %d." % n, "pests")
 		sim.feed.say("pests", g, {"hole": n})
+	if course.litter[ti] >= float(sim.db.litter.get("show", 0.45)):
+		g.feel(float(sim.db.litter.get("mood", -1.5)), "Litter around hole %d." % n, "litter")
 
 
 func on_hole_done(g: Golfer, hole: Hole, hole_i: int, group: Group) -> void:
@@ -1070,6 +1090,11 @@ func _on_ricochet(b: Ball) -> void:
 		sim.feed.say("window", null, {}, false, "A homeowner", "FairwayLiving")
 	else:
 		sim.toast.emit("A golf ball went through a window at the %s. %s to fix." % [sim.object_name(b.hit_obj).to_lower(), Defs.money(50.0)], "bad")
+	var wi := b.hit_tile
+	if wi < 0 or wi >= sim.course.repair.size() or int(sim.course.objects[wi]) != b.hit_obj:
+		wi = sim.course.index_at(b.pos.x, b.pos.z)
+	if wi >= 0:
+		sim.course.repair[wi] = 1
 
 
 func untrack(b: Ball) -> void:

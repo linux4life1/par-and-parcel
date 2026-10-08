@@ -19,7 +19,7 @@ const CATEGORY := {
 	"score": "play", "shot": "play", "putt": "play", "suits": "play",
 	"hard": "difficulty", "water": "difficulty", "bunker": "difficulty", "rough": "difficulty", "oob": "difficulty",
 	"wait": "pace",
-	"weeds": "condition", "pests": "condition", "wet": "condition", "greens": "condition", "greens_bad": "condition",
+	"weeds": "condition", "pests": "condition", "wet": "condition", "greens": "condition", "greens_bad": "condition", "litter": "condition",
 	"rain": "weather", "storm": "weather",
 	"hit": "danger", "eruption": "danger",
 	"thirst": "comfort", "hungry": "comfort", "restroom": "comfort", "tired": "comfort", "drink": "comfort",

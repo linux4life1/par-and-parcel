@@ -30,6 +30,7 @@ var accreditation: Dictionary = {}  # the design-score checklist
 var lights: Dictionary = {}     # which lights pay only for the hours they are on
 var starter: Dictionary = {}    # how far apart the starter sends parties
 var awards: Dictionary = {}     # themed hole awards
+var litter: Dictionary = {}     # how litter gathers, and what a bin or a porter does about it
 var slope: Dictionary = {}      # how the ground is read, and how the marks are drawn
 var debt: Dictionary = {}       # how a balance below zero meets a new arrival
 var preview: Dictionary = {}    # the par and yardage label while a hole is laid out
@@ -70,6 +71,7 @@ func _init() -> void:
 	lights = _load("lights")
 	starter = _load("starter")
 	awards = _load("awards")
+	litter = _load("litter")
 	slope = _load("slope")
 	Slope.use(slope)
 	debt = _load("debt")

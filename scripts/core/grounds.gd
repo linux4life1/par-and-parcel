@@ -27,6 +27,10 @@ var _acc_pest := 0.0
 var _acc_wet := 0.0
 var _warned_at := -1000.0   # sim time the owner was last told about unrest and weeds
 var _acc_all := 0.0
+var _litter_rev := -1
+var _litter_ready := false
+var _bins: Array[Vector2] = []
+var _source_at := {}
 
 
 func _init(s: Sim) -> void:
@@ -99,6 +103,7 @@ func _mood_warning(mood: float) -> void:
 ## Called a few times a second with the sim time that has passed.
 func step(dt: float) -> void:
 	refresh_layout()
+	_refresh_litter()
 	var course := sim.course
 	var n := course.w * course.h
 	var count := n / SLICES
@@ -189,6 +194,79 @@ func step(dt: float) -> void:
 				_acc_weed += 1.0
 			if pv > 0.3:
 				_acc_pest += 1.0
+
+
+## Keep the bin and source lists current. Rebuilt only when an object moves,
+## so a step does not walk the whole map.
+func _refresh_litter() -> void:
+	var course := sim.course
+	if _litter_ready and _litter_rev == course.revision:
+		return
+	_litter_ready = true
+	_litter_rev = course.revision
+	_bins.clear()
+	_source_at = {}
+	var want := {}
+	for name in sim.db.litter.get("sources", []):
+		var id := Defs.O_NAMES.find(str(name))
+		if id > 0:
+			want[id] = true
+	for i in course.objects.size():
+		if _shut(course, i):
+			continue
+		var o := int(course.objects[i])
+		if o == Defs.O.BIN:
+			_bins.append(Vector2((i % course.w + 0.5) * Defs.TILE, (int(i / course.w) + 0.5) * Defs.TILE))
+		elif want.has(o):
+			_source_at[i] = true
+
+
+func _shut(course: Course, i: int) -> bool:
+	return course.is_closed(i)
+
+
+## One sale at a stand. The 3 by 3 around it picks up a little litter. A bin
+## nearby cuts that new litter. It does not take up what is already there.
+func drop_litter(tile: int) -> void:
+	_refresh_litter()
+	var course := sim.course
+	if not _source_at.has(tile):
+		return
+	var spec: Dictionary = sim.db.litter
+	var add := float(spec.get("per_sale", 0.16))
+	if add <= 0.0:
+		return
+	var radius := float(spec.get("bin_radius", 22.0))
+	var sx := tile % course.w
+	var sy := int(tile / course.w)
+	if _bin_near(_bins, Vector2((sx + 0.5) * Defs.TILE, (sy + 0.5) * Defs.TILE), radius * radius):
+		add *= float(spec.get("bin_cut", 0.12))
+	var show := float(spec.get("show", 0.45))
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
+			var x := sx + ox
+			var y := sy + oy
+			if not course.in_bounds(x, y):
+				continue
+			var i := y * course.w + x
+			_set_litter(i, course.litter[i] + add, show)
+
+
+func _bin_near(bins: Array[Vector2], p: Vector2, r2: float) -> bool:
+	for b: Vector2 in bins:
+		if b.distance_squared_to(p) <= r2:
+			return true
+	return false
+
+
+func _set_litter(i: int, after: float, show: float) -> void:
+	var before: float = sim.course.litter[i]
+	after = clampf(after, 0.0, 1.0)
+	if is_equal_approx(before, after):
+		return
+	sim.course.litter[i] = after
+	if (before < show and after >= show) or (before >= show and after < show):
+		sim.course.litter_rev += 1
 
 
 func _neighbour(i: int, w: int, n: int, rng: RandomNumberGenerator) -> int:
