@@ -84,7 +84,7 @@ func monthly_wages() -> float:
 	return t * sim.skills.mult("wage") * sim.diff("wages")
 
 
-## Promote someone: they work faster and better, for more pay.
+## How far, in metres, a stationed member looks for work.
 func home_radius() -> float:
 	return sim.db.home_radius
 
@@ -119,6 +119,7 @@ func _go_home(m: Member) -> void:
 		m.timer = 2.5
 
 
+## Promote someone: they work faster and better, for more pay.
 func promote(m: Member) -> bool:
 	var cost := float(m.role.wage) * 3.0 * sim.diff("wages")
 	if m.level > 1 or not sim.economy.can_afford(cost):
