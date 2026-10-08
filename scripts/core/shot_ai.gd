@@ -26,7 +26,7 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 	if lie < 0:
 		lie = Defs.T.ROUGH
 	var p2 := Vector2(p.x, p.z)
-	var to_pin := Vector2(hole.pin.x - p.x, hole.pin.z - p.z)
+	var to_pin := Vector2(hole.aim_at().x - p.x, hole.aim_at().z - p.z)
 	var d := to_pin.length()
 	if Defs.is_green(lie):
 		return _plan_putt(sim, g, hole)
@@ -209,11 +209,11 @@ static func putt_speed(sim: Sim, g: Golfer, from: Vector3, to: Vector3, over: fl
 
 static func _plan_putt(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 	var p := g.ball.pos
-	var to := Vector2(hole.pin.x - p.x, hole.pin.z - p.z)
+	var to := Vector2(hole.aim_at().x - p.x, hole.aim_at().z - p.z)
 	var d := to.length()
 	var heading := to.angle()
 	var over := 0.3
-	var v := putt_speed(sim, g, p, hole.pin, over)
+	var v := putt_speed(sim, g, p, hole.aim_at(), over)
 	var read := 0.3 + 0.7 * g.putting
 	for i in 2:
 		var rest := predict_putt(sim, g, v, heading)
@@ -225,7 +225,7 @@ static func _plan_putt(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 		var along := r.dot(to / maxf(d, 0.01))
 		var ratio := clampf((d + over) / maxf(along, 0.2), 0.5, 1.8)
 		v = lerpf(v, v * sqrt(ratio), read)
-	return {"putt": true, "ci": sim.gear.putter_i, "speed": v, "heading": heading, "dist": d, "target": hole.pin}
+	return {"putt": true, "ci": sim.gear.putter_i, "speed": v, "heading": heading, "dist": d, "target": hole.aim_at()}
 
 
 ## Swing: turn a plan into a moving ball, with human error.

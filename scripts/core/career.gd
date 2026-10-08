@@ -365,7 +365,8 @@ func round_done(card: Array, pars: Array) -> int:
 
 ## What identifies a hole for its medal: where its tee and pin are.
 static func hole_key(hole: Hole) -> String:
-	return "%d,%d>%d,%d" % [int(hole.tee.x / Defs.TILE), int(hole.tee.z / Defs.TILE), int(hole.pin.x / Defs.TILE), int(hole.pin.z / Defs.TILE)]
+	var end := hole.design_pin()
+	return "%d,%d>%d,%d" % [int(hole.tee.x / Defs.TILE), int(hole.tee.z / Defs.TILE), int(end.x / Defs.TILE), int(end.z / Defs.TILE)]
 
 
 func medal(hole: Hole) -> int:

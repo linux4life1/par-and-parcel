@@ -153,7 +153,8 @@ func _step_bombs(dt: float) -> void:
 func _protected(tx: int, ty: int) -> bool:
 	# Leave the cup and the tee markers themselves alone so a hole survives.
 	for hole in sim.course.holes:
-		var pt := sim.course.tile_of(hole.pin.x, hole.pin.z)
+		var aim := hole.aim_at()
+		var pt := sim.course.tile_of(aim.x, aim.z)
 		var tt := sim.course.tile_of(hole.tee.x, hole.tee.z)
 		if (absi(pt.x - tx) <= 1 and absi(pt.y - ty) <= 1) or (tt.x == tx and tt.y == ty):
 			return true
@@ -181,7 +182,10 @@ func _impact(p: Vector3) -> void:
 					continue
 				var i := ty * course.w + tx
 				var near := absi(tx - tile.x) <= 1 and absi(ty - tile.y) <= 1
-				course.health[i] *= 0.0 if near else 0.45
+				var scorched := 0.45
+				if near:
+					scorched = 0.0
+				course.health[i] *= scorched
 				if not near:
 					continue
 				var o := course.objects[i]

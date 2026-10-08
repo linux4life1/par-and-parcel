@@ -251,6 +251,7 @@ func step(dt: float) -> void:
 	if d != _day:
 		_day = d
 		_new_day(d)
+	settle_pins()
 
 
 func day() -> int:
@@ -331,6 +332,7 @@ func _new_day(d: int) -> void:
 		_end_month(d)
 	if d % Defs.DAYS_PER_YEAR == 0 and d > 0:
 		_end_year(d / Defs.DAYS_PER_YEAR)
+	move_pins()
 
 
 # ------------------------------------------------------- names and standing
@@ -1078,7 +1080,8 @@ func lot_value(tx: int, ty: int) -> float:
 				v += 22.0
 	var p := Vector2((tx + 0.5) * Defs.TILE, (ty + 0.5) * Defs.TILE)
 	for hole in course.holes:
-		var d := Ball._seg_dist(Vector2(hole.tee.x, hole.tee.z), Vector2(hole.pin.x, hole.pin.z), p)
+		var end := hole.design_pin()
+		var d := Ball._seg_dist(Vector2(hole.tee.x, hole.tee.z), Vector2(end.x, end.z), p)
 		if d < 22.0:
 			v -= 700.0
 		elif d < 70.0:
@@ -1191,8 +1194,9 @@ func _price_lots() -> void:
 		var hole := course.holes[hi]
 		hx[hi] = hole.tee.x
 		hz[hi] = hole.tee.z
-		var dx := hole.pin.x - hole.tee.x
-		var dz := hole.pin.z - hole.tee.z
+		var end := hole.design_pin()
+		var dx := end.x - hole.tee.x
+		var dz := end.z - hole.tee.z
 		abx[hi] = dx
 		abz[hi] = dz
 		var l2 := dx * dx + dz * dz
@@ -1521,6 +1525,103 @@ func move_hole(i: int, dir: int) -> bool:
 
 func hire(role_id: String) -> bool:
 	return crew.hire(role_id) != null
+
+
+## Move each cup to today's spot on the green. A greenkeeper has to be on
+## staff, and a tournament that is holding the pins is left alone. A locked
+## hole keeps its cup. A group already playing the hole keeps the cup it
+## teed off to: today's spot waits in pin_due and is set when that group
+## has holed out. Nobody is sent to walk the cup over. Par and length stay
+## on the placed pin. A cup that actually moves drops the undo history, so
+## the old spot cannot be put back.
+func move_pins() -> void:
+	if crew.count("greenkeeper") < 1 or tourney.pins_held():
+		return
+	var today := day()
+	var moved := false
+	for i in course.holes.size():
+		var hole := course.holes[i]
+		if hole.pin_locked:
+			hole.pin_due = -1
+			continue
+		var spot := _cup_spot(i)
+		if _hole_busy(hole):
+			hole.pin_due = spot
+			continue
+		if _place_cup(hole, spot):
+			moved = true
+	if not moved:
+		return
+	_pins_moved()
+	if today > 0 and today % Defs.DAYS_PER_MONTH == 0:
+		toast.emit("The greenkeepers have moved the pins.", "info")
+
+
+## A cup that was waiting on a busy hole, once that hole is clear.
+## The spot is the one the last morning asked for.
+func settle_pins() -> void:
+	if crew.count("greenkeeper") < 1 or tourney.pins_held():
+		return
+	var moved := false
+	for hole in course.holes:
+		if hole.pin_due < 0:
+			continue
+		if hole.pin_locked:
+			hole.pin_due = -1
+			continue
+		if _hole_busy(hole):
+			continue
+		var waiting := hole.pin_due
+		if _place_cup(hole, waiting):
+			moved = true
+	if moved:
+		_pins_moved()
+
+
+## A group has teed off and has not holed out. Parties still in line have
+## not started, so the cup can move for them.
+func _hole_busy(hole: Hole) -> bool:
+	return not hole.groups.is_empty() or hole.teeing_group != null
+
+
+func _cup_spot(i: int) -> int:
+	var names: Array = db.pins.get("spots", [])
+	if names.is_empty():
+		return 0
+	return (day() + i) % names.size()
+
+
+func _place_cup(hole: Hole, spot: int) -> bool:
+	var spec: Dictionary = db.pins
+	var front_m := float(spec.get("front", 6.0))
+	var back_m := float(spec.get("back", 6.0))
+	var edge_m := float(spec.get("edge", 2.0))
+	var slope_max := float(spec.get("slope", 4.0))
+	var cup := course.day_cup(hole, spot, front_m, back_m, edge_m, slope_max)
+	hole.pin_spot = spot
+	hole.pin_due = -1
+	if hole.pin.distance_squared_to(cup) <= 0.01:
+		return false
+	hole.pin = cup
+	return true
+
+
+func _pins_moved() -> void:
+	if undo != null:
+		undo.clear()
+	# The routing field watches the cup itself. Bumping the revision here
+	# would rebuild every path and reshuffle the round.
+	course.holes_changed.emit()
+
+
+## middle, front, back, or held while a tournament has the pins.
+func pin_spot_name(hole: Hole) -> String:
+	if tourney.pins_held():
+		return "held"
+	var names: Array = db.pins.get("spots", [])
+	if hole.pin_spot < 0 or hole.pin_spot >= names.size():
+		return "middle"
+	return str(names[hole.pin_spot])
 
 
 # ---------------------------------------------------------- save and load
