@@ -5365,15 +5365,16 @@ func _test_pin_rules() -> void:
 	right.pin = right.placed
 	left.pin_spot = 0
 	right.pin_spot = 0
+	check(busy._cups_waiting == 0, "a quiet morning leaves no cup waiting")
 	var party := Group.new()
 	left.groups.append(party)
 	var waiting := left.pin
 	var keeper_before := busy.crew.members[0].state
 	busy.move_pins()
-	check(left.pin.distance_squared_to(waiting) < 0.01 and left.pin_due >= 0 and right.pin.distance_squared_to(right.placed) > 1.0 and busy.crew.members[0].state == keeper_before, "a hole with a group on it keeps its cup for that group, and the keeper is not sent to walk")
+	check(left.pin.distance_squared_to(waiting) < 0.01 and left.pin_due >= 0 and busy._cups_waiting == 1 and right.pin.distance_squared_to(right.placed) > 1.0 and busy.crew.members[0].state == keeper_before, "a hole with a group on it keeps its cup for that group, and the keeper is not sent to walk")
 	left.groups.clear()
 	busy.settle_pins()
-	check(left.pin.distance_squared_to(waiting) > 1.0 and left.pin_due < 0, "once that group has holed out the waiting cup is set")
+	check(left.pin.distance_squared_to(waiting) > 1.0 and left.pin_due < 0 and busy._cups_waiting == 0, "once that group has holed out the waiting cup is set")
 	var shifted := left.pin
 	busy.move_pins()
 	check(left.pin.distance_squared_to(shifted) < 0.01 and left.pin.z < waiting.z - 1.0, "the same morning does not move that cup a second time")
@@ -5507,11 +5508,12 @@ func _test_cup_target() -> void:
 	check(at_held > at_new + 1.0, "the routing field is rebuilt when the cup moves")
 
 
-## One season swings by several points once shots follow the cup. The mean
-## over these seeds is the comparison: moving the cups should not push the
-## weeds or the condition by a point.
+## One month, eight seeds. Four months of both cups was most of the suite's
+## time. A seed may not finish worse than the locked pin by more than 3
+## weed points or 0.02 condition, so a good seed cannot cancel a bad one.
+## The mean still has to stay inside a point.
 func _test_pin_seasons() -> void:
-	print("-- eight seasons, the day's cup against a pin left where it was placed")
+	print("-- eight seasons of one month, the day's cup against a pin left where it was placed")
 	var seeds: Array[int] = [51, 7, 99, 12345, 3, 13, 21, 42]
 	var weed_sum := 0.0
 	var cond_sum := 0.0
@@ -5519,6 +5521,8 @@ func _test_pin_seasons() -> void:
 		var got := _pin_season(seed_value)
 		weed_sum += got.x
 		cond_sum += got.y
+		check(got.x <= 0.03, "seed %d weeds are not more than 3 points worse with the cup moving (%+.1f)" % [seed_value, got.x * 100.0])
+		check(got.y >= -0.02, "seed %d condition is not more than 0.02 worse with the cup moving (%+.3f)" % [seed_value, got.y])
 	var weed_mean := weed_sum / float(seeds.size())
 	var cond_mean := cond_sum / float(seeds.size())
 	print("  mean change weeds %+.2f points, condition %+.3f" % [weed_mean * 100.0, cond_mean])
@@ -5537,7 +5541,7 @@ func _pin_season(seed_value: int) -> Vector2:
 	turning.events.timer = 99999.0
 	for hole in still.course.holes:
 		hole.pin_locked = true
-	var days := 4 * Defs.DAYS_PER_MONTH
+	var days := Defs.DAYS_PER_MONTH
 	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
 	for _i in steps:
 		still.step(1.0 / 60.0)
