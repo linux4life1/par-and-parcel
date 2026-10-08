@@ -5851,9 +5851,12 @@ func _test_pin_rules() -> void:
 	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
 	var moved_mornings := 0
 	var prev_day := turning.day()
+	var cups := {}
+	_note_cups(turning, cups)
 	for _i in steps:
 		still.step(1.0 / 60.0)
 		turning.step(1.0 / 60.0)
+		_note_cups(turning, cups)
 		var now := turning.day()
 		if now != prev_day:
 			prev_day = now
@@ -5888,7 +5891,7 @@ func _test_pin_rules() -> void:
 	check(totals_ok, "rotating spreads the cup wear: each hole takes the same amount as when the pin stays put")
 	print("  one seed swings: weeds %.1f%% locked against %.1f%% rotating, condition %.3f against %.3f" % [still.grounds.weed_cover * 100.0, turning.grounds.weed_cover * 100.0, still.grounds.condition, turning.grounds.condition])
 	# Same two months, same hires and the same locked pins as _pin_season(51).
-	_pin51 = _pin_delta(still, turning, 51)
+	_pin51 = _pin_delta(still, turning, 51, cups)
 	_test_pin_seasons()
 
 
@@ -5965,13 +5968,19 @@ func _test_cup_target() -> void:
 ## rounds reshuffling, not cup wear: weeds may reach +3.2 points, the
 ## measured +3.1 rounded up to the next tenth, and condition stays inside
 ## 0.02. The mean over all four seeds still has to stay inside a point.
-## Green tiles, where the cup and its wear are, may not be more than 0.5
-## points weedier when the cup moves.
+## Green weeds are counted in tiles. One weedy tile on a 79-tile green is
+## 1.27 points, so a half-point bound was finer than the test can resolve.
+## A rotating season may have at most one more weedy green tile than the
+## locked season, and across the four seeds the rotating total may not
+## exceed the locked total. A weed on a tile the cup stood on, or within
+## the wear radius of one, is cup damage.
 func _test_pin_seasons() -> void:
 	print("-- four seasons of two months, the day's cup against a pin left where it was placed")
 	var seeds: Array[int] = [51, 7, 99, 42]
 	var weed_sum := 0.0
 	var cond_sum := 0.0
+	var rot_total := 0
+	var lock_total := 0
 	for seed_value in seeds:
 		var got: Dictionary = {}
 		if seed_value == 51:
@@ -5981,9 +5990,13 @@ func _test_pin_seasons() -> void:
 			got = _pin_season(seed_value)
 		var dw: float = float(got.get("weed", 1.0))
 		var dc: float = float(got.get("cond", -1.0))
-		var dg: float = float(got.get("green", 1.0))
+		var rot_green: int = int(got.get("rot_green", 0))
+		var lock_green: int = int(got.get("lock_green", 0))
+		var cup_hits: int = int(got.get("cup_weeds", -1))
 		weed_sum += dw
 		cond_sum += dc
+		rot_total += rot_green
+		lock_total += lock_green
 		if seed_value == 51:
 			# Pinned known exception from rounds reshuffling, not cup wear.
 			check(dw <= 0.032, "seed 51 weeds stay within the pinned +3.2 points, a known exception from rounds reshuffling (%+.2f)" % (dw * 100.0))
@@ -5991,12 +6004,15 @@ func _test_pin_seasons() -> void:
 		else:
 			check(dw <= 0.03, "seed %d weeds are not more than 3 points worse with the cup moving (%+.1f)" % [seed_value, dw * 100.0])
 			check(dc >= -0.02, "seed %d condition is not more than 0.02 worse with the cup moving (%+.3f)" % [seed_value, dc])
-		check(dg <= 0.005, "seed %d green-tile weeds are not more than 0.5 points worse with the cup moving (%+.2f)" % [seed_value, dg * 100.0])
+		check(rot_green <= lock_green + 1, "seed %d rotating green weed tiles are at most one more than locked (%d against %d)" % [seed_value, rot_green, lock_green])
+		check(cup_hits == 0, "seed %d has no weed tile on a cup spot or within the wear radius (%d)" % [seed_value, cup_hits])
 	var weed_mean := weed_sum / float(seeds.size())
 	var cond_mean := cond_sum / float(seeds.size())
 	print("  mean change weeds %+.2f points, condition %+.3f" % [weed_mean * 100.0, cond_mean])
+	print("  green weed tiles rotating %d, locked %d" % [rot_total, lock_total])
 	check(absf(weed_mean) < 0.01, "across these seasons, moving the cups changes the weeds by under a point (%+.2f)" % (weed_mean * 100.0))
 	check(absf(cond_mean) < 0.01, "and the condition by under a point (%+.3f)" % cond_mean)
+	check(rot_total <= lock_total, "across these seasons, rotating green weed tiles are no more than locked (%d against %d)" % [rot_total, lock_total])
 
 
 func _pin_season(seed_value: int) -> Dictionary:
@@ -6012,16 +6028,19 @@ func _pin_season(seed_value: int) -> Dictionary:
 		hole.pin_locked = true
 	var days := 2 * Defs.DAYS_PER_MONTH
 	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
-	for _i in steps:
+	var cups := {}
+	_note_cups(turning, cups)
+	for _k in steps:
 		still.step(1.0 / 60.0)
 		turning.step(1.0 / 60.0)
-	return _pin_delta(still, turning, seed_value)
+		_note_cups(turning, cups)
+	return _pin_delta(still, turning, seed_value, cups)
 
 
 ## Overall weed cover and condition, plus weed cover on greens and on the
 ## other in-play grass. Visible weeds are the same cut Grounds uses, above
 ## 0.3, and rough is left out of that cover.
-func _pin_delta(quiet: Sim, moving: Sim, seed_value: int) -> Dictionary:
+func _pin_delta(quiet: Sim, moving: Sim, seed_value: int, spots: Dictionary) -> Dictionary:
 	var dw := moving.grounds.weed_cover - quiet.grounds.weed_cover
 	var dc := moving.grounds.condition - quiet.grounds.condition
 	var qg := _grass_weeds(quiet.course)
@@ -6044,9 +6063,16 @@ func _pin_delta(quiet: Sim, moving: Sim, seed_value: int) -> Dictionary:
 		print("  seed 51 weeds locked %.2f%% rotating %.2f%% (change %+.2f), condition %.3f %.3f (change %+.3f)" % [quiet.grounds.weed_cover * 100.0, moving.grounds.weed_cover * 100.0, dw * 100.0, quiet.grounds.condition, moving.grounds.condition, dc])
 	else:
 		print("  seed %d weeds locked %.1f%% rotating %.1f%% (change %+.1f), condition %.3f %.3f (change %+.3f)" % [seed_value, quiet.grounds.weed_cover * 100.0, moving.grounds.weed_cover * 100.0, dw * 100.0, quiet.grounds.condition, moving.grounds.condition, dc])
-	print("  seed %d green weed tiles %d/%d rotating against %d/%d locked (%+.2f points), other grass %d/%d against %d/%d (%+.2f points)" % [seed_value, int(mg.y), int(mg.x), int(qg.y), int(qg.x), dg * 100.0, int(mg.w), int(mg.z), int(qg.w), int(qg.z), dother * 100.0])
+	var rot_green := int(mg.y)
+	var lock_green := int(qg.y)
+	var reach := float(moving.db.pins.get("reach", 2.5))
+	var cup_weeds := _weeds_on_cups(moving.course, spots, reach)
+	print("  seed %d green weed tiles %d/%d rotating against %d/%d locked (%+.2f points), other grass %d/%d against %d/%d (%+.2f points)" % [seed_value, rot_green, int(mg.x), lock_green, int(qg.x), dg * 100.0, int(mg.w), int(mg.z), int(qg.w), int(qg.z), dother * 100.0])
+	print("  seed %d recorded %d cup spots; weed tiles on a cup or within %.1f m: %d" % [seed_value, spots.size(), reach, cup_weeds])
+	_print_extra_greens(quiet.course, moving.course, spots, seed_value)
 	check(qg.x > 0.0 and mg.x > 0.0, "seed %d has green tiles to measure" % seed_value)
-	return {"weed": dw, "cond": dc, "green": dg, "other": dother}
+	check(spots.size() > 0, "seed %d recorded the cup spots used during the season" % seed_value)
+	return {"weed": dw, "cond": dc, "green": dg, "other": dother, "rot_green": rot_green, "lock_green": lock_green, "cup_weeds": cup_weeds}
 
 
 ## x green tiles, y of them weedy; z other in-play grass, w of them weedy.
@@ -6070,6 +6096,69 @@ func _grass_weeds(course: Course) -> Vector4:
 			if weedy:
 				other_w += 1
 	return Vector4(green_n, green_w, other_n, other_w)
+
+
+## Remember each place the rotating cup stood. Reading the pin does not draw
+## a random number, so the season stays the one the wear pair already ran.
+func _note_cups(sim: Sim, spots: Dictionary) -> void:
+	for hole in sim.course.holes:
+		var key := "%d,%d" % [int(round(hole.pin.x * 100.0)), int(round(hole.pin.z * 100.0))]
+		if not spots.has(key):
+			spots[key] = Vector2(hole.pin.x, hole.pin.z)
+
+
+## How many visible weed tiles sit on a tile a cup stood on, or within the
+## wear radius of one. The radius is the same `reach` the cup wears with.
+func _weeds_on_cups(course: Course, spots: Dictionary, reach: float) -> int:
+	var stood_on := {}
+	for spot_key in spots:
+		var spot_at: Vector2 = spots[spot_key]
+		var stood_tile := course.tile_of(spot_at.x, spot_at.y)
+		if course.in_bounds(stood_tile.x, stood_tile.y):
+			stood_on[stood_tile.y * course.w + stood_tile.x] = true
+	var hits := 0
+	var ntiles := course.terrain.size()
+	for ti in ntiles:
+		if course.weeds[ti] <= 0.3:
+			continue
+		var tx := ti % course.w
+		var ty := int(ti / course.w)
+		var on_cup := stood_on.has(ti)
+		var centre := course.tile_center(tx, ty)
+		var within := false
+		if not on_cup:
+			for near_key in spots:
+				var near_at: Vector2 = spots[near_key]
+				var gap := Vector2(centre.x - near_at.x, centre.z - near_at.y).length()
+				if gap <= reach:
+					within = true
+					break
+		if on_cup or within:
+			hits += 1
+	return hits
+
+
+## A green tile weedy with the cup moving and clean with it locked.
+func _print_extra_greens(locked: Course, moving: Course, spots: Dictionary, seed_value: int) -> void:
+	var extras := 0
+	var ntiles := moving.terrain.size()
+	for ti in ntiles:
+		var kind: int = moving.terrain[ti]
+		if not Defs.is_green(kind) or moving.weeds[ti] <= 0.3 or locked.weeds[ti] > 0.3:
+			continue
+		extras += 1
+		var tx := ti % moving.w
+		var ty := int(ti / moving.w)
+		var centre := moving.tile_center(tx, ty)
+		var nearest := -1.0
+		for spot_key in spots:
+			var spot_at: Vector2 = spots[spot_key]
+			var gap := Vector2(centre.x - spot_at.x, centre.z - spot_at.y).length()
+			if nearest < 0.0 or gap < nearest:
+				nearest = gap
+		print("  seed %d extra green weed tile at %d,%d, %.1f m from the nearest cup spot" % [seed_value, tx, ty, nearest])
+	if extras == 0:
+		print("  seed %d has no extra green weed tile" % seed_value)
 
 
 func _test_undo() -> void:
