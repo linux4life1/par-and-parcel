@@ -27,6 +27,10 @@ var path_metres := 0.0
 var _book: Dictionary = {}
 var _sig := 0
 var _have := false
+## Course revision and a hash of the tee, the pin and the line. The tile
+## hash is rebuilt only when one of those has changed.
+var _rev := -1
+var _mark := 0
 var _scale := 1.0
 var _left := 0.0
 var _top := 0.0
@@ -41,9 +45,27 @@ func _init(book: Dictionary) -> void:
 	_book = book
 
 
-## The cached image, redrawn only when the hole's picture would change.
+## The card already drawn for this hole, or a new one. Keyed by the hole
+## itself, so rebuilding the panel does not hand one hole another's picture.
+static func for_hole(cards: Dictionary, hole: Hole, book: Dictionary) -> YardageCard:
+	var got: Variant = cards.get(hole, null)
+	if got is YardageCard:
+		return got
+	var made := YardageCard.new(book)
+	cards[hole] = made
+	return made
+
+
+## The cached image. The tile hash runs only when the course revision or
+## this hole's tee, pin or line has changed, and the picture is redrawn
+## only when that hash changes.
 func ensure(course: Course, hole: Hole) -> Image:
+	var ends := _ends(hole)
+	if _have and image != null and course.revision == _rev and ends == _mark:
+		return image
 	var sig := _signature(course, hole)
+	_rev = course.revision
+	_mark = ends
 	if _have and sig == _sig and image != null:
 		return image
 	_draw(course, hole)
@@ -51,6 +73,19 @@ func ensure(course: Course, hole: Hole) -> Image:
 	_have = true
 	draws += 1
 	return image
+
+
+func _ends(hole: Hole) -> int:
+	var h := 2166136261
+	h = _mix(h, int(round(hole.tee.x * 10.0)))
+	h = _mix(h, int(round(hole.tee.z * 10.0)))
+	h = _mix(h, int(round(hole.pin.x * 10.0)))
+	h = _mix(h, int(round(hole.pin.z * 10.0)))
+	h = _mix(h, hole.route.size())
+	for p in hole.route:
+		h = _mix(h, int(round(p.x * 10.0)))
+		h = _mix(h, int(round(p.y * 10.0)))
+	return h
 
 
 func _signature(course: Course, hole: Hole) -> int:
@@ -155,13 +190,15 @@ func _draw(course: Course, hole: Hole) -> void:
 	var thick := float(_book.get("line", 1.15))
 	for i in range(1, line.size()):
 		_stroke(_to_px(line[i - 1]), _to_px(line[i]), thick, line_c)
-	var mark := float(_book.get("mark", 2.2))
+	var tee_r := float(_book.get("tee_dot", 0.99))
+	var pin_r := float(_book.get("pin_dot", 0.88))
+	var flag := float(_book.get("flag", 4.84))
 	tee_px = _to_px(Vector2(hole.tee.x, hole.tee.z))
 	pin_px = _to_px(Vector2(hole.pin.x, hole.pin.z))
-	_dot(tee_px, mark * 0.45, tee_c)
-	_dot(pin_px, mark * 0.4, pin_c)
-	_stroke(pin_px, pin_px + Vector2(0.0, -mark * 2.2), 1.0, pin_c)
-	_yards(line, ink)
+	_dot(tee_px, tee_r, tee_c)
+	_dot(pin_px, pin_r, pin_c)
+	_stroke(pin_px, pin_px + Vector2(0.0, -flag), 1.0, pin_c)
+	_yards(line, ink, float(_book.get("label_gap", 8.0)))
 
 
 func _fit(line: PackedVector2Array, hole: Hole, width: int, height: int, pad: float) -> void:
@@ -212,7 +249,7 @@ func _to_world(px: float, py: float) -> Vector2:
 	return _anchor + _right * across + _up * along
 
 
-func _yards(line: PackedVector2Array, ink: Color) -> void:
+func _yards(line: PackedVector2Array, ink: Color, gap: float) -> void:
 	var turn := deg_to_rad(float(_book.get("turn", 28.0)))
 	var glyph := maxi(int(_book.get("glyph", 1)), 1)
 	var carried := 0.0
@@ -227,7 +264,7 @@ func _yards(line: PackedVector2Array, ink: Color) -> void:
 		var at_pin := i == line.size() - 1
 		if corner or at_pin:
 			var px := _to_px(line[i])
-			if px.distance_to(last) >= 8.0 or at_pin:
+			if px.distance_to(last) >= gap or at_pin:
 				_number(int(round(px.x)), int(round(px.y)), Defs.yards(carried), ink, glyph)
 				last = px
 		prev = step

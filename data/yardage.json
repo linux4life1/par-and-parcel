@@ -8,6 +8,10 @@
 	"tree": 1.6,
 	"turn": 28,
 	"glyph": 1,
+	"label_gap": 8,
+	"tee_dot": 0.99,
+	"pin_dot": 0.88,
+	"flag": 4.84,
 	"colours": {
 		"paper": "f4f0e6",
 		"rough": "9aa67a",

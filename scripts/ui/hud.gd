@@ -49,6 +49,8 @@ var hint_panel: PanelContainer
 var hint_label: Label
 var overlay_btns: Array[Button] = []
 var contour_btn: Button
+## One yardage diagram per hole. Rebuilding the Holes panel reuses these.
+var yardage_cards := {}
 var bottom_right: VBoxContainer
 var inspector: PanelContainer
 var inspector_body: VBoxContainer

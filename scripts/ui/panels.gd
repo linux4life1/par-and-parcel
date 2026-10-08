@@ -364,14 +364,14 @@ func _holes(body: VBoxContainer) -> Callable:
 		body.add_child(card)
 		var cv := UIKit.vbox(4)
 		card.add_child(cv)
-		var sheet := YardageCard.new(sim.db.yardage)
+		var sheet := YardageCard.for_hole(hud.yardage_cards, hole, sim.db.yardage)
 		var sheet_img := sheet.ensure(sim.course, hole)
 		var sheet_tex := TextureRect.new()
 		sheet_tex.texture = ImageTexture.create_from_image(sheet_img)
 		sheet_tex.custom_minimum_size = Vector2(sheet_img.get_width(), sheet_img.get_height())
 		sheet_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 		sheet_tex.stretch_mode = TextureRect.STRETCH_KEEP
-		sheet_tex.mouse_filter = Control.MOUSE_FILTER_STOP
+		sheet_tex.mouse_filter = Control.MOUSE_FILTER_PASS
 		sheet_tex.tooltip_text = "Tee at the bottom. The line is the path the yardage is measured on."
 		cv.add_child(sheet_tex)
 		diagrams.append(sheet)

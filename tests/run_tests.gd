@@ -5078,3 +5078,58 @@ func _test_yardage() -> void:
 	check(c.set_terrain(tile.x, tile.y, other), "a tile on the hole can be changed")
 	book.ensure(c, hole)
 	check(book.draws == drawn + 1, "changing a tile on the hole redraws the card")
+	var nub_book: Dictionary = db.yardage.duplicate(true)
+	nub_book["flag"] = 1.0
+	var nub := YardageCard.new(nub_book)
+	nub.ensure(c, hole)
+	var pin_col := Color.html(str((db.yardage["colours"] as Dictionary).get("pin", "8e2e2e")))
+	var sx := int(round(book.pin_px.x))
+	var sy := int(round(book.pin_px.y)) - 3
+	var fly_px := book.image.get_pixel(sx, sy)
+	var nub_px := nub.image.get_pixel(sx, int(round(nub.pin_px.y)) - 3)
+	check(sy >= 0 and fly_px.is_equal_approx(pin_col) and not nub_px.is_equal_approx(pin_col), "the flag length in the yardage file is what gets drawn")
+	drawn = book.draws
+	var moved_pin := c.tile_center(42, 48)
+	hole.pin = c.on_ground(moved_pin.x, moved_pin.z)
+	hole.update_metrics(c)
+	book.ensure(c, hole)
+	check(book.draws == drawn + 1, "moving the pin redraws the card")
+	drawn = book.draws
+	var moved_tee := c.tile_center(40, 16)
+	hole.tee = c.on_ground(moved_tee.x, moved_tee.z)
+	hole.update_metrics(c)
+	book.ensure(c, hole)
+	check(book.draws == drawn + 1, "moving the tee redraws the card")
+	drawn = book.draws
+	var mid_pt := hole.point_along(0.5, c)
+	var trunk := c.tile_of(mid_pt.x, mid_pt.z)
+	check(c.set_object(trunk.x, trunk.y, Defs.O.OAK), "a tree can be planted on the hole")
+	book.ensure(c, hole)
+	check(book.draws == drawn + 1, "planting a tree on the hole redraws the card")
+	drawn = book.draws
+	check(c.set_object(trunk.x, trunk.y, Defs.O.NONE), "the tree can be taken off the hole")
+	book.ensure(c, hole)
+	check(book.draws == drawn + 1, "removing a tree on the hole redraws the card")
+	drawn = book.draws
+	check(c.set_terrain(4, 4, Defs.T.BUNKER), "a tile far from the hole can be changed")
+	book.ensure(c, hole)
+	check(book.draws == drawn, "changing a tile far from the hole does not redraw the card")
+	for ty2 in range(20, 38):
+		c.set_terrain(90, ty2, Defs.T.FAIRWAY)
+	var other_hole := sim.add_hole(c.tile_center(90, 20), c.tile_center(90, 36))
+	check(other_hole != null and absf(other_hole.length - hole.length) > 10.0, "a second, shorter hole")
+	if other_hole == null:
+		return
+	var cards := {}
+	var first := YardageCard.for_hole(cards, hole, db.yardage)
+	var second := YardageCard.for_hole(cards, other_hole, db.yardage)
+	first.ensure(c, hole)
+	second.ensure(c, other_hole)
+	var first_len := first.path_metres
+	var second_len := second.path_metres
+	sim.remove_hole(0)
+	var kept := YardageCard.for_hole(cards, other_hole, db.yardage)
+	var lost := YardageCard.for_hole(cards, hole, db.yardage)
+	var kept_draws := kept.draws
+	kept.ensure(c, other_hole)
+	check(kept == second and lost == first and kept.draws == kept_draws and is_equal_approx(kept.path_metres, second_len) and not is_equal_approx(first_len, second_len), "after a hole is removed, reopening the panel keeps each card with its own hole")
