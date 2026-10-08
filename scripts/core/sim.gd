@@ -77,6 +77,7 @@ var _scenery := {}
 var _lines_rev := -1
 var _mark_rev := -2
 var _marks: Array = []
+var _mark_scale := PackedFloat32Array()
 
 
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
@@ -483,11 +484,33 @@ func _ensure_marks() -> void:
 		var p := course.tile_center(i % course.w, int(i / course.w))
 		_marks.append({
 			"x": p.x, "z": p.z,
-			"radius": float(kind.get("radius", 40.0)),
+			"radius": float(kind.get("radius", 42.0)),
 			"mood": float(kind.get("mood", 0.0)),
 			"weeds": float(kind.get("weeds", 1.0)),
 			"story": float(kind.get("story", 0.0)),
 		})
+	var n := course.w * course.h
+	_mark_scale = PackedFloat32Array()
+	_mark_scale.resize(n)
+	_mark_scale.fill(1.0)
+	for m: Dictionary in _marks:
+		var rad: float = float(m.radius)
+		var reach := int(ceil(rad / Defs.TILE))
+		var hx := int(float(m.x) / Defs.TILE)
+		var hz := int(float(m.z) / Defs.TILE)
+		var calm := float(m.weeds)
+		for oy in range(-reach, reach + 1):
+			for ox in range(-reach, reach + 1):
+				var x := hx + ox
+				var y := hz + oy
+				if not course.in_bounds(x, y):
+					continue
+				var cx := (x + 0.5) * Defs.TILE
+				var cz := (y + 0.5) * Defs.TILE
+				if Vector2(cx - float(m.x), cz - float(m.z)).length_squared() > rad * rad:
+					continue
+				var ti := y * course.w + x
+				_mark_scale[ti] = minf(_mark_scale[ti], calm)
 
 
 ## The landmark covering this spot, or an empty dictionary.
@@ -509,17 +532,9 @@ func mark_at(x: float, z: float) -> Dictionary:
 ## How much a landmark slows the weeds on this tile. 1 where nothing stands.
 func weed_scale(i: int) -> float:
 	_ensure_marks()
-	if _marks.is_empty() or i < 0:
+	if i < 0 or i >= _mark_scale.size():
 		return 1.0
-	var p := course.tile_center(i % course.w, int(i / course.w))
-	var scale := 1.0
-	for m: Dictionary in _marks:
-		var dx: float = p.x - float(m.x)
-		var dz: float = p.z - float(m.z)
-		var rad: float = float(m.radius)
-		if dx * dx + dz * dz <= rad * rad:
-			scale = minf(scale, float(m.weeds))
-	return scale
+	return _mark_scale[i]
 
 
 ## Once a round, a golfer inside a landmark's circle feels it, and a story
