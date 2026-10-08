@@ -19,8 +19,6 @@ var placed := Vector3.ZERO
 var pin_spot := 0
 ## The owner asked the greenkeepers to leave this cup where it is.
 var pin_locked := false
-## A tournament is holding this pin. The morning rotation leaves it alone.
-var pin_held := false
 ## The morning's spot, waiting because a group is still playing the hole.
 ## -1 when nothing is waiting.
 var pin_due := -1

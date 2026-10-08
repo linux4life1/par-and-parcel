@@ -349,7 +349,6 @@ func apply_setup(id: String) -> void:
 	_pin_home.clear()
 	var moved := false
 	for hole in sim.course.holes:
-		hole.pin_held = true
 		var was := sim.course.tuck_pin(hole, tuck)
 		if hole.pin.distance_squared_to(was) > 0.0001:
 			moved = true
@@ -366,7 +365,6 @@ func clear_setup() -> void:
 	for hole in sim.course.holes:
 		if not _pin_home.has(hole):
 			continue
-		hole.pin_held = false
 		var back: Vector3 = _pin_home[hole]
 		if hole.pin.distance_squared_to(back) > 0.0001:
 			hole.pin = back

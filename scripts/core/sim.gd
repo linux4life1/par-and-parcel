@@ -81,6 +81,9 @@ var _light_ids: Array[int] = []
 var _light_ready := false
 var _slow := 0.0
 var _day := 0
+## How many holes have a cup waiting in pin_due. settle_pins looks at this
+## and returns without walking the holes when it is zero.
+var _cups_waiting := 0
 var _scenery := {}
 var _lines_rev := -1
 var _lot_rev := -2
@@ -1555,6 +1558,7 @@ func remove_hole(i: int) -> void:
 	# hole itself and sets applying so this does not wipe the step it is in.
 	if undo != null and not undo.applying:
 		undo.clear()
+	_set_due(course.holes[i], -1)
 	course.remove_hole(i)
 	visitors.on_hole_removed(i)
 
@@ -1598,11 +1602,11 @@ func move_pins() -> void:
 	for i in course.holes.size():
 		var hole := course.holes[i]
 		if hole.pin_locked:
-			hole.pin_due = -1
+			_set_due(hole, -1)
 			continue
 		var spot := _cup_spot(i)
 		if _hole_busy(hole):
-			hole.pin_due = spot
+			_set_due(hole, spot)
 			continue
 		if _place_cup(hole, spot):
 			moved = true
@@ -1616,6 +1620,8 @@ func move_pins() -> void:
 ## A cup that was waiting on a busy hole, once that hole is clear.
 ## The spot is the one the last morning asked for.
 func settle_pins() -> void:
+	if _cups_waiting <= 0:
+		return
 	if crew.count("greenkeeper") < 1 or tourney.pins_held():
 		return
 	var moved := false
@@ -1623,7 +1629,7 @@ func settle_pins() -> void:
 		if hole.pin_due < 0:
 			continue
 		if hole.pin_locked:
-			hole.pin_due = -1
+			_set_due(hole, -1)
 			continue
 		if _hole_busy(hole):
 			continue
@@ -1632,6 +1638,22 @@ func settle_pins() -> void:
 			moved = true
 	if moved:
 		_pins_moved()
+
+
+## Remember a waiting cup, or forget one. The count is what settle_pins
+## checks, so a quiet step does not walk the holes.
+func _set_due(hole: Hole, spot: int) -> void:
+	var waiting := hole.pin_due >= 0
+	hole.pin_due = spot
+	var still := hole.pin_due >= 0
+	if waiting == still:
+		return
+	if still:
+		_cups_waiting += 1
+	else:
+		_cups_waiting -= 1
+		if _cups_waiting < 0:
+			_cups_waiting = 0
 
 
 ## A group has teed off and has not holed out. Parties still in line have
@@ -1655,7 +1677,7 @@ func _place_cup(hole: Hole, spot: int) -> bool:
 	var slope_max := float(spec.get("slope", 4.0))
 	var cup := course.day_cup(hole, spot, front_m, back_m, edge_m, slope_max)
 	hole.pin_spot = spot
-	hole.pin_due = -1
+	_set_due(hole, -1)
 	if hole.pin.distance_squared_to(cup) <= 0.01:
 		return false
 	hole.pin = cup
@@ -1714,6 +1736,10 @@ func install_course(course_d: Dictionary) -> void:
 	player.golfer.course = course
 	wildlife.populate()
 	grounds.reset_layout()
+	_cups_waiting = 0
+	for wait_hole in course.holes:
+		if wait_hole.pin_due >= 0:
+			_cups_waiting += 1
 
 
 func to_dict() -> Dictionary:
