@@ -31,6 +31,11 @@ var _litter_rev := -1
 var _litter_ready := false
 var _bins: Array[Vector2] = []
 var _source_at := {}
+## Plays already counted toward today's cup wear, per hole.
+var _cup_seen := {}
+## Cup wear applied to each tile. Mowing does not clear it, so a test can
+## see where a stationary pin piled up and a moving pin spread out.
+var cup_load := {}
 
 
 func _init(s: Sim) -> void:
@@ -197,28 +202,22 @@ func step(dt: float) -> void:
 	wear_around_pins(dt)
 
 
-## Extra wear on the green around each cup, so a pin that stays put tires
-## the same spot and a pin that moves spreads it. `dt` is sim seconds.
-## Nothing is added unless a greenkeeper is actually moving pins. The rate
-## uses the same difficulty and skill multipliers as the rest of the turf.
+## Extra wear on the green around each cup. A cup tires its own green every
+## day, locked or rotating, and a hole that has been played today wears a
+## little more. Moving the pin spreads that wear; it does not add any. The
+## rate uses the same difficulty and skill multipliers as the rest of the turf.
+## `dt` is sim seconds.
 func wear_around_pins(dt: float) -> void:
-	if sim.crew.count("greenkeeper") < 1 or sim.tourney.pins_held():
-		return
-	var moving := false
-	for hole in sim.course.holes:
-		if not hole.pin_locked:
-			moving = true
-			break
-	if not moving:
-		return
 	var spec: Dictionary = sim.db.pins
-	var rate := float(spec.get("wear", 0.0)) * dt * sim.skills.mult("wear") * sim.diff("wear")
-	if rate <= 0.0 or sim.course.holes.is_empty():
+	var base := float(spec.get("wear", 0.0)) * dt * sim.skills.mult("wear") * sim.diff("wear")
+	if base <= 0.0 or sim.course.holes.is_empty():
 		return
-	var reach := int(spec.get("radius", 2))
+	var reach_m := float(spec.get("reach", 2.5))
+	var reach := int(ceil(reach_m / Defs.TILE))
 	var course := sim.course
 	var seen := {}
 	for hole in course.holes:
+		var rate := base * _cup_play_scale(hole, spec)
 		var t := course.tile_of(hole.pin.x, hole.pin.z)
 		for ty in range(t.y - reach, t.y + reach + 1):
 			for tx in range(t.x - reach, t.x + reach + 1):
@@ -228,10 +227,39 @@ func wear_around_pins(dt: float) -> void:
 				if seen.has(i) or not Defs.is_green(course.terrain[i]):
 					continue
 				var centre := course.tile_center(tx, ty)
-				if Vector2(centre.x - hole.pin.x, centre.z - hole.pin.z).length() > float(reach) * Defs.TILE:
+				if Vector2(centre.x - hole.pin.x, centre.z - hole.pin.z).length() > reach_m:
 					continue
 				seen[i] = true
+				cup_load[i] = float(cup_load.get(i, 0.0)) + rate
 				course.health[i] = maxf(0.0, course.health[i] - rate)
+
+
+## 1 on a quiet day, up to 1 + played once the hole has been played play_cap
+## times today. The first look records the scorecard so far, so a hole is not
+## charged for rounds that finished before the cup started wearing.
+func _cup_play_scale(hole: Hole, spec: Dictionary) -> float:
+	var id := hole.get_instance_id()
+	var today := sim.day()
+	var known := hole.plays
+	var gain := 0
+	var stamped := today
+	if _cup_seen.has(id):
+		var got: Variant = _cup_seen[id]
+		var rec: Dictionary = got
+		known = int(rec.get("plays", hole.plays))
+		gain = int(rec.get("gain", 0))
+		stamped = int(rec.get("day", today))
+		if stamped != today:
+			gain = maxi(0, hole.plays - known)
+			stamped = today
+		else:
+			gain += maxi(0, hole.plays - known)
+	_cup_seen[id] = {"day": stamped, "plays": hole.plays, "gain": gain}
+	var cap := float(spec.get("play_cap", 4.0))
+	if cap <= 0.0:
+		return 1.0
+	var bonus := float(spec.get("played", 0.0))
+	return 1.0 + bonus * clampf(float(gain) / cap, 0.0, 1.0)
 
 
 ## Keep the bin and source lists current. Rebuilt only when an object moves,

@@ -5066,6 +5066,8 @@ func _test_pins() -> void:
 	check(hole.par == par and is_equal_approx(hole.length, length) and hole.placed.distance_squared_to(placed) < 0.01, "par and length stay on the placed pin")
 	check(sim.pin_spot_name(hole) == "front", "the day's spot is the front")
 	var keeper: Crew.Member = sim.crew.members[0]
+	c.weeds.fill(0.0)
+	c.health.fill(1.0)
 	keeper.pos = hole.pin
 	keeper.state = 0
 	keeper.timer = 0.0
@@ -5077,8 +5079,9 @@ func _test_pins() -> void:
 	c.terrain[far] = Defs.T.GREEN
 	c.health[ui] = 1.0
 	c.health[far] = 1.0
-	sim.grounds.wear_around_pins(200.0)
-	check(c.health[ui] < c.health[far] - 0.05 and is_equal_approx(c.health[far], 1.0), "the green around the cup wears and a green far away does not")
+	sim.grounds.wear_around_pins(1000.0)
+	var cup_expect := float(db.pins.get("wear", 0.0)) * 1000.0
+	check(cup_expect > 0.0 and c.health[ui] < c.health[far] - cup_expect * 0.5 and is_equal_approx(c.health[far], 1.0), "the green around the cup wears and a green far away does not")
 	var saved := Sim.from_dict(db, JSON.parse_string(JSON.stringify(sim.to_dict())), gear)
 	var loaded: Hole = saved.course.holes[0]
 	check(loaded.pin.distance_squared_to(hole.pin) < 0.01 and loaded.placed.distance_squared_to(hole.placed) < 0.01 and loaded.pin_spot == hole.pin_spot, "a save keeps the day's cup and the placed pin")
@@ -5131,8 +5134,57 @@ func _cup_drop(seed_value: int, level: int, wear_bonus: float) -> float:
 	var at := sim.course.tile_of(hole.pin.x, hole.pin.z)
 	var i := at.y * sim.course.w + at.x
 	sim.course.health[i] = 1.0
-	sim.grounds.wear_around_pins(200.0)
+	sim.grounds.wear_around_pins(1000.0)
 	return 1.0 - sim.course.health[i]
+
+
+func _locked_cup_drop(sibling: bool) -> float:
+	var sim := _sim("sandbox", 47)
+	sim.paint(40, 50, 4, Defs.T.GREEN)
+	var hole := sim.add_hole(sim.course.tile_center(40, 28), sim.course.tile_center(40, 50))
+	hole.pin_locked = true
+	if sibling:
+		sim.paint(100, 50, 4, Defs.T.GREEN)
+		var other := sim.add_hole(sim.course.tile_center(100, 28), sim.course.tile_center(100, 50))
+		other.pin_locked = false
+	var at := sim.course.tile_of(hole.pin.x, hole.pin.z)
+	var i := at.y * sim.course.w + at.x
+	sim.course.health[i] = 1.0
+	sim.grounds.wear_around_pins(1000.0)
+	return 1.0 - sim.course.health[i]
+
+
+func _played_cup_drop(played: bool) -> float:
+	var sim := _sim("sandbox", 60)
+	sim.paint(40, 50, 4, Defs.T.GREEN)
+	var hole := sim.add_hole(sim.course.tile_center(40, 28), sim.course.tile_center(40, 50))
+	var at := sim.course.tile_of(hole.pin.x, hole.pin.z)
+	var i := at.y * sim.course.w + at.x
+	sim.course.health[i] = 1.0
+	sim.grounds.wear_around_pins(1.0)
+	sim.course.health[i] = 1.0
+	if played:
+		hole.plays = 4
+	sim.grounds.wear_around_pins(1000.0)
+	return 1.0 - sim.course.health[i]
+
+
+## Cup wear on the middle, front and back tiles of one hole.
+func _spot_loads(sim: Sim, hi: int) -> Array[float]:
+	var spec: Dictionary = sim.db.pins
+	var front_m := float(spec.get("front", 6.0))
+	var back_m := float(spec.get("back", 6.0))
+	var edge_m := float(spec.get("edge", 2.0))
+	var slope_max := float(spec.get("slope", 4.0))
+	var out: Array[float] = [0.0, 0.0, 0.0]
+	var c := sim.course
+	var hole: Hole = c.holes[hi]
+	for spot in 3:
+		var cup := c.day_cup(hole, spot, front_m, back_m, edge_m, slope_max)
+		var at := c.tile_of(cup.x, cup.z)
+		var i := at.y * c.w + at.x
+		out[spot] = float(sim.grounds.cup_load.get(i, 0.0))
+	return out
 
 
 func _test_pin_rules() -> void:
@@ -5187,30 +5239,64 @@ func _test_pin_rules() -> void:
 	steep.move_pins()
 	var cup_grade := float(Slope.read(sc, tier.pin.x, tier.pin.z)["percent"])
 	check(asked_grade > slope_max and cup_grade <= slope_max and tier.pin.distance_to(home) + 0.5 < front_m, "a steep front tier is skipped for a flatter spot")
+	var split := _sim("sandbox", 55)
+	var sp := split.course
+	check(split.paint(40, 50, 2, Defs.T.GREEN) > 0, "a green with a gap and a far lobe")
+	var lobe := split.add_hole(sp.tile_center(40, 28), sp.tile_center(40, 50))
+	for gx in range(38, 43):
+		sp.terrain[51 * sp.w + gx] = Defs.T.FAIRWAY
+	for gy in range(53, 58):
+		for gx in range(38, 43):
+			if sp.in_bounds(gx, gy):
+				sp.terrain[gy * sp.w + gx] = Defs.T.GREEN
+	var stopped := sp.day_cup(lobe, 2, 6.0, 20.0, 0.0, 100.0)
+	var stopped_at := sp.tile_of(stopped.x, stopped.z)
+	check(Defs.is_green(sp.terrain_at(sp.tile_center(40, 54).x, sp.tile_center(40, 54).z)) and stopped_at.y <= 50, "a gap off the green stops the cup walk before the far lobe")
 	var bare := _sim("sandbox", 45)
 	bare.paint(40, 50, 4, Defs.T.GREEN)
 	var bare_hole := bare.add_hole(bare.course.tile_center(40, 28), bare.course.tile_center(40, 50))
 	var bare_at := bare.course.tile_of(bare_hole.pin.x, bare_hole.pin.z)
 	var bare_i := bare_at.y * bare.course.w + bare_at.x
 	bare.course.health[bare_i] = 1.0
-	bare.grounds.wear_around_pins(200.0)
-	check(is_equal_approx(bare.course.health[bare_i], 1.0), "with no greenkeeper the cup does not wear the green")
+	bare.time = Defs.DAY_SECONDS
+	var bare_pin := bare_hole.pin
+	bare.move_pins()
+	bare.grounds.wear_around_pins(1000.0)
+	var bare_expect := float(db.pins.get("wear", 0.0)) * 1000.0
+	check(bare_hole.pin.distance_squared_to(bare_pin) < 0.01 and bare_expect > 0.0 and bare.course.health[bare_i] < 1.0 - bare_expect * 0.5, "with no greenkeeper the pin stays put and the cup still wears the green")
 	var plain := _cup_drop(46, 2, 0.0)
 	var scaled := _cup_drop(46, 3, -0.3)
 	var hard := _sim("sandbox", 1)
 	hard.set_difficulty(3)
 	var want := 0.7 * hard.diff("wear")
-	check(plain > 0.05 and scaled < plain and is_equal_approx(scaled / plain, want), "cup wear follows the difficulty and the skill wear multipliers")
-	var quiet := _sim("sandbox", 47)
-	quiet.paint(40, 50, 4, Defs.T.GREEN)
-	var quiet_hole := quiet.add_hole(quiet.course.tile_center(40, 28), quiet.course.tile_center(40, 50))
-	quiet.hire("greenkeeper")
-	quiet_hole.pin_locked = true
-	var quiet_at := quiet.course.tile_of(quiet_hole.pin.x, quiet_hole.pin.z)
-	var quiet_i := quiet_at.y * quiet.course.w + quiet_at.x
-	quiet.course.health[quiet_i] = 1.0
-	quiet.grounds.wear_around_pins(200.0)
-	check(is_equal_approx(quiet.course.health[quiet_i], 1.0), "a locked course, with nobody moving pins, adds no cup wear")
+	var rate_expect := float(db.pins.get("wear", 0.0)) * 1000.0
+	check(rate_expect > 0.0 and plain > rate_expect * 0.5 and scaled < plain and is_equal_approx(scaled / plain, want), "cup wear follows the difficulty and the skill wear multipliers")
+	var alone := _locked_cup_drop(false)
+	var beside := _locked_cup_drop(true)
+	check(rate_expect > 0.0 and alone > rate_expect * 0.5 and is_equal_approx(alone, beside), "a locked cup wears the same whether or not another hole is unlocked (%.3f and %.3f)" % [alone, beside])
+	var calm := _played_cup_drop(false)
+	var busy_cup := _played_cup_drop(true)
+	check(rate_expect > 0.0 and calm > rate_expect * 0.5 and busy_cup > calm * 1.4 and busy_cup < calm * 1.6, "a hole that was played today wears its cup harder (%.3f against %.3f)" % [busy_cup, calm])
+	var weeded := _sim("sandbox", 53)
+	var wc := weeded.course
+	check(weeded.paint(40, 50, 6, Defs.T.GREEN) > 0, "a green beside a weedy patch")
+	var weed_hole := weeded.add_hole(wc.tile_center(40, 28), wc.tile_center(40, 50))
+	check(weeded.hire("greenkeeper"), "a greenkeeper choosing between weeds and a cup")
+	weeded.time = Defs.DAY_SECONDS
+	weeded.move_pins()
+	var cup_at := wc.tile_of(weed_hole.pin.x, weed_hole.pin.z)
+	var rough_x := cup_at.x + 3
+	var rough_y := cup_at.y
+	var rough_i := rough_y * wc.w + rough_x
+	wc.terrain[rough_i] = Defs.T.ROUGH
+	wc.weeds[rough_i] = 0.45
+	wc.health[rough_i] = 1.0
+	var chooser: Crew.Member = weeded.crew.members[0]
+	chooser.pos = wc.tile_center(rough_x, rough_y)
+	chooser.state = 0
+	chooser.timer = 0.0
+	weeded.crew.step(0.05)
+	check(chooser.target_i == rough_i and weeded.crew.pin_cuts.has(wc.index_at(weed_hole.pin.x, weed_hole.pin.z)), "a weedy patch is taken before the new cup")
 	var twin := _sim("three_holes", 48)
 	check(twin.hire("greenkeeper"), "a greenkeeper on the saved course")
 	twin.time = Defs.DAY_SECONDS * 2.0
@@ -5291,19 +5377,48 @@ func _test_pin_rules() -> void:
 	var still := _sim("three_holes", 51)
 	var turning := _sim("three_holes", 51)
 	check(still.hire("greenkeeper") and turning.hire("greenkeeper"), "greenkeepers for a season of pins")
+	check(still.hire("marshal") and turning.hire("marshal"), "marshals so the round keeps moving")
+	still.events.timer = 99999.0
+	turning.events.timer = 99999.0
 	for hole in still.course.holes:
 		hole.pin_locked = true
 	var days := 4 * Defs.DAYS_PER_MONTH
-	for di in days:
-		still.grounds.step(Defs.DAY_SECONDS)
-		turning.grounds.step(Defs.DAY_SECONDS)
-		still.time = float(di + 1) * Defs.DAY_SECONDS
-		turning.time = still.time
-		still.move_pins()
-		turning.move_pins()
-		turning.course.weeds = still.course.weeds.duplicate()
-		turning.course.pests = still.course.pests.duplicate()
-		turning.course.wet = still.course.wet.duplicate()
-		turning.rng.state = still.rng.state
-	print("  pin season condition locked %.3f rotating %.3f" % [still.grounds.condition, turning.grounds.condition])
-	check(absf(still.grounds.condition - turning.grounds.condition) < 0.05, "a season of rotating pins stays within a few points of a course whose pins do not move")
+	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
+	var moved_mornings := 0
+	var prev_day := turning.day()
+	for _i in steps:
+		still.step(1.0 / 60.0)
+		turning.step(1.0 / 60.0)
+		var now := turning.day()
+		if now != prev_day:
+			prev_day = now
+			for hole in turning.course.holes:
+				if hole.pin.distance_squared_to(hole.placed) > 1.0:
+					moved_mornings += 1
+	var spread := 0
+	var totals_ok := true
+	var peaks_ok := true
+	for hi in still.course.holes.size():
+		var locked_spots := _spot_loads(still, hi)
+		var turning_spots := _spot_loads(turning, hi)
+		var locked_sum := locked_spots[0] + locked_spots[1] + locked_spots[2]
+		var turning_sum := turning_spots[0] + turning_spots[1] + turning_spots[2]
+		var hole_load := maxf(locked_sum, turning_sum)
+		if absf(locked_sum - turning_sum) > hole_load * 0.15:
+			totals_ok = false
+		var locked_peak := maxf(locked_spots[0], maxf(locked_spots[1], locked_spots[2]))
+		var turning_peak := maxf(turning_spots[0], maxf(turning_spots[1], turning_spots[2]))
+		var spots_used := 0
+		for amount in turning_spots:
+			if amount > hole_load * 0.12:
+				spots_used += 1
+		if spots_used >= 2:
+			spread += 1
+			if turning_peak > locked_peak * 0.9:
+				peaks_ok = false
+		print("  hole %d cup wear locked %.3f rotating %.3f (peak %.3f against %.3f)" % [hi + 1, locked_sum, turning_sum, turning_peak, locked_peak])
+	print("  condition locked %.3f rotating %.3f, weeds %.3f %.3f" % [still.grounds.condition, turning.grounds.condition, still.grounds.weed_cover, turning.grounds.weed_cover])
+	check(moved_mornings > 100, "the rotating cups left the placed pin on quiet mornings")
+	check(spread >= 2 and peaks_ok, "where the cup changes tile, the worst of those tiles took less wear than a pin that stayed put")
+	check(totals_ok, "rotating spreads the cup wear: each hole takes the same amount as when the pin stays put")
+	check(absf(still.grounds.condition - turning.grounds.condition) < 0.04, "the course stays about as healthy as one whose pins are locked (%.3f against %.3f)" % [still.grounds.condition, turning.grounds.condition])

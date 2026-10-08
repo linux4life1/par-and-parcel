@@ -674,7 +674,8 @@ func roll_decel(t: int) -> float:
 ## tee, spot 2 is past the placed pin. A legal spot stays `edge` metres inside
 ## the green and no steeper than `slope_max` percent. The walk keeps the legal
 ## spot nearest the asked distance, or the middle when the front or the back
-## has none.
+## has none. The first step whose centre is off the green ends the walk, so
+## it cannot cross a gap and sit on a further lobe.
 func day_cup(hole: Hole, spot: int, front_m: float = 6.0, back_m: float = 6.0, edge: float = 2.0, slope_max: float = 4.0) -> Vector3:
 	var home := hole.placed if hole.placed.length_squared() > 0.01 else hole.pin
 	if spot == 0:
@@ -692,6 +693,8 @@ func day_cup(hole: Hole, spot: int, front_m: float = 6.0, back_m: float = 6.0, e
 	while travelled + 0.01 < metres:
 		var next := minf(travelled + step, metres)
 		var p := home + dir * next
+		if not Defs.is_green(terrain_at(p.x, p.z)):
+			break
 		if _cup_clear(p.x, p.z, edge, slope_max):
 			best = p
 			best_d = next
