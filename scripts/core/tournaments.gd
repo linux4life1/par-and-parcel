@@ -343,8 +343,14 @@ func apply_setup(id: String) -> void:
 	sim.course.rough_power = float(s.get("rough_power", 1.0))
 	var tuck := float(s.get("pin_tuck", 0.0))
 	_pin_home.clear()
+	var moved := false
 	for hole in sim.course.holes:
-		_pin_home[hole] = sim.course.tuck_pin(hole, tuck)
+		var was := sim.course.tuck_pin(hole, tuck)
+		if hole.pin.distance_squared_to(was) > 0.0001:
+			moved = true
+		_pin_home[hole] = was
+	if moved and sim.undo != null:
+		sim.undo.clear()
 
 
 ## Greens, rough and pins go back to how the members play them.
@@ -365,6 +371,8 @@ func clear_setup() -> void:
 	if moved:
 		sim.course.revision += 1
 		sim.course.holes_changed.emit()
+		if sim.undo != null:
+			sim.undo.clear()
 
 
 func _finish() -> void:

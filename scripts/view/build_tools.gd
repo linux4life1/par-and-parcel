@@ -20,6 +20,7 @@ var sculpt_mode := "raise"
 var object_type: int = Defs.O.OAK
 var hover: Variant = null      # world position under the mouse, or null
 var _down := false
+var _stroke := false          # this drag is one undo step
 var _last_tile := Vector2i(-999, -999)
 var _tick := 0.0
 var _level := 0.0
@@ -79,6 +80,7 @@ func bind(s: Sim) -> void:
 
 
 func set_mode(m: String) -> void:
+	_end_stroke()
 	mode = m
 	if m != "":
 		station_for = null
@@ -218,6 +220,7 @@ func _input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if not mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 			_down = false
+			_end_stroke()
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -233,6 +236,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			return
 		if not mb.pressed:
 			_down = false
+			_end_stroke()
 			# With no tool out, a click picks a person. A drag moved the map
 			# instead, so it picks nobody.
 			if mode == "" and not rig.dragged:
@@ -296,12 +300,35 @@ func _unhandled_input(event: InputEvent) -> void:
 				_:
 					_warn_broke()
 		else:
+			if _records_stroke():
+				_begin_stroke()
 			_apply()
 	elif event is InputEventKey:
 		var k := event as InputEventKey
 		if k.pressed and k.keycode == KEY_ESCAPE and mode != "":
 			set_mode("")
 			get_viewport().set_input_as_handled()
+
+
+## A drag of the paint, raise, lower, place or bulldoze tool is one step.
+func _records_stroke() -> bool:
+	if mode == "terrain" or mode == "object" or mode == "bulldoze":
+		return true
+	return mode == "sculpt" and (sculpt_mode == "raise" or sculpt_mode == "lower")
+
+
+func _begin_stroke() -> void:
+	if sim == null or sim.undo == null:
+		return
+	_stroke = sim.undo.begin()
+
+
+func _end_stroke() -> void:
+	if not _stroke:
+		return
+	_stroke = false
+	if sim != null and sim.undo != null:
+		sim.undo.commit()
 
 
 func _apply() -> void:
@@ -474,8 +501,10 @@ func _click_hole(p: Vector3) -> void:
 	if Vector2(p.x - tee.x, p.z - tee.z).length() < 40.0:
 		sim.toast.emit("That hole is too short. Put the pin at least 45 yards from the tee.", "bad")
 		return
+	_begin_stroke()
 	var hole := sim.add_hole(tee, p)
 	if hole == null:
+		_end_stroke()
 		_warn_broke()
 		return
 	hole.open = false

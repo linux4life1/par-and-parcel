@@ -193,6 +193,7 @@ func start(s: Sim, camera: CameraRig, first: int = 0, count: int = -1, in_tourna
 	_saved_view = {"yaw": rig.yaw, "dist": rig.target_dist, "focus": rig.focus}
 	rig.locked = true
 	sim.career.begin_round(hole_i == 0 and last_hole == sim.course.holes.size() - 1)
+	sim.playing_round = true
 	_begin_hole()
 	started.emit()
 	return true
@@ -201,6 +202,8 @@ func start(s: Sim, camera: CameraRig, first: int = 0, count: int = -1, in_tourna
 func stop() -> void:
 	if not active():
 		return
+	if sim != null:
+		sim.playing_round = false
 	# walking off mid-round forfeits whatever was at stake
 	if not match_play.is_empty():
 		_settle_match(true)

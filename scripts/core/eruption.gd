@@ -170,6 +170,8 @@ func _impact(p: Vector3) -> void:
 	summary.bombs = int(summary.bombs) + 1
 	var i0 := tile.y * course.w + tile.x
 	if course.hot[i0] == 0 and course.terrain[i0] != Defs.T.WATER:
+		if sim.undo != null:
+			sim.undo.clear()
 		course.guard = false
 		course.sculpt(p.x, p.z, 9.0, -1.1)
 		var burnt := false
@@ -261,6 +263,8 @@ func _advance(f: Dictionary) -> void:
 	f.steps = int(f.steps) - 1
 	if course.terrain[best] == Defs.T.WATER:
 		return
+	if sim.undo != null:
+		sim.undo.clear()
 	if course.objects[best] != 0:
 		if Defs.is_tree(course.objects[best]):
 			summary.trees = int(summary.trees) + 1
@@ -303,6 +307,8 @@ func _cool_one() -> void:
 	var i: int = fresh.pop_front()
 	if course.terrain[i] != Defs.T.WATER:
 		return
+	if sim.undo != null:
+		sim.undo.clear()
 	course.terrain[i] = Defs.T.ROCK
 	course.revision += 1
 	course.tiles_changed.emit(Rect2i(i % course.w - 1, i / course.w - 1, 3, 3))

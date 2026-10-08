@@ -33,6 +33,7 @@ var awards: Dictionary = {}     # themed hole awards
 var litter: Dictionary = {}     # how litter gathers, and what a bin or a porter does about it
 var slope: Dictionary = {}      # how the ground is read, and how the marks are drawn
 var debt: Dictionary = {}       # how a balance below zero meets a new arrival
+var undo: Dictionary = {}       # how many build steps can be taken back
 var preview: Dictionary = {}    # the par and yardage label while a hole is laid out
 var yardage: Dictionary = {}    # the printed hole diagram on the scorecard
 var home_radius := 45.0         # how far a stationed member looks for work, metres
@@ -76,6 +77,7 @@ func _init() -> void:
 	slope = _load("slope")
 	Slope.use(slope)
 	debt = _load("debt")
+	undo = _load("undo")
 	preview = _load("preview")
 	yardage = _load("yardage")
 	names = _load("names")

@@ -35,7 +35,7 @@ check. **Basic** works but is thin. **Not yet** is planned.
 | Camera | Built | Move, zoom, turn and tilt, from the whole property down to standing beside a golfer. Works with a one-button mouse, a trackpad, a wheel mouse, the keyboard, or the Camera bar on screen. Click a golfer and follow them. |
 | Map overlays | Built | Moisture, turf health, height, mood, lot value, lights, slope, contours, build grid. The slope map shades steepness from the grade at each tile, pale where the ground is flat and dark where it falls away. Greens use a finer scale than the rest of the course, so 1 to 4% still reads, and the legend names both scales. The colours, the scales and the downhill marks are data. The mood map is where golfers have lately been pleased or annoyed, and it fades over a couple of days. A thought in the golfer card remembers the spot and jumps the camera there. The lot map shows where a home site is worth the most, brightest on the dearest ground, and it is redrawn when the course changes or any hole's fun has moved by a point. The rating shifts every lot by the same amount, so it is left out. Neighbourhood prices come from a summed-area table, so a rebuild stays quick. The lights map is how well each tile is lit after dark, from the same reach the night game uses, brightest where a floodlight or lamp covers the ground. |
 | Draft holes | Built | A hole laid out by hand starts closed. Test plays it with the lab golfers and marks where their tee shots stopped. Open lets the public on. Generated holes, and saves that never stored the flag, stay open. |
-| Undo | Not yet | Bulldoze and repaint instead. No refunds. |
+| Undo | Built | Ctrl+Z, or the Undo button, takes back the last paint stroke, raise or lower, object placed or removed, or hole laid out. Several steps, up to a depth set in data. Only the tiles a stroke changed are kept. The refund is what that stroke's own build calls spent, booked against construction, so a bill that lands during the drag is not given back. Doing the step again charges that same amount and refuses if it cannot be paid. Wetness, health, weeds, pests, litter and a repair mark are put back only where they are still what the step left. If the ground, the object, the switch or a corner height is no longer what the step left, undo and redo change nothing and drop the history. A home sale, an eruption, switching a structure, a tournament pin move, moving or removing a hole, smoothing, flattening and buying land drop it too. A round being played refuses it, and a save or loading another course drops it. Ctrl+Y or Ctrl+Shift+Z puts the step back. |
 | Streams, pot bunkers, waste areas | Not yet | |
 
 ### Run the club
@@ -331,7 +331,7 @@ dummy driver, which is expected.
    music.
 3. Art: richer buildings, animated characters with real clothing, water
    reflections.
-4. Undo, streams and more bunker types, irrigation.
+4. Streams and more bunker types, irrigation.
 5. In-game help beyond the first-round coach.
 6. Testing the Windows build, and a physical controller, on real hardware.
 7. More scripted stories, golfer editor, career mode for your golfer.

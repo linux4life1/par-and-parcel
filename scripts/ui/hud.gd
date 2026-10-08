@@ -23,6 +23,7 @@ var top_box: VBoxContainer
 var _refresh := Callable()
 var _refresh_t := 0.0
 var _tool_buttons := {}
+var undo_btn: Button
 
 var l_name: Label
 var l_date: Label
@@ -274,6 +275,11 @@ func _build_toolbar() -> void:
 	var mb := UIKit.button("Menu", func() -> void: show_menu(), "Save, load, new game (Esc)")
 	mb.custom_minimum_size = Vector2(118, 30)
 	toolbar.add_child(mb)
+	undo_btn = UIKit.button("Undo", _undo_build, "Undo the last thing you built (Ctrl+Z)")
+	undo_btn.custom_minimum_size = Vector2(118, 34)
+	undo_btn.alignment = HORIZONTAL_ALIGNMENT_LEFT
+	undo_btn.disabled = true
+	toolbar.add_child(undo_btn)
 
 
 # ------------------------------------------------------------ side panel
@@ -1374,6 +1380,9 @@ func _show_structure(tile: Vector2i) -> void:
 func _frame_hud(delta: float) -> void:
 	if sim == null:
 		return
+	if undo_btn != null and sim.undo != null:
+		var playing := play != null and play.active()
+		undo_btn.disabled = playing or not sim.undo.can_undo()
 	_refresh_t -= delta
 	if _refresh_t <= 0.0:
 		_refresh_t = 0.25
@@ -1492,6 +1501,23 @@ func _update_ticker(delta: float) -> void:
 		_ticker_idle = 0.0
 
 
+func _line_focused() -> bool:
+	var f := get_viewport().gui_get_focus_owner()
+	return f is LineEdit or f is TextEdit
+
+
+func _undo_build() -> void:
+	if sim == null or sim.undo == null or (play != null and play.active()):
+		return
+	sim.undo.undo()
+
+
+func _redo_build() -> void:
+	if sim == null or sim.undo == null or (play != null and play.active()):
+		return
+	sim.undo.redo()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if sim == null or not (event is InputEventKey):
 		return
@@ -1502,6 +1528,18 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if play != null and play.active():
 		return
+	if not _line_focused() and (k.ctrl_pressed or k.meta_pressed) and not k.alt_pressed:
+		if k.keycode == KEY_Z:
+			if k.shift_pressed:
+				_redo_build()
+			else:
+				_undo_build()
+			get_viewport().set_input_as_handled()
+			return
+		if k.keycode == KEY_Y:
+			_redo_build()
+			get_viewport().set_input_as_handled()
+			return
 	match k.keycode:
 		KEY_SPACE:
 			Game.paused = not Game.paused

@@ -32,6 +32,9 @@ var locked := PackedByteArray()       # 1 where the land is not yours yet
 var hot := PackedByteArray()          # 1 on the volcano: nothing can be built
 var guard := false                    # when set, edits skip locked and hot tiles
 var clear_cost := 0.0                 # extra cost run up by the last paint call
+var _edit_tile := Callable()           # told before a tile changes, so a stroke can be undone
+var _edit_height := Callable()
+var _drop_history := Callable()        # an edit this history does not record
 var green_decel := 1.0                # tournament setup: multiplies how fast a putt stops
 var rough_power := 1.0                # tournament setup: multiplies the rough's share of a full swing
 var _objects_dirty := false
@@ -340,6 +343,28 @@ func lock_all() -> void:
 
 # ------------------------------------------------------------------ edits
 
+## The build history watches edits. Empty until a game is running.
+func watch_edits(on_tile: Callable, on_height: Callable, on_drop: Callable = Callable()) -> void:
+	_edit_tile = on_tile
+	_edit_height = on_height
+	_drop_history = on_drop
+
+
+func _note_tile(i: int) -> void:
+	if _edit_tile.is_valid():
+		_edit_tile.call(i)
+
+
+func _note_height(vi: int) -> void:
+	if _edit_height.is_valid():
+		_edit_height.call(vi)
+
+
+func _drop_unrecorded() -> void:
+	if _drop_history.is_valid():
+		_drop_history.call()
+
+
 func set_terrain(tx: int, ty: int, t: int) -> bool:
 	if not in_bounds(tx, ty):
 		return false
@@ -350,6 +375,7 @@ func set_terrain(tx: int, ty: int, t: int) -> bool:
 		return false
 	if guard and (locked[i] != 0 or hot[i] != 0):
 		return false
+	_note_tile(i)
 	clear_cost += Defs.T_CLEAR[terrain[i]]
 	terrain[i] = t
 	if objects[i] != 0 and t != Defs.T.ROUGH and t != Defs.T.DEEP_ROUGH and t != Defs.T.ASH:
@@ -409,7 +435,9 @@ func _level_water(tx: int, ty: int) -> void:
 		level = minf(minf(corner(tx, ty), corner(tx + 1, ty)), minf(corner(tx, ty + 1), corner(tx + 1, ty + 1))) - 0.5
 	for vy in [ty, ty + 1]:
 		for vx in [tx, tx + 1]:
-			heights[vy * (w + 1) + vx] = level
+			var vi := int(vy) * (w + 1) + int(vx)
+			_note_height(vi)
+			heights[vi] = level
 
 
 func set_object(tx: int, ty: int, o: int) -> bool:
@@ -423,6 +451,7 @@ func set_object(tx: int, ty: int, o: int) -> bool:
 	# Only a bridge can stand in the hazard, and a bridge can stand nowhere else.
 	if o != 0 and (terrain[i] == Defs.T.WATER) != (o == Defs.O.BRIDGE):
 		return false
+	_note_tile(i)
 	var lights: bool = Defs.O_LIGHT[objects[i]] > 0.0 or Defs.O_LIGHT[o] > 0.0
 	objects[i] = o
 	repair[i] = 0
@@ -470,6 +499,7 @@ func set_closed(tx: int, ty: int, off: bool) -> bool:
 	var bit := 1 if off else 0
 	if int(closed[i]) == bit:
 		return false
+	_drop_unrecorded()
 	closed[i] = bit
 	if not off:
 		open_month[i] = 1
@@ -501,6 +531,7 @@ func sculpt(x: float, z: float, radius_m: float, delta: float) -> void:
 			if _corner_is_locked(vx, vy):
 				continue
 			var i := vy * (w + 1) + vx
+			_note_height(i)
 			heights[i] = clampf(heights[i] + delta * fall, -12.0, 40.0)
 	_heights_edited(cvx, cvy, r)
 
@@ -521,6 +552,7 @@ func smooth(x: float, z: float, radius_m: float, strength: float = 0.5) -> void:
 			var i := vy * (w + 1) + vx
 			updates[i] = lerpf(heights[i], avg, strength)
 	for i: int in updates:
+		_note_height(i)
 		heights[i] = updates[i]
 	_heights_edited(cvx, cvy, r)
 
@@ -537,6 +569,7 @@ func flatten(x: float, z: float, radius_m: float, level: float, strength: float 
 			if _corner_is_locked(vx, vy):
 				continue
 			var i := vy * (w + 1) + vx
+			_note_height(i)
 			heights[i] = lerpf(heights[i], level, strength)
 	_heights_edited(cvx, cvy, r)
 
