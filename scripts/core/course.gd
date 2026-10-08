@@ -34,6 +34,7 @@ var guard := false                    # when set, edits skip locked and hot tile
 var clear_cost := 0.0                 # extra cost run up by the last paint call
 var _edit_tile := Callable()           # told before a tile changes, so a stroke can be undone
 var _edit_height := Callable()
+var _drop_history := Callable()        # an edit this history does not record
 var green_decel := 1.0                # tournament setup: multiplies how fast a putt stops
 var rough_power := 1.0                # tournament setup: multiplies the rough's share of a full swing
 var _objects_dirty := false
@@ -343,9 +344,10 @@ func lock_all() -> void:
 # ------------------------------------------------------------------ edits
 
 ## The build history watches edits. Empty until a game is running.
-func watch_edits(on_tile: Callable, on_height: Callable) -> void:
+func watch_edits(on_tile: Callable, on_height: Callable, on_drop: Callable = Callable()) -> void:
 	_edit_tile = on_tile
 	_edit_height = on_height
+	_drop_history = on_drop
 
 
 func _note_tile(i: int) -> void:
@@ -356,6 +358,11 @@ func _note_tile(i: int) -> void:
 func _note_height(vi: int) -> void:
 	if _edit_height.is_valid():
 		_edit_height.call(vi)
+
+
+func _drop_unrecorded() -> void:
+	if _drop_history.is_valid():
+		_drop_history.call()
 
 
 func set_terrain(tx: int, ty: int, t: int) -> bool:
@@ -492,6 +499,7 @@ func set_closed(tx: int, ty: int, off: bool) -> bool:
 	var bit := 1 if off else 0
 	if int(closed[i]) == bit:
 		return false
+	_drop_unrecorded()
 	closed[i] = bit
 	if not off:
 		open_month[i] = 1

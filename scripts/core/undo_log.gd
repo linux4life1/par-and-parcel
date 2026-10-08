@@ -2,12 +2,13 @@ class_name UndoLog
 extends RefCounted
 ## Build steps that can be taken back: a paint stroke, a raise or lower, an
 ## object placed or removed, a hole laid out. Only the tiles and corners a
-## step changed are kept. Undo refunds the exact amount that step charged
-## and books it against construction, and redo charges that same amount
-## again, refusing if it cannot be paid. Wetness, health, weeds and pests
-## are put back only where they are still what the step left. A round being
-## played refuses both. Saving, or an edit that is not one of these steps,
-## drops the history.
+## step changed are kept. The refund is the sum of the build calls spent
+## while the stroke was open, booked against construction, and redo charges
+## that same amount again, refusing if it cannot be paid. Wetness, health,
+## weeds, pests, litter and a repair mark are put back only where they are
+## still what the step left. If the ground, the object, the switch or a
+## corner is no longer what the step left, undo and redo change nothing and
+## drop the history. A round being played refuses both.
 
 
 var sim: Sim
@@ -56,7 +57,7 @@ func begin() -> bool:
 		return false
 	_stroking = true
 	_open = {
-		"money": sim.economy.money,
+		"charged": 0.0,
 		"tiles": {},
 		"heights": {},
 		"holes": sim.course.holes.size(),
@@ -91,7 +92,7 @@ func commit() -> void:
 			any = true
 			height_rec[vi] = {"before": was, "after": now}
 	var hole_added := c.holes.size() > int(_open["holes"])
-	var charged := float(_open["money"]) - sim.economy.money
+	var charged := float(_open["charged"])
 	var gifts := _gifts_used(_open["gifts"], _copy_gifts(sim.gifts))
 	var built := int(sim.stats.get("holes_built", 0)) - int(_open["built"])
 	if not any and not hole_added and is_zero_approx(charged) and gifts.is_empty() and built == 0:
@@ -133,11 +134,23 @@ func note_height(vi: int) -> void:
 	hs[vi] = sim.course.heights[vi]
 
 
+## A paint, a placement, a raise, a lower or a hole, charged while this
+## stroke is open. Fees and bills that land in the same moment are not part
+## of it.
+func note_charge(amount: float) -> void:
+	if not _stroking or amount <= 0.0:
+		return
+	_open["charged"] = float(_open["charged"]) + amount
+
+
 func undo() -> bool:
 	if _blocked() or past.is_empty():
 		return false
 	var e: Dictionary = past[past.size() - 1]
 	past.remove_at(past.size() - 1)
+	if not _intact(e, false) or (e.has("hole") and _find_hole(e["hole"]) < 0):
+		clear()
+		return false
 	if not _apply(e, false):
 		past.append(e)
 		return false
@@ -150,10 +163,34 @@ func redo() -> bool:
 		return false
 	var e: Dictionary = future[future.size() - 1]
 	future.remove_at(future.size() - 1)
-	if not _apply(e, true):
+	if not _intact(e, true):
+		clear()
+		return false
+	if not _afford(e) or not _apply(e, true):
 		future.append(e)
 		return false
 	past.append(e)
+	return true
+
+
+## The ground, object, switch and corners are still what this step left
+## (the after side on undo, the before side on redo).
+func _intact(e: Dictionary, forward: bool) -> bool:
+	var side := "before" if forward else "after"
+	var c := sim.course
+	var tiles: Dictionary = e["tiles"]
+	for key in tiles:
+		var i := int(key)
+		var rec: Dictionary = tiles[key]
+		var was: Dictionary = rec[side]
+		if int(c.terrain[i]) != int(was["terrain"]) or int(c.objects[i]) != int(was["object"]) or int(c.closed[i]) != int(was["closed"]):
+			return false
+	var heights: Dictionary = e["heights"]
+	for key in heights:
+		var vi := int(key)
+		var rec: Dictionary = heights[key]
+		if not is_equal_approx(c.heights[vi], float(rec[side])):
+			return false
 	return true
 
 
@@ -177,8 +214,6 @@ func _afford(e: Dictionary) -> bool:
 
 func _apply(e: Dictionary, forward: bool) -> bool:
 	if forward and not _afford(e):
-		return false
-	if not forward and e.has("hole") and _find_hole(e["hole"]) < 0:
 		return false
 	applying = true
 	var c := sim.course
@@ -204,13 +239,15 @@ func _apply(e: Dictionary, forward: bool) -> bool:
 		c.objects[i] = new_o
 		c.closed[i] = int(dest["closed"])
 		c.open_month[i] = int(dest["open_month"])
-		c.repair[i] = int(dest["repair"])
-		var litter := float(dest["litter"])
-		var was_litter := float(c.litter[i])
-		if not is_equal_approx(was_litter, litter):
-			c.litter[i] = litter
-			if (was_litter < show and litter >= show) or (was_litter >= show and litter < show):
-				litter_edge = true
+		if int(c.repair[i]) == int(from["repair"]):
+			c.repair[i] = int(dest["repair"])
+		if is_equal_approx(float(c.litter[i]), float(from["litter"])):
+			var litter := float(dest["litter"])
+			var was_litter := float(c.litter[i])
+			if not is_equal_approx(was_litter, litter):
+				c.litter[i] = litter
+				if (was_litter < show and litter >= show) or (was_litter >= show and litter < show):
+					litter_edge = true
 		if is_equal_approx(c.wet[i], float(from["wet"])):
 			c.wet[i] = float(dest["wet"])
 		if is_equal_approx(c.health[i], float(from["health"])):

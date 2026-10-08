@@ -5393,11 +5393,88 @@ func _test_undo_books() -> void:
 	yc.litter[stand] = 0.85
 	check(yard.remove_object(34, 34) and int(yc.objects[stand]) == 0 and int(yc.repair[stand]) == 0, "bulldozing the stand clears its window mark")
 	check(yard.undo.undo() and int(yc.objects[stand]) == Defs.O.DRINK_STAND and int(yc.repair[stand]) == 1 and is_equal_approx(yc.litter[stand], 0.85), "undoing the bulldoze does not fix the window, and the litter stays")
-	check(yard.undo.undo() and int(yc.objects[stand]) == 0 and int(yc.repair[stand]) == 0 and is_equal_approx(yc.litter[stand], 0.2), "undoing the stand leaves no repair mark and puts the litter back")
+	check(yard.undo.undo() and int(yc.objects[stand]) == 0 and int(yc.repair[stand]) == 1 and is_equal_approx(yc.litter[stand], 0.85), "undoing the stand leaves the litter that built up")
 	var house := 36 * yc.w + 36
 	yc.terrain[house] = Defs.T.ROUGH
 	yc.objects[house] = 0
+	yc.litter[house] = 0.0
 	yc.repair[house] = 0
 	check(yard.place_object(36, 36, Defs.O.HOUSE) == 1, "a house goes up")
 	yc.repair[house] = 1
-	check(yard.undo.undo() and int(yc.objects[house]) == 0 and int(yc.repair[house]) == 0, "undoing the house leaves no window waiting")
+	yc.litter[house] = 0.7
+	check(yard.undo.undo() and int(yc.objects[house]) == 0 and int(yc.repair[house]) == 1 and is_equal_approx(yc.litter[house], 0.7), "undoing the house leaves the broken window and the litter")
+	check(yard.undo.redo() and int(yc.objects[house]) == Defs.O.HOUSE and int(yc.repair[house]) == 1 and is_equal_approx(yc.litter[house], 0.7), "redo brings the house back with the window still broken and the litter still there")
+	var drag := _sim("sandbox", 24)
+	var dc := drag.course
+	dc.terrain[12 * dc.w + 12] = Defs.T.ROUGH
+	check(drag.undo.begin(), "a drag can be opened")
+	before = drag.economy.money
+	check(drag.paint(12, 12, 0, Defs.T.FAIRWAY) == 1, "the drag paints a tile")
+	price = before - drag.economy.money
+	drag.economy.spend("wages", 1000.0)
+	drag.undo.commit()
+	mid = drag.economy.money
+	check(drag.undo.undo(), "the drag can be taken back")
+	check(is_equal_approx(drag.economy.money, mid + price) and is_equal_approx(float(drag.economy.expense.get("wages", 0.0)), 1000.0), "undo after a bill during the drag refunds only the paint")
+	var sale := _sim("sandbox", 25)
+	var sc2 := sale.course
+	var lot := 28 * sc2.w + 28
+	sc2.terrain[lot] = Defs.T.ROUGH
+	sc2.objects[lot] = 0
+	check(sale.place_object(28, 28, Defs.O.HOME_SITE) == 1, "a home site can be marked")
+	var buyer := {"name": "Pat", "home": false, "handle": "Pat"}
+	var sold := sale.economy.money
+	var fees_in := float(sale.economy.income.get("real_estate", 0.0))
+	var homes_n := sale.homes
+	check(sale.sell_home(buyer), "a member buys the site")
+	check(int(sc2.objects[lot]) == Defs.O.HOUSE, "the site is a house")
+	var after_sale := sale.economy.money
+	check(not sale.undo.undo() and not sale.undo.can_undo(), "undo after the sale is refused and the history is empty")
+	check(int(sc2.objects[lot]) == Defs.O.HOUSE and is_equal_approx(sale.economy.money, after_sale) and is_equal_approx(float(sale.economy.income.get("real_estate", 0.0)), after_sale - sold + fees_in) and sale.homes == homes_n + 1, "the house, the sale and the books stay")
+	var ash := _sim("sandbox", 26)
+	var ac := ash.course
+	var tree := 44 * ac.w + 44
+	ac.terrain[tree] = Defs.T.ROUGH
+	ac.objects[tree] = 0
+	check(ash.place_object(44, 44, Defs.O.OAK) == 1, "a tree is planted")
+	cash = ash.economy.money
+	ac.objects[tree] = 0
+	ac.closed[tree] = 0
+	ac.terrain[tree] = Defs.T.ASH
+	ac.weeds[tree] = 0.0
+	ac.pests[tree] = 0.0
+	check(not ash.undo.undo() and is_equal_approx(ash.economy.money, cash) and int(ac.terrain[tree]) == Defs.T.ASH and int(ac.objects[tree]) == 0 and not ash.undo.can_undo(), "undo after the tile is burned is refused, with no refund")
+	var switched := _sim("sandbox", 27)
+	var wc := switched.course
+	var bar := 46 * wc.w + 46
+	wc.terrain[bar] = Defs.T.ROUGH
+	wc.objects[bar] = 0
+	check(switched.place_object(46, 46, Defs.O.DRINK_STAND) == 1, "a stand that can be switched off")
+	cash = switched.economy.money
+	check(wc.set_closed(46, 46, true) and not switched.undo.can_undo() and not switched.undo.undo(), "switching it off drops the history")
+	check(wc.is_closed(bar) and is_equal_approx(switched.economy.money, cash), "the stand stays off and the placement is not refunded")
+	var outside := _sim("sandbox", 28)
+	var oc2 := outside.course
+	var pond := 48 * oc2.w + 48
+	oc2.terrain[pond] = Defs.T.ROUGH
+	check(outside.paint(48, 48, 0, Defs.T.FAIRWAY) == 1 and outside.undo.undo(), "a stroke is taken back so it can be refused on the way forward")
+	oc2.terrain[pond] = Defs.T.WATER
+	cash = outside.economy.money
+	check(not outside.undo.redo() and int(oc2.terrain[pond]) == Defs.T.WATER and is_equal_approx(outside.economy.money, cash) and not outside.undo.can_redo(), "redo after an outside change is refused and the history is dropped")
+	var tucked := _sim("sandbox", 29)
+	check(tucked.paint(40, 50, 4, Defs.T.GREEN) > 0, "a green for the cup")
+	var flag := tucked.add_hole(tucked.course.tile_center(40, 30), tucked.course.tile_center(40, 50))
+	check(flag != null and tucked.undo.can_undo(), "the hole is a step")
+	if flag != null:
+		var cup := flag.pin
+		tucked.tourney.apply_setup("stern")
+		cash = tucked.economy.money
+		check(flag.pin.distance_squared_to(cup) > 0.25 and not tucked.undo.can_undo() and not tucked.undo.undo() and is_equal_approx(tucked.economy.money, cash) and tucked.course.holes.find(flag) >= 0, "a tournament pin move drops the history and the hole stays")
+	var stuck := _sim("sandbox", 30)
+	var moved_hole := stuck.add_hole(stuck.course.tile_center(60, 70), stuck.course.tile_center(60, 40))
+	check(moved_hole != null, "a hole can be laid out and then have its pin moved")
+	if moved_hole != null:
+		moved_hole.pin.x += 6.0
+		cash = stuck.economy.money
+		check(not stuck.undo.undo() and not stuck.undo.can_undo() and is_equal_approx(stuck.economy.money, cash) and stuck.course.holes.find(moved_hole) >= 0, "a pin that no longer matches does not leave undo stuck")
+	check(not stuck.undo.undo(), "there is no step left refusing")

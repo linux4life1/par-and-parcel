@@ -918,7 +918,7 @@ func touch_landmark(g: Golfer) -> bool:
 # ------------------------------------------------- building, with a budget
 
 func _bind_undo() -> void:
-	course.watch_edits(Callable(undo, "note_tile"), Callable(undo, "note_height"))
+	course.watch_edits(Callable(undo, "note_tile"), Callable(undo, "note_height"), Callable(undo, "clear"))
 
 
 ## Paint terrain with a round brush. Returns tiles changed, or -1 if broke.
@@ -929,7 +929,9 @@ func paint(tx: int, ty: int, radius: int, t: int) -> int:
 	var started := undo.begin()
 	var n := course.paint(tx, ty, radius, t)
 	if n > 0:
-		economy.spend("construction", n * unit + course.clear_cost)
+		var bill := n * unit + course.clear_cost
+		economy.spend("construction", bill)
+		undo.note_charge(bill)
 		if Defs.is_green(t) or t == Defs.T.TEE:
 			# Fresh greens and tees are graded as they are laid, so they are
 			# playable straight away. Sculpt them afterwards to add break.
@@ -977,6 +979,7 @@ func place_object(tx: int, ty: int, o: int) -> int:
 	var placed := 0
 	if course.set_object(tx, ty, o):
 		economy.spend("construction", cost)
+		undo.note_charge(cost)
 		if free:
 			gifts[o] = int(gifts[o]) - 1
 		placed = 1
@@ -1172,6 +1175,8 @@ func sell_home(m: Dictionary, celebrity: bool = false) -> bool:
 				best = i
 	if best < 0:
 		return false
+	if undo != null:
+		undo.clear()
 	if celebrity:
 		best_v *= 3.0
 	m["home"] = true
@@ -1364,6 +1369,7 @@ func sculpt(mode: String, x: float, z: float, radius_m: float, amount: float) ->
 			course.flatten(x, z, radius_m, amount, 0.5)
 	economy.spend("construction", cost)
 	if started:
+		undo.note_charge(cost)
 		undo.commit()
 	return true
 
@@ -1399,6 +1405,7 @@ func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 		return null
 	var started := undo.begin()
 	economy.spend("construction", 250.0)
+	undo.note_charge(250.0)
 	var hole := course.add_hole(tee, pin)
 	name_hole(hole)
 	stats.holes_built = int(stats.holes_built) + 1
