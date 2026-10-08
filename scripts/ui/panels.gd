@@ -120,7 +120,7 @@ func _build(body: VBoxContainer) -> Callable:
 		["Lighting", [Defs.O.FLOODLIGHT, Defs.O.LAMP],
 			"Golfers play on after dark, but on an unlit hole they see poorly, enjoy it less and pay less, and few new golfers turn up at night. Light a hole from tee to green and it plays as well as by day. A floodlight lights a wide circle, shown as you place it. Lamp posts light paths and odd corners. Holes shows how much of each hole is lit."],
 		["Club facilities", [Defs.O.PUTTING_GREEN, Defs.O.DRIVING_RANGE, Defs.O.CART_BARN, Defs.O.HOME_SITE],
-			"A putting green and driving range let golfers warm up. A cart barn rents carts that fly along cart paths. Home sites are lots that Silver members and above will buy: they are worth more with a view and less in the line of fire."],
+			"A putting green helps putting and a driving range adds length. A member who plays keeps a little of that, so regulars get longer and better on the greens the more they come. A cart barn rents carts that fly along cart paths. Home sites are lots that Silver members and above will buy: they are worth more with a view and less in the line of fire."],
 		["Resort", [Defs.O.TENNIS, Defs.O.MARINA, Defs.O.HOTEL, Defs.O.AIRSTRIP],
 			"Big investments that lift the whole club. Tennis courts put every arrival in a good mood. A marina raises home values and draws celebrities. A hotel brings more golfers and keeps them fresh. An airstrip brings the kind who pay more for every hole."],
 	]
@@ -1495,7 +1495,7 @@ func _short(n: int) -> String:
 func _members(body: VBoxContainer) -> Callable:
 	var sim := hud.sim
 	var mem := sim.members
-	body.add_child(UIKit.para("Golfers who love their round join the club and come back as regulars. Every tier above Basic is unlocked by a different private wish. Give a member a round that grants it and they move up and pay more in dues. Two miserable rounds in a row and they resign."))
+	body.add_child(UIKit.para("Golfers who love their round join the club and come back as regulars. Every tier above Basic is unlocked by a different private wish. Give a member a round that grants it and they move up and pay more in dues. Two miserable rounds in a row and they resign. Regulars get a little better every visit, and faster at the range and on the practice green, and they keep it."))
 	var summary := UIKit.hbox(4)
 	body.add_child(summary)
 	var tier_labels: Array[Label] = []
@@ -1537,7 +1537,7 @@ func _members(body: VBoxContainer) -> Callable:
 		# rebuild the roster only when it changes
 		var sig := ""
 		for m in mem.roster:
-			sig += "%d%d%d%s%d" % [int(m.id), int(m.tier), int(m.visits), str(m.known), int(m.strikes)]
+			sig += "%d%d%d%s%d%d%d" % [int(m.id), int(m.tier), int(m.visits), str(m.known), int(m.strikes), int(float(m.get("power", 0.0)) * 1000.0), int(float(m.get("putting", 0.0)) * 1000.0)]
 		if sig == shown[0]:
 			return
 		shown[0] = sig
@@ -1567,6 +1567,10 @@ func _members(body: VBoxContainer) -> Callable:
 			h.add_child(UIKit.spacer())
 			var mood := float(m.last_mood)
 			h.add_child(UIKit.label("%d visit%s  ·  last round %d%%" % [int(m.visits), "" if int(m.visits) == 1 else "s", int(mood)], 11, UIKit.mood_color(mood)))
+			var prog := sim.members.progress
+			var length := int(round(clampf(inverse_lerp(float(prog["power_floor"]), float(prog["power_cap"]), float(m.get("power", 0.9))), 0.0, 1.0) * 100.0))
+			var putt := int(round(clampf(float(m.get("putting", 0.0)) / float(prog["skill_cap"]), 0.0, 1.0) * 100.0))
+			v.add_child(UIKit.label("Length %d  ·  Putting %d" % [length, putt], 11, UIKit.MUTED))
 			var persona := DataDB.find(sim.db.personalities, str(m.persona))
 			var line := str(persona.get("name", ""))
 			if m.home:
