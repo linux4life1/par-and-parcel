@@ -6584,6 +6584,7 @@ func _test_rating() -> void:
 	var moved_card := built.playing_card()
 	check(moved_card.scratch_score() > scratch and moved_card.slope_score() > slope_n, "once the course changes, the scratch rating and the slope are worked out again")
 	_test_rating_card()
+	_test_rating_day()
 	_test_rating_holes()
 
 
@@ -6665,6 +6666,7 @@ func _test_rating_card() -> void:
 	sim.tourney.apply_setup("stern")
 	check(hole.pin.distance_squared_to(laid) > 0.25, "the stern setup moves the cup")
 	check(hole.design_pin().distance_squared_to(laid) < 0.01, "the design pin stays where the hole was laid out")
+	sim.course.revision += 1
 	var tucked := sim.playing_card()
 	check(is_equal_approx(tucked.scratch_score(), scratch) and tucked.slope_score() == slope_n, "a tournament tuck does not change the card")
 	var one := _rating_sim(50, 4, false)
@@ -6721,6 +6723,22 @@ func _rating_climb(tee_y: float, pin_y: float) -> float:
 	hole.placed.y = pin_y
 	sim.course.revision += 1
 	return sim.playing_card().bogey_score()
+
+
+func _test_rating_day() -> void:
+	var sim := _rating_sim(50, 4, false)
+	var hole: Hole = sim.course.holes[0]
+	var card := sim.playing_card()
+	var scratch := card.scratch_score()
+	var slope_n := card.slope_score()
+	var laid := hole.design_pin()
+	check(sim.hire("greenkeeper"), "a greenkeeper can be hired")
+	sim.time = float(Defs.DAY_SECONDS)
+	sim.move_pins()
+	check(hole.pin.distance_squared_to(laid) > 0.25 and hole.design_pin().distance_squared_to(laid) < 0.01, "the day's cup leaves the placed pin")
+	sim.course.revision += 1
+	var moved := sim.playing_card()
+	check(is_equal_approx(moved.scratch_score(), scratch) and moved.slope_score() == slope_n, "moving the day's cup does not change the card")
 
 
 func _test_rating_holes() -> void:
