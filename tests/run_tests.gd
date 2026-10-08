@@ -2843,9 +2843,21 @@ func _test_lot_shade() -> void:
 				tx = x
 				ty = y
 				break
-	check(tx >= 0, "the starter course has a rough tile to price")
+	check(tx >= 0 and c.w == 128 and c.h == 128, "the starter course has a rough tile to price, on a 128 by 128 map")
 	var i := ty * c.w + tx
 	var first := sim.lot_shade()
+	var mismatch := 0
+	for y in c.h:
+		for x in c.w:
+			if not is_equal_approx(sim._lot_fast(x, y), sim.lot_value(x, y)):
+				mismatch += 1
+	check(mismatch == 0, "the fast lot map matches the reference price on every tile (%d differ)" % mismatch)
+	c.revision += 1
+	var t0 := Time.get_ticks_usec()
+	sim.lot_shade()
+	var ms := float(Time.get_ticks_usec() - t0) / 1000.0
+	print("   lot map rebuild on 128 by 128: %.2f ms" % ms)
+	check(ms < 20.0, "a lot map rebuild stays under 20 ms (%.2f)" % ms)
 	var again := sim.lot_shade()
 	check(first.size() == c.w * c.h and int(first[i]) == int(again[i]), "the lot map covers the course and is kept until it changes")
 	var hi := 0
@@ -2894,6 +2906,11 @@ func _test_lot_shade() -> void:
 			moved = true
 			break
 	check(sim._lot_builds == built + 1 and moved, "a hole the golfers enjoy more changes the shade within 70 m of its line")
+	var swapped := sim._lot_builds
+	c.holes[0].fun += 5.0
+	c.holes[1].fun -= 5.0
+	sim.lot_shade()
+	check(sim._lot_builds == swapped + 1, "fun moving from one hole to another still rebuilds the lot map")
 
 
 func _test_landmarks() -> void:
