@@ -458,6 +458,7 @@ func _tick_golfer(g: Golfer, dt: float) -> void:
 
 
 func _slow_check(g: Golfer) -> void:
+	sim.touch_landmark(g)
 	var w := sim.weather
 	var staying := g.kind == "public" and g.group != null and g.group.state != Group.S.LEAVING
 	var bold := float(g.persona.get("tags", {}).get("danger", 1.0)) < 0.0

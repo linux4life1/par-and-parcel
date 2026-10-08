@@ -25,6 +25,7 @@ var tutorial: Dictionary = {}   # the guided first round
 var tips: Dictionary = {}       # for the loading screen
 var stories: Dictionary = {}    # the long golfer stories
 var setups: Array = []          # how a tournament can be set up
+var landmarks: Dictionary = {}  # area effects of landmark objects
 var names: Dictionary = {}
 var feed: Dictionary = {}
 
@@ -54,6 +55,7 @@ func _init() -> void:
 	tips = _load("tips")
 	stories = _load("stories")
 	setups = _load("setups").get("setups", [])
+	landmarks = _load("landmarks")
 	names = _load("names")
 	feed = _load("feed")
 
