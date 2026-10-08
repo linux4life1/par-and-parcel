@@ -1888,6 +1888,8 @@ func _rebuild_objects() -> void:
 	_dark_shown = -1.0
 	for i in course.objects.size():
 		var o := course.objects[i]
+		if course.is_closed(i):
+			continue
 		var reach: float = Defs.O_LIGHT[o]
 		if reach <= 0.0:
 			continue
@@ -1957,6 +1959,8 @@ func _rebuild_objects() -> void:
 			elif o == Defs.O.BRIDGE:
 				p.y += 0.1
 			mm.set_instance_transform(n, Transform3D(b, p))
+			if course.is_closed(i):
+				tint = Color(0.38, 0.4, 0.45)
 			mm.set_instance_color(n, tint)
 		var mmi := MultiMeshInstance3D.new()
 		mmi.multimesh = mm

@@ -96,7 +96,7 @@ func _mood_warning(mood: float) -> void:
 ## Called a few times a second with the sim time that has passed.
 func step(dt: float) -> void:
 	refresh_layout()
-	_litter(dt)
+	_refresh_litter()
 	var course := sim.course
 	var n := course.w * course.h
 	var count := n / SLICES
@@ -191,10 +191,6 @@ func step(dt: float) -> void:
 
 ## Keep the bin and source lists current. Rebuilt only when an object moves,
 ## so a step does not walk the whole map.
-func _litter(_dt: float) -> void:
-	_refresh_litter()
-
-
 func _refresh_litter() -> void:
 	var course := sim.course
 	if _litter_ready and _litter_rev == course.revision:
@@ -219,9 +215,7 @@ func _refresh_litter() -> void:
 
 
 func _shut(course: Course, i: int) -> bool:
-	if not course.has_method("is_closed"):
-		return false
-	return bool(course.call("is_closed", i))
+	return course.is_closed(i)
 
 
 ## One sale at a stand. The 3 by 3 around it picks up a little litter. A bin

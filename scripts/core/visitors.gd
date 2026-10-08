@@ -620,7 +620,7 @@ func plan_stop(gr: Group) -> Dictionary:
 				var toward := (here - spot)
 				toward.y = 0.0
 				var front := spot + toward.normalized() * 4.0 if toward.length() > 0.1 else spot
-				best = {"kind": kind, "pos": sim.course.on_ground(front.x, front.z), "tile": sim.course.index_at(spot.x, spot.z), "timer": 4.0}
+				best = {"kind": kind, "pos": sim.course.on_ground(front.x, front.z), "spot": spot, "tile": sim.course.index_at(spot.x, spot.z), "timer": 4.0}
 	return best
 
 
@@ -804,7 +804,7 @@ func _refresh_amenities() -> void:
 		"vending": 0, "bar": 0}
 	for i in course.objects.size():
 		var o := course.objects[i]
-		if o == 0 or not FACILITY.has(o):
+		if o == 0 or course.is_closed(i) or not FACILITY.has(o):
 			continue
 		var kind: String = FACILITY[o]
 		amenities[kind] = int(amenities[kind]) + 1

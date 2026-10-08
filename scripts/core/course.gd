@@ -13,6 +13,8 @@ var h: int
 var heights := PackedFloat32Array()   # (w + 1) * (h + 1) corner heights
 var terrain := PackedByteArray()      # Defs.T per tile
 var objects := PackedByteArray()      # Defs.O per tile
+var closed := PackedByteArray()       # 1 where that object is switched off
+var open_month := PackedByteArray()    # 1 if it was open at any point this month, so the bill still includes it
 var wet := PackedFloat32Array()       # 0 dry .. 1 flooded
 var health := PackedFloat32Array()    # 0 dead .. 1 perfect turf
 var weeds := PackedFloat32Array()     # 0 .. 1
@@ -53,6 +55,10 @@ func _init(width: int = 128, height: int = 128) -> void:
 	terrain.fill(Defs.T.ROUGH)
 	objects.resize(w * h)
 	objects.fill(0)
+	closed.resize(w * h)
+	closed.fill(0)
+	open_month.resize(w * h)
+	open_month.fill(0)
 	wet.resize(w * h)
 	wet.fill(0.2)
 	health.resize(w * h)
@@ -139,6 +145,8 @@ func _ensure_light() -> void:
 	_light.resize(w * h)
 	_light.fill(0.0)
 	for i in objects.size():
+		if is_closed(i):
+			continue
 		var reach: float = Defs.O_LIGHT[objects[i]]
 		if reach <= 0.0:
 			continue
@@ -348,6 +356,8 @@ func set_terrain(tx: int, ty: int, t: int) -> bool:
 		var gave_light: bool = Defs.O_LIGHT[objects[i]] > 0.0
 		objects[i] = 0
 		repair[i] = 0
+		closed[i] = 0
+		open_month[i] = 0
 		_objects_dirty = true
 		objects_touched(i, gave_light)
 	if t == Defs.T.WATER:
@@ -416,10 +426,65 @@ func set_object(tx: int, ty: int, o: int) -> bool:
 	var lights: bool = Defs.O_LIGHT[objects[i]] > 0.0 or Defs.O_LIGHT[o] > 0.0
 	objects[i] = o
 	repair[i] = 0
+	closed[i] = 0
+	open_month[i] = 1 if o != 0 else 0
 	objects_touched(i, lights)
 	revision += 1
 	objects_changed.emit()
 	return true
+
+
+## A structure with a monthly bill can be switched off. The clubhouse,
+## trees and anything else that costs nothing stay as they are. A bridge
+## stays open: people are still walking it.
+func can_switch(o: int) -> bool:
+	if o == Defs.O.BRIDGE:
+		return false
+	return o > 0 and o < Defs.O_UPKEEP.size() and Defs.O_UPKEEP[o] > 0
+
+
+## How many of this object are standing and open. A closed one does not
+## count as built for the tutorial.
+func count_open(o: int) -> int:
+	var n := 0
+	for i in objects.size():
+		if objects[i] == o and not is_closed(i):
+			n += 1
+	return n
+
+
+## True when the object on this tile has been switched off.
+func is_closed(i: int) -> bool:
+	return i >= 0 and i < closed.size() and i < objects.size() and objects[i] != 0 and closed[i] != 0
+
+
+## Switch a structure off or back on. A closed one is still standing, but
+## it costs nothing and nobody can use it.
+func set_closed(tx: int, ty: int, off: bool) -> bool:
+	if not in_bounds(tx, ty):
+		return false
+	var i := ty * w + tx
+	var o := int(objects[i])
+	if not can_switch(o):
+		return false
+	var bit := 1 if off else 0
+	if int(closed[i]) == bit:
+		return false
+	closed[i] = bit
+	if not off:
+		open_month[i] = 1
+	if Defs.O_LIGHT[o] > 0.0:
+		lights_rev += 1
+	revision += 1
+	objects_changed.emit()
+	return true
+
+
+## The month's bill has been taken. A structure that is still closed starts
+## the next month unpaid; one that is open is already on the next bill.
+func settle_month() -> void:
+	for i in open_month.size():
+		open_month[i] = 0 if closed[i] != 0 else 1
 
 
 ## Raise or lower the ground with a soft round brush centred on a world point.
@@ -643,6 +708,8 @@ func to_dict() -> Dictionary:
 		"heights": Marshalls.raw_to_base64(heights.to_byte_array()),
 		"terrain": Marshalls.raw_to_base64(terrain),
 		"objects": Marshalls.raw_to_base64(objects),
+		"closed": Marshalls.raw_to_base64(closed),
+		"open_month": Marshalls.raw_to_base64(open_month),
 		"wet": Marshalls.raw_to_base64(wet.to_byte_array()),
 		"health": Marshalls.raw_to_base64(health.to_byte_array()),
 		"weeds": Marshalls.raw_to_base64(weeds.to_byte_array()),
@@ -666,6 +733,19 @@ static func from_dict(d: Dictionary) -> Course:
 	c.heights = Marshalls.base64_to_raw(d.heights).to_float32_array()
 	c.terrain = Marshalls.base64_to_raw(d.terrain)
 	c.objects = Marshalls.base64_to_raw(d.objects)
+	if d.has("closed"):
+		c.closed = Marshalls.base64_to_raw(d.closed)
+	if c.closed.size() != c.w * c.h:
+		c.closed = PackedByteArray()
+		c.closed.resize(c.w * c.h)
+		c.closed.fill(0)
+	if d.has("open_month"):
+		c.open_month = Marshalls.base64_to_raw(d.open_month)
+	if c.open_month.size() != c.w * c.h:
+		c.open_month = PackedByteArray()
+		c.open_month.resize(c.w * c.h)
+		for i in c.open_month.size():
+			c.open_month[i] = 0 if c.closed[i] != 0 else 1
 	c.wet = Marshalls.base64_to_raw(d.wet).to_float32_array()
 	c.health = Marshalls.base64_to_raw(d.health).to_float32_array()
 	c.weeds = Marshalls.base64_to_raw(d.weeds).to_float32_array()
