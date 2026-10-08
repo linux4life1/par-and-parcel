@@ -80,6 +80,8 @@ var _lot_funs := PackedFloat32Array()
 var _lot_builds := 0
 var _lot_shade := PackedByteArray()
 var _lot_sat := PackedFloat32Array()
+var _lot_cellv := PackedFloat32Array()
+var _lot_price := PackedFloat32Array()
 var _lot_lava := false
 var _lot_marina := false
 var _mark_rev := -2
@@ -636,20 +638,17 @@ func lot_shade() -> PackedByteArray:
 		_lot_funs[i] = course.holes[i].fun
 	_lot_builds += 1
 	_build_lot_sat()
-	var vals := PackedFloat32Array()
-	vals.resize(n)
+	_price_lots()
 	var lo := 1.0e12
 	var hi := -1.0e12
-	var w := course.w
 	for i in n:
-		var v := _lot_fast(i % w, int(i / w))
-		vals[i] = v
+		var v := _lot_price[i]
 		lo = minf(lo, v)
 		hi = maxf(hi, v)
 	_lot_shade.resize(n)
 	var span := hi - lo
 	for i in n:
-		var t := 0.5 if span < 1.0 else (vals[i] - lo) / span
+		var t := 0.5 if span < 1.0 else (_lot_price[i] - lo) / span
 		_lot_shade[i] = int(clampf(t, 0.0, 1.0) * 255.0)
 	return _lot_shade
 
@@ -686,41 +685,87 @@ func _build_lot_sat() -> void:
 		_lot_sat.resize(stride * (h + 1))
 	else:
 		_lot_sat.fill(0.0)
+	if _lot_cellv.size() != w * h:
+		_lot_cellv = PackedFloat32Array()
+		_lot_cellv.resize(w * h)
 	for y in h:
 		var run := 0.0
 		var row := y * w
 		var below := y * stride
 		var dest := (y + 1) * stride
 		for x in w:
-			run += _lot_cell(row + x)
+			var cell := _lot_cell(row + x)
+			_lot_cellv[row + x] = cell
+			run += cell
 			_lot_sat[dest + x + 1] = _lot_sat[below + x + 1] + run
 
 
-func _lot_rect(x0: int, y0: int, x1: int, y1: int) -> float:
+## Prices every tile from the table. Hole geometry is cached so the inner
+## loop does not build vectors or call out.
+func _price_lots() -> void:
 	var w := course.w
-	x0 = maxi(x0, 0)
-	y0 = maxi(y0, 0)
-	x1 = mini(x1, w - 1)
-	y1 = mini(y1, course.h - 1)
-	if x1 < x0 or y1 < y0:
-		return 0.0
+	var h := course.h
+	var n := w * h
 	var stride := w + 1
-	return _lot_sat[(y1 + 1) * stride + (x1 + 1)] - _lot_sat[y0 * stride + (x1 + 1)] - _lot_sat[(y1 + 1) * stride + x0] + _lot_sat[y0 * stride + x0]
-
-
-## The same price as lot_value, with the neighbourhood read from the table.
-func _lot_fast(tx: int, ty: int) -> float:
-	var v := 1200.0 + rating * 22.0 + _lot_rect(tx - 4, ty - 4, tx + 4, ty + 4) - _lot_cell(ty * course.w + tx)
-	var p := Vector2((tx + 0.5) * Defs.TILE, (ty + 0.5) * Defs.TILE)
-	for hole in course.holes:
-		var d := Ball._seg_dist(Vector2(hole.tee.x, hole.tee.z), Vector2(hole.pin.x, hole.pin.z), p)
-		if d < 22.0:
-			v -= 700.0
-		elif d < 70.0:
-			v += hole.fun * 4.0
-	if _lot_marina:
-		v *= 1.4
-	return float(int(maxf(v, 500.0) / 50.0) * 50)
+	var tile := Defs.TILE
+	var base := 1200.0 + rating * 22.0
+	var nh := course.holes.size()
+	var hx := PackedFloat32Array()
+	var hz := PackedFloat32Array()
+	var abx := PackedFloat32Array()
+	var abz := PackedFloat32Array()
+	var inv := PackedFloat32Array()
+	var fun := PackedFloat32Array()
+	hx.resize(nh)
+	hz.resize(nh)
+	abx.resize(nh)
+	abz.resize(nh)
+	inv.resize(nh)
+	fun.resize(nh)
+	for hi in nh:
+		var hole := course.holes[hi]
+		hx[hi] = hole.tee.x
+		hz[hi] = hole.tee.z
+		var dx := hole.pin.x - hole.tee.x
+		var dz := hole.pin.z - hole.tee.z
+		abx[hi] = dx
+		abz[hi] = dz
+		var l2 := dx * dx + dz * dz
+		inv[hi] = 0.0 if l2 < 1e-9 else 1.0 / l2
+		fun[hi] = hole.fun
+	if _lot_price.size() != n:
+		_lot_price = PackedFloat32Array()
+		_lot_price.resize(n)
+	var marina := _lot_marina
+	for y in h:
+		var pz := (float(y) + 0.5) * tile
+		var y0 := maxi(y - 4, 0)
+		var y1 := mini(y + 4, h - 1)
+		var row := y * w
+		for x in w:
+			var x0 := maxi(x - 4, 0)
+			var x1 := mini(x + 4, w - 1)
+			var neigh := _lot_sat[(y1 + 1) * stride + (x1 + 1)] - _lot_sat[y0 * stride + (x1 + 1)] - _lot_sat[(y1 + 1) * stride + x0] + _lot_sat[y0 * stride + x0]
+			var v := base + neigh - _lot_cellv[row + x]
+			var px := (float(x) + 0.5) * tile
+			for hi in nh:
+				var d2: float
+				if inv[hi] == 0.0:
+					var ddx := hx[hi] - px
+					var ddz := hz[hi] - pz
+					d2 = ddx * ddx + ddz * ddz
+				else:
+					var tt := clampf(((px - hx[hi]) * abx[hi] + (pz - hz[hi]) * abz[hi]) * inv[hi], 0.0, 1.0)
+					var qx := hx[hi] + abx[hi] * tt - px
+					var qz := hz[hi] + abz[hi] * tt - pz
+					d2 = qx * qx + qz * qz
+				if d2 < 484.0:
+					v -= 700.0
+				elif d2 < 4900.0:
+					v += fun[hi] * 4.0
+			if marina:
+				v *= 1.4
+			_lot_price[row + x] = float(int(maxf(v, 500.0) / 50.0) * 50)
 
 
 ## A member buys a free home site, if there is one. The lot becomes a house.

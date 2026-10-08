@@ -2849,7 +2849,7 @@ func _test_lot_shade() -> void:
 	var mismatch := 0
 	for y in c.h:
 		for x in c.w:
-			if not is_equal_approx(sim._lot_fast(x, y), sim.lot_value(x, y)):
+			if not is_equal_approx(sim._lot_price[y * c.w + x], sim.lot_value(x, y)):
 				mismatch += 1
 	check(mismatch == 0, "the fast lot map matches the reference price on every tile (%d differ)" % mismatch)
 	c.revision += 1
