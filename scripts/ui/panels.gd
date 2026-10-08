@@ -476,6 +476,7 @@ func _holes(body: VBoxContainer) -> Callable:
 		cv.add_child(report)
 		rows.append([kind, bars, st, report, paid])
 	var card_plays := -1
+	var card_rev := -1
 	return func() -> void:
 		var now := ""
 		for hole in sim.course.holes:
@@ -486,8 +487,9 @@ func _holes(body: VBoxContainer) -> Callable:
 		var total_plays := 0
 		for hole in sim.course.holes:
 			total_plays += hole.plays
-		if total_plays != card_plays:
+		if total_plays != card_plays or sim.course.revision != card_rev:
 			card_plays = total_plays
+			card_rev = sim.course.revision
 			_scorecard(card_box)
 		var round_total := 0.0
 		var rated := 0
@@ -656,6 +658,8 @@ func _scorecard(box: VBoxContainer) -> void:
 		notes.append("Timed holes so far add up to %s." % Defs.pace_text(sim.course.round_time()))
 	if slow >= 0:
 		notes.append("Slowest: hole %d, %s a group." % [slow + 1, Defs.pace_text(holes[slow].average_time())])
+	var played := sim.playing_card()
+	notes.append("Scratch %s    Slope %s" % [played.scratch_text(), played.slope_text()])
 	if not notes.is_empty():
 		cv.add_child(UIKit.para("  ".join(PackedStringArray(notes)), 12))
 	var said := sim.course.comment_report()
@@ -1419,6 +1423,9 @@ func _goals(body: VBoxContainer) -> Callable:
 		recs.add_child(UIKit.row("   from golfer satisfaction", "%d%%" % int(sim.visitors.average_satisfaction())))
 		recs.add_child(UIKit.row("   from course condition", "%d%%" % int(sim.grounds.condition * 100.0)))
 		recs.add_child(UIKit.row("   from design and amenities", "%d / 100" % int(sim.design)))
+		var played := sim.playing_card()
+		recs.add_child(UIKit.row("Scratch rating", played.scratch_text()))
+		recs.add_child(UIKit.row("Slope rating", played.slope_text()))
 		recs.add_child(UIKit.row("Reputation", "%d / 100" % int(sim.reputation)))
 		recs.add_child(UIKit.row("Holes", "%d  (par %d)" % [sim.course.holes.size(), sim.course.total_par()]))
 		recs.add_child(UIKit.row("Club members", str(sim.members.count())))
