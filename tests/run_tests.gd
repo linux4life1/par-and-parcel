@@ -3959,14 +3959,14 @@ func _test_litter() -> void:
 	var spot := Vector2i(-1, -1)
 	for y in range(1, c.h - 1):
 		for x in range(1, c.w - 3):
-			var open := true
-			for ox in [0, 2]:
-				var i := y * c.w + x + ox
-				if c.locked[i] != 0 or c.objects[i] != 0 or c.hot[i] != 0 or c.terrain[i] != Defs.T.ROUGH:
-					open = false
-			if open:
-				spot = Vector2i(x, y)
-				break
+			var i0: int = y * c.w + x
+			var i2: int = i0 + 2
+			if c.locked[i0] != 0 or c.objects[i0] != 0 or c.hot[i0] != 0 or c.terrain[i0] != Defs.T.ROUGH:
+				continue
+			if c.locked[i2] != 0 or c.objects[i2] != 0 or c.hot[i2] != 0 or c.terrain[i2] != Defs.T.ROUGH:
+				continue
+			spot = Vector2i(x, y)
+			break
 		if spot.x >= 0:
 			break
 	check(spot.x >= 0, "there is rough for a stand and a bin")
@@ -3979,6 +3979,7 @@ func _test_litter() -> void:
 	check(sim.place_object(spot.x + 2, spot.y, Defs.O.BIN) == 1, "a bin goes up two tiles away")
 	sim.grounds.step(30.0)
 	check(c.litter[ti] < show, "the bin keeps that same half minute from showing (%.2f)" % c.litter[ti])
+	c.litter.fill(0.0)
 	c.litter[ti] = 0.8
 	c.weeds[ti] = 0.0
 	c.pests[ti] = 0.0
@@ -4009,7 +4010,7 @@ func _test_litter() -> void:
 	var house := Vector2i(-1, -1)
 	for y in c.h:
 		for x in c.w:
-			var i := y * c.w + x
+			var i: int = y * c.w + x
 			if i == ti or c.locked[i] != 0 or c.objects[i] != 0 or c.hot[i] != 0 or c.terrain[i] != Defs.T.ROUGH:
 				continue
 			house = Vector2i(x, y)
@@ -4024,7 +4025,7 @@ func _test_litter() -> void:
 	ball.hit_speed = 20.0
 	ball.hit_obj = Defs.O.HOUSE
 	var smashed := false
-	for _k in 20:
+	for _attempt in 20:
 		sim.visitors._on_ricochet(ball)
 		if c.repair[wi] != 0:
 			smashed = true
