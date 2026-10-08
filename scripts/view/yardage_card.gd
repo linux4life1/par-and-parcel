@@ -221,6 +221,7 @@ func _draw(course: Course, hole: Hole) -> void:
 	for i in range(1, line.size()):
 		_stroke(_to_px(line[i - 1]), _to_px(line[i]), thick, line_c)
 	var tee_r := float(_book.get("tee_dot", 0.99))
+	var set_scale := float(_book.get("set_scale", 0.85))
 	var pin_r := float(_book.get("pin_dot", 0.88))
 	var flag := float(_book.get("flag", 4.84))
 	tee_px = _to_px(Vector2(hole.tee.x, hole.tee.z))
@@ -234,11 +235,11 @@ func _draw(course: Course, hole: Hole) -> void:
 	forward_px = Vector2(-1.0, -1.0)
 	if hole.has_tee("middle"):
 		middle_px = _to_px(Vector2(hole.tee_middle.x, hole.tee_middle.z))
-		_dot(middle_px, tee_r * 0.85, tee_c)
+		_dot(middle_px, tee_r * set_scale, tee_c)
 		_number(int(round(middle_px.x)), int(round(middle_px.y)), Defs.yards(hole.length_middle), ink, glyph)
 	if hole.has_tee("forward"):
 		forward_px = _to_px(Vector2(hole.tee_forward.x, hole.tee_forward.z))
-		_dot(forward_px, tee_r * 0.85, tee_c)
+		_dot(forward_px, tee_r * set_scale, tee_c)
 		_number(int(round(forward_px.x)), int(round(forward_px.y)), Defs.yards(hole.length_forward), ink, glyph)
 
 
