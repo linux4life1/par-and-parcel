@@ -354,9 +354,13 @@ func monthly_upkeep() -> float:
 
 func _update_rating(dt: float) -> void:
 	var n := 0
+	var pars := {}
+	var scenery := 0.0
 	for hole in course.holes:
 		if hole.open:
 			n += 1
+			pars[hole.par] = true
+			scenery += scenery_score(hole)
 	if n == 0:
 		rating = 0.0
 		design = 0.0
@@ -368,8 +372,10 @@ func _update_rating(dt: float) -> void:
 		if int(am.get(key, 0)) > 0:
 			resort[key] = true
 	var d := 0.0
-	for row in accreditation():
-		d += float(row.points)
+	var lines: Array = db.accreditation.get("lines", [])
+	for item in lines:
+		if item is Dictionary:
+			d += _accredit_points(item, n, pars.size(), scenery, am)
 	design = clampf(d, 0.0, 100.0)
 	rating = clampf(0.4 * visitors.average_satisfaction() + 15.0 * grounds.condition + 0.45 * design + stories.rating_bias(), 0.0, 100.0)
 	reputation = move_toward(reputation, rating, dt * 0.04)
@@ -397,11 +403,40 @@ func accreditation() -> Array[Dictionary]:
 	return out
 
 
+func _accredit_points(line: Dictionary, n: int, kinds: int, scenery: float, am: Dictionary) -> float:
+	match str(line.get("kind", "")):
+		"holes":
+			var cap := int(line.get("cap", 18))
+			var full := float(line.get("points", 0.0))
+			return minf(float(n), float(cap)) / float(cap) * full
+		"pars":
+			var steps: Array = line.get("points", [])
+			if n == 0 or steps.is_empty():
+				return 0.0
+			return float(steps[mini(kinds, maxi(steps.size() - 1, 0))])
+		"count", "any":
+			if n == 0:
+				return 0.0
+			var cap := int(line.get("cap", 1))
+			var each := float(line.get("each", 0.0))
+			return float(mini(_accredit_have(line, am), cap)) * each
+		"clubhouse":
+			if n == 0:
+				return 0.0
+			return float(clubhouse_level) * float(line.get("each", 0.0))
+		"scenery":
+			if n == 0:
+				return 0.0
+			return scenery / float(n) * float(line.get("points", 0.0))
+		_:
+			return 0.0
+
+
 func _accredit_line(line: Dictionary, n: int, kinds: int, scenery: float, am: Dictionary) -> Dictionary:
 	var id := str(line.get("id", ""))
 	var text := str(line.get("text", ""))
 	var kind := str(line.get("kind", ""))
-	var pts := 0.0
+	var pts := _accredit_points(line, n, kinds, scenery, am)
 	var have := 0
 	var met := false
 	var next := ""
@@ -411,7 +446,6 @@ func _accredit_line(line: Dictionary, n: int, kinds: int, scenery: float, am: Di
 			var cap := int(line.get("cap", 18))
 			var full := float(line.get("points", 0.0))
 			have = n
-			pts = 0.0 if n == 0 else minf(float(n), float(cap)) / float(cap) * full
 			met = n >= cap
 			detail = "%d of %d, worth %s of %s." % [mini(n, cap), cap, _accredit_num(pts), _accredit_num(full)]
 			if n == 0:
@@ -421,9 +455,7 @@ func _accredit_line(line: Dictionary, n: int, kinds: int, scenery: float, am: Di
 		"pars":
 			var steps: Array = line.get("points", [])
 			var top := 0.0 if steps.is_empty() else float(steps[steps.size() - 1])
-			var idx := mini(kinds, maxi(steps.size() - 1, 0))
 			have = kinds
-			pts = 0.0 if n == 0 or steps.is_empty() else float(steps[idx])
 			met = n > 0 and not steps.is_empty() and kinds >= steps.size() - 1
 			var word := "No pars yet" if kinds == 0 else ("%d different par%s" % [kinds, "" if kinds == 1 else "s"])
 			detail = "%s, worth %s of %s." % [word, _accredit_num(pts), _accredit_num(top)]
@@ -434,7 +466,6 @@ func _accredit_line(line: Dictionary, n: int, kinds: int, scenery: float, am: Di
 			var each := float(line.get("each", 0.0))
 			have = _accredit_have(line, am)
 			var used := mini(have, cap)
-			pts = 0.0 if n == 0 else float(used) * each
 			var full := float(cap) * each
 			met = have >= cap
 			detail = "%d of %d, worth %s of %s." % [used, cap, _accredit_num(pts), _accredit_num(full)]
@@ -446,7 +477,6 @@ func _accredit_line(line: Dictionary, n: int, kinds: int, scenery: float, am: Di
 			var each := float(line.get("each", 0.0))
 			var top_level := maxi(clubhouse_levels().size() - 1, 0)
 			have = clubhouse_level
-			pts = 0.0 if n == 0 else float(clubhouse_level) * each
 			var full := float(top_level) * each
 			met = clubhouse_top()
 			detail = "%s, worth %s of %s." % [clubhouse_name(), _accredit_num(pts), _accredit_num(full)]
@@ -456,13 +486,11 @@ func _accredit_line(line: Dictionary, n: int, kinds: int, scenery: float, am: Di
 				next = str(line.get("next", ""))
 		"scenery":
 			var full := float(line.get("points", 0.0))
-			pts = 0.0 if n == 0 else scenery / float(n) * full
 			met = n > 0 and pts >= full - 0.05
 			detail = "Worth %s of %s." % [_accredit_num(pts), _accredit_num(full)]
 			if n > 0 and not met:
 				next = str(line.get("next", ""))
 		"pace":
-			pts = 0.0
 			if n == 0:
 				detail = str(line.get("next_none", ""))
 				next = detail

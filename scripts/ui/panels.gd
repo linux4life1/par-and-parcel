@@ -1250,12 +1250,6 @@ func _goals(body: VBoxContainer) -> Callable:
 		recs.add_child(UIKit.row("   from course condition", "%d%%" % int(sim.grounds.condition * 100.0)))
 		recs.add_child(UIKit.row("   from design and amenities", "%d / 100" % int(sim.design)))
 		recs.add_child(UIKit.row("Reputation", "%d / 100" % int(sim.reputation)))
-		UIKit.clear(accred)
-		for row in sim.accreditation():
-			var met := bool(row.met)
-			var head := ("\u2713  " if met else "\u25cb  ") + str(row.text)
-			accred.add_child(UIKit.para(head, 13, UIKit.GOOD if met else UIKit.TEXT))
-			accred.add_child(UIKit.para(str(row.detail), 12, UIKit.MUTED))
 		recs.add_child(UIKit.row("Holes", "%d  (par %d)" % [sim.course.holes.size(), sim.course.total_par()]))
 		recs.add_child(UIKit.row("Club members", str(sim.members.count())))
 		recs.add_child(UIKit.row("Homes on the course", str(sim.homes)))
@@ -1268,6 +1262,12 @@ func _goals(body: VBoxContainer) -> Callable:
 		if sim.eruption.has_volcano():
 			recs.add_child(UIKit.row("Eruptions survived", str(sim.stats.eruptions)))
 		recs.add_child(UIKit.row("Your holes played", str(sim.player.holes_played)))
+		UIKit.clear(accred)
+		for row in sim.accreditation():
+			var met := bool(row.met)
+			var head := ("\u2713  " if met else "\u25cb  ") + str(row.text)
+			accred.add_child(UIKit.para(head, 13, UIKit.GOOD if met else UIKit.TEXT))
+			accred.add_child(UIKit.para(str(row.detail), 12, UIKit.MUTED))
 		# the ranking table, with your course slotted in
 		UIKit.clear(ranks)
 		var table: Array = []

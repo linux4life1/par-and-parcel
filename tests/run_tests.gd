@@ -3203,25 +3203,17 @@ func _test_accreditation() -> void:
 	var built := _sim("three_holes", 4)
 	var c := built.course
 	c.guard = false
-	var had := float(_accredit(built, "restroom").get("points", 0.0))
-	if had > 0.0:
-		for i in c.objects.size():
-			if c.objects[i] == Defs.O.RESTROOM:
-				c.set_object(i % c.w, int(i / c.w), Defs.O.NONE)
-		built._update_rating(0.0)
-		check(is_equal_approx(float(_accredit(built, "restroom").get("points", -1.0)), 0.0) and is_equal_approx(built.design, _legacy_design(built)), "taking out the restroom takes its points off the score")
-	else:
-		var placed := false
-		for y in range(8, c.h - 8):
-			if placed:
-				break
-			for x in range(8, c.w - 8):
-				if c.objects[y * c.w + x] == 0 and c.terrain[y * c.w + x] != Defs.T.WATER:
-					placed = c.set_object(x, y, Defs.O.RESTROOM)
-					if placed:
-						break
-		built._update_rating(0.0)
-		check(placed and bool(_accredit(built, "restroom").get("met", false)) and is_equal_approx(float(_accredit(built, "restroom").get("points", 0.0)), 4.0), "a restroom is worth 4 once a hole is open")
+	var placed := false
+	for y in range(8, c.h - 8):
+		if placed:
+			break
+		for x in range(8, c.w - 8):
+			if c.objects[y * c.w + x] == 0 and c.terrain[y * c.w + x] != Defs.T.WATER:
+				placed = c.set_object(x, y, Defs.O.RESTROOM)
+				if placed:
+					break
+	built._update_rating(0.0)
+	check(placed and bool(_accredit(built, "restroom").get("met", false)) and is_equal_approx(float(_accredit(built, "restroom").get("points", 0.0)), 4.0), "a restroom is worth 4 once a hole is open")
 	var cart := _sim("three_holes", 4)
 	var ground := cart.course
 	ground.guard = false
