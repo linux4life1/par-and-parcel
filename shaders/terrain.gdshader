@@ -18,7 +18,7 @@ uniform int overlay = 0;            // 0 off, 1 moisture, 2 turf health, 3 heigh
 uniform vec3 brush = vec3(0.0, 0.0, -1.0);   // x, z, radius; negative radius hides it
 uniform vec3 brush_color : source_color = vec3(1.0, 1.0, 1.0);
 uniform vec4 land_rect = vec4(0.0);          // x0, z0, x1, z1 of a highlighted land parcel
-uniform vec3 pal[11];               // linear colour per terrain type, then the hazard's second colour
+uniform vec3 pal[13];               // linear colour per terrain type, then the hazard's second colour
 uniform float lava = 0.0;           // 1 when the hazard is lava
 uniform float heat = 0.0;           // extra glow during an eruption
 uniform vec2 cloud_offset = vec2(0.0);
@@ -28,13 +28,13 @@ uniform vec3 season_grass = vec3(1.0);   // the season's tint on everything gras
 uniform sampler2DArray ground_tex : source_color, filter_linear_mipmap_anisotropic, repeat_enable;
 uniform sampler2DArray ground_nor : filter_linear_mipmap, repeat_enable;
 uniform vec3 ground_mean[10];       // average colour of each layer
-uniform float layer_of[10];         // which layer each terrain type uses
-uniform float layer_size[10];       // metres one repeat of the texture covers
-uniform float layer_bump[10];       // how strongly its bumps catch the light
+uniform float layer_of[12];         // which layer each terrain type uses
+uniform float layer_size[12];       // metres one repeat of the texture covers
+uniform float layer_bump[12];       // how strongly its bumps catch the light
 
 // How strongly each surface claims the ground near its edge. Small features
 // get a boost so a one-tile bunker survives the smoothing as a round pit.
-const float PRIORITY[10] = float[10](1.0, 1.12, 1.38, 1.5, 1.62, 1.32, 0.94, 1.58, 1.25, 1.05);
+const float PRIORITY[12] = float[12](1.0, 1.12, 1.38, 1.5, 1.62, 1.32, 0.94, 1.58, 1.25, 1.05, 1.16, 1.42);
 
 varying vec3 wpos;
 varying float relief;
@@ -136,10 +136,10 @@ vec3 terrain_color(int t, vec2 wp, float n, vec3 fine, float grain, out float ro
 			float crust = vnoise(wp * 0.5 - vec2(TIME * 0.03, 0.0)) * 0.6 + vnoise(wp * 1.2 + flow * 2.5) * 0.4;
 			float hot = smoothstep(0.38, 0.72, crust + 0.2 * sin(TIME * 0.7 + flow * 6.0) + heat * 0.25);
 			emit = hot;
-			return mix(pal[5] * 0.35, pal[10], hot);
+			return mix(pal[5] * 0.35, pal[12], hot);
 		}
 		rough = 0.04;
-		return mix(pal[5], pal[10], wave(wp) * 0.6);
+		return mix(pal[5], pal[12], wave(wp) * 0.6);
 	}
 	if (t == 6) {           // deep rough: tussocky and uneven
 		grass = 0.35;
@@ -160,6 +160,17 @@ vec3 terrain_color(int t, vec2 wp, float n, vec3 fine, float grain, out float ro
 	if (t == 9) {           // scorched ground and ash
 		grass = 0.0;
 		return pal[9] * (0.78 + 0.32 * n) * fine;
+	}
+	if (t == 10) {          // firm fairway: tighter stripes, a little paler
+		float s = step(0.5, fract((wp.x + wp.y) / 11.0)) * 2.0 - 1.0;
+		rough = 0.88;
+		return pal[10] * (1.0 + 0.06 * s * (0.45 + 0.55 * grain)) * (0.94 + 0.12 * n) * mix(vec3(1.0), fine, 0.85);
+	}
+	if (t == 11) {          // fast green: a finer cut
+		float a = step(0.5, fract(wp.x / 2.2)) * 2.0 - 1.0;
+		float b = step(0.5, fract(wp.y / 2.2)) * 2.0 - 1.0;
+		rough = 0.72;
+		return pal[11] * (1.0 + 0.028 * a * grain + 0.028 * b) * (0.97 + 0.08 * n) * mix(vec3(1.0), fine, 0.45);
 	}
 	grass = 0.7;            // rough: longer, patchier grass
 	float clump = vnoise(wp * 0.8) * 0.55 + vnoise(wp * 2.6) * 0.45;
@@ -189,8 +200,8 @@ void fragment() {
 	vec2 f = tp - base - 0.5;
 	vec3 wx = vec3(0.5 * (0.5 - f.x) * (0.5 - f.x), 0.75 - f.x * f.x, 0.5 * (0.5 + f.x) * (0.5 + f.x));
 	vec3 wy = vec3(0.5 * (0.5 - f.y) * (0.5 - f.y), 0.75 - f.y * f.y, 0.5 * (0.5 + f.y) * (0.5 + f.y));
-	float cov[10];
-	for (int k = 0; k < 10; k++) {
+	float cov[12];
+	for (int k = 0; k < 12; k++) {
 		cov[k] = 0.0;
 	}
 	vec3 data = vec3(0.0);
@@ -201,15 +212,15 @@ void fragment() {
 			vec4 d = texelFetch(tile_tex, c, 0);
 			float w = wx[i] * wy[j];
 			int raw = int(d.r * 255.0 + 0.5);
-			int t = min(raw & 63, 9);
+			int t = min(raw & 63, 11);
 			cov[t] += w;
 			lock += raw >= 128 ? w : 0.0;
 			data += d.gba * w;
 		}
 	}
-	float wt[10];
+	float wt[12];
 	float total = 0.0;
-	for (int k = 0; k < 10; k++) {
+	for (int k = 0; k < 12; k++) {
 		float v = pow(cov[k] * PRIORITY[k], 12.0);
 		wt[k] = v;
 		total += v;
@@ -219,7 +230,7 @@ void fragment() {
 	float grass = 0.0;
 	float emit = 0.0;
 	vec2 bump = vec2(0.0);
-	for (int k = 0; k < 10; k++) {
+	for (int k = 0; k < 12; k++) {
 		float w = wt[k] / total;
 		if (w > 0.004) {
 			float r_;
@@ -234,7 +245,7 @@ void fragment() {
 			bump += b_ * w;
 		}
 	}
-	float w_green = wt[2] / total;
+	float w_green = (wt[2] + wt[11]) / total;
 	float w_bunker = wt[4] / total;
 	float w_water = wt[5] / total;
 	float wet = data.x;
@@ -244,7 +255,7 @@ void fragment() {
 
 	// --- edges that give the ground some depth ---
 	// a collar of slightly longer grass round every green
-	float collar = smoothstep(0.10, 0.30, cov[2]) * (1.0 - w_green) * (1.0 - w_bunker) * (1.0 - w_water);
+	float collar = smoothstep(0.10, 0.30, cov[2] + cov[11]) * (1.0 - w_green) * (1.0 - w_bunker) * (1.0 - w_water);
 	col = mix(col, col * vec3(0.80, 0.86, 0.78), collar * 0.75);
 	// bunkers sit below the turf: shade the inside of the lip, brighten the rim
 	float lip_in = w_bunker * (1.0 - smoothstep(0.42, 0.68, cov[4]));
@@ -412,5 +423,5 @@ void fragment() {
 	ALBEDO = col;
 	ROUGHNESS = rough;
 	SPECULAR = mix(0.3, 0.6, w_water * (1.0 - lava));
-	EMISSION = pal[10] * emit * (2.2 + heat * 2.0) * (overlay == 0 ? 1.0 : 0.0);
+	EMISSION = pal[12] * emit * (2.2 + heat * 2.0) * (overlay == 0 ? 1.0 : 0.0);
 }

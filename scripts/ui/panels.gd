@@ -76,7 +76,7 @@ func _build(body: VBoxContainer) -> Callable:
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)
 	body.add_child(grid)
-	for t: int in [Defs.T.FAIRWAY, Defs.T.GREEN, Defs.T.TEE, Defs.T.BUNKER, Defs.T.WATER, Defs.T.ROUGH, Defs.T.DEEP_ROUGH, Defs.T.PATH]:
+	for t: int in [Defs.T.FAIRWAY, Defs.T.FIRM, Defs.T.GREEN, Defs.T.FAST_GREEN, Defs.T.TEE, Defs.T.BUNKER, Defs.T.WATER, Defs.T.ROUGH, Defs.T.DEEP_ROUGH, Defs.T.PATH]:
 		var b := UIKit.button("%s   %s" % [hud.sim.terrain_name(t), Defs.money(Defs.T_COST[t])], func() -> void:
 			tools.terrain_type = t
 			tools.set_mode("terrain"))

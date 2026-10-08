@@ -120,6 +120,16 @@ func _advance() -> void:
 	_glow.queue_redraw()
 
 
+## Greens count a fast green, and fairway counts a firm fairway.
+func _painted(c: Course, green: bool) -> int:
+	var n := 0
+	for t in c.terrain:
+		var k := int(t)
+		if (green and Defs.is_green(k)) or ((not green) and Defs.is_fairway(k)):
+			n += 1
+	return n
+
+
 ## Is the current step's condition met?
 func _met(st: Dictionary) -> bool:
 	var key := str(st.get("done", ""))
@@ -134,9 +144,9 @@ func _met(st: Dictionary) -> bool:
 		"tee":
 			return c.terrain.count(Defs.T.TEE) >= COUNT_TEE
 		"green":
-			return c.terrain.count(Defs.T.GREEN) >= COUNT_GREEN
+			return _painted(c, true) >= COUNT_GREEN
 		"fairway":
-			return c.terrain.count(Defs.T.FAIRWAY) >= COUNT_FAIRWAY
+			return _painted(c, false) >= COUNT_FAIRWAY
 		"hole":
 			return not c.holes.is_empty()
 		"hole_open":
