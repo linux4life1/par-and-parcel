@@ -438,6 +438,15 @@ func _holes(body: VBoxContainer) -> Callable:
 			], false), "Remove this hole")
 		close.add_theme_font_size_override("font_size", 12)
 		h2.add_child(close)
+		var turn_text := UIKit.label(hole.turn_line(), 12, UIKit.MUTED)
+		turn_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		cv.add_child(turn_text)
+		var turn_btn := UIKit.button("Turning point  %s" % Defs.money(sim.turn_price()), func() -> void:
+			hud.open_dock("build")
+			hud.tools.arm_turn(i), "Mark a spot on the line of play where this hole changes direction")
+		turn_btn.add_theme_font_size_override("font_size", 12)
+		turn_btn.disabled = hole.turns.size() >= sim.turn_cap()
+		cv.add_child(turn_btn)
 		var tee_price := Defs.money(sim.tee_price())
 		var tee_text := UIKit.label(hole.tee_line(), 12, UIKit.MUTED)
 		tee_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
@@ -492,7 +501,7 @@ func _holes(body: VBoxContainer) -> Callable:
 		cv.add_child(st)
 		var report := UIKit.para("", 12, UIKit.TEXT)
 		cv.add_child(report)
-		rows.append([kind, bars, st, report, paid, tee_text, mid_btn, fwd_btn])
+		rows.append([kind, bars, st, report, paid, turn_text, turn_btn, tee_text, mid_btn, fwd_btn])
 	var card_plays := -1
 	var card_rev := -1
 	return func() -> void:
@@ -571,10 +580,15 @@ func _holes(body: VBoxContainer) -> Callable:
 				txt += "\nAbout %s a group, waiting included" % Defs.pace_text(hole.average_time())
 			(row[2] as Label).text = txt
 			(row[3] as Label).text = _hole_report(hole)
-			var tee_lbl: Label = row[5]
+			var turn_lbl: Label = row[5]
+			turn_lbl.text = hole.turn_line()
+			var turn_now: Button = row[6]
+			turn_now.text = "Turning point  %s" % Defs.money(sim.turn_price())
+			turn_now.disabled = hole.turns.size() >= sim.turn_cap()
+			var tee_lbl: Label = row[7]
 			tee_lbl.text = hole.tee_line()
-			var mid_now: Button = row[6]
-			var fwd_now: Button = row[7]
+			var mid_now: Button = row[8]
+			var fwd_now: Button = row[9]
 			var set_price := Defs.money(sim.tee_price())
 			mid_now.text = hole.tee_button("middle", set_price)
 			mid_now.disabled = hole.has_tee("middle")

@@ -84,7 +84,9 @@ func _ready() -> void:
 	_test_undo()
 	_test_undo_books()
 	_test_yardage()
+	_test_turns()
 	_test_tee_sets()
+	_test_tee_and_stake()
 	_test_rating()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
@@ -6738,6 +6740,258 @@ func _test_yardage() -> void:
 	var kept_draws := kept.draws
 	kept.ensure(c, other_hole)
 	check(kept == second and lost == first and kept.draws == kept_draws and is_equal_approx(kept.path_metres, second_len) and not is_equal_approx(first_len, second_len), "after a hole is removed, reopening the panel keeps each card with its own hole")
+
+
+func _turning_button(root: Node) -> Button:
+	var stack: Array[Node] = []
+	stack.append(root)
+	while not stack.is_empty():
+		var node: Node = stack.pop_back()
+		if node is Button:
+			var btn: Button = node
+			if btn.text.begins_with("Turning point"):
+				return btn
+		for kid in node.get_children():
+			stack.append(kid)
+	return null
+
+
+func _test_turns() -> void:
+	print("-- turning points")
+	var sim := _sim("sandbox", 19)
+	sim.economy.money = 10000.0
+	var c := sim.course
+	for leg_y in range(20, 46):
+		c.set_terrain(30, leg_y, Defs.T.FAIRWAY)
+	for leg_x in range(30, 51):
+		c.set_terrain(leg_x, 45, Defs.T.FAIRWAY)
+	c.set_terrain(30, 20, Defs.T.TEE)
+	for green_y in range(-1, 2):
+		for green_x in range(-1, 2):
+			c.set_terrain(50 + green_x, 45 + green_y, Defs.T.GREEN)
+	var hole := sim.add_hole(c.tile_center(30, 20), c.tile_center(50, 45))
+	check(hole != null, "a dogleg can be laid out")
+	if hole == null:
+		return
+	var par0 := hole.par
+	var len0 := hole.length
+	var price := float(db.turns.get("price", -1.0))
+	var on_line := float(db.turns.get("on_line", -1.0))
+	var gap := float(db.turns.get("gap", -1.0))
+	var cap := int(db.turns.get("max", 0))
+	var boulder := float(Defs.O_COST[Defs.O.BOULDER])
+	check(is_equal_approx(price, boulder) and is_equal_approx(sim.turn_price(), boulder) and sim.turn_cap() == cap and on_line > 0.0 and gap > 0.0 and cap >= 2, "turning-point price is a boulder's, and the tolerance and limit live in the turns file")
+	var first_at := hole.point_along(0.35)
+	var second_at := hole.point_along(0.70)
+	var tee_flat := Vector2(hole.tee.x, hole.tee.z)
+	var pin_flat := Vector2(hole.design_pin().x, hole.design_pin().z)
+	var chord := pin_flat - tee_flat
+	var chord_len := chord.length()
+	var side := Vector2(0.0, 1.0)
+	if chord_len > 0.01:
+		var dir := chord / chord_len
+		side = Vector2(-dir.y, dir.x)
+	var bend := Vector2(first_at.x, first_at.z)
+	var off_at := bend + side * (on_line + 4.0)
+	var cash := sim.economy.money
+	var why_off := sim.place_turn(hole, Vector3(off_at.x, 0.0, off_at.y))
+	check(why_off != "" and hole.turns.is_empty() and is_equal_approx(sim.economy.money, cash), "a marker off the line of play is refused (%s)" % why_off)
+	sim.economy.money = price - 1.0
+	var why_broke := sim.place_turn(hole, Vector3(bend.x, 0.0, bend.y))
+	check(why_broke != "" and hole.turns.is_empty() and is_equal_approx(sim.economy.money, price - 1.0), "a marker you can't afford is refused and charges nothing (%s)" % why_broke)
+	sim.economy.money = cash
+	var card := YardageCard.new(db.yardage)
+	card.ensure(c, hole)
+	var drawn := card.draws
+	var why_bend := sim.place_turn(hole, Vector3(bend.x, 0.0, bend.y))
+	check(why_bend == "" and hole.turns.size() == 1 and hole.par == par0 and is_equal_approx(hole.length, len0) and is_equal_approx(cash - sim.economy.money, price), "a stake on the line of play leaves par and length alone (%s)" % why_bend)
+	card.ensure(c, hole)
+	var turn_col := Color.html(str((db.yardage["colours"] as Dictionary).get("turn_mark", "8a5a2b")))
+	var marked := false
+	if card.turn_px.size() == 1:
+		var dot := card.image.get_pixel(int(round(card.turn_px[0].x)), int(round(card.turn_px[0].y)))
+		marked = dot.is_equal_approx(turn_col)
+	check(card.draws == drawn + 1 and marked, "the yardage diagram draws the turning point")
+	var why_next := sim.place_turn(hole, second_at)
+	check(why_next == "" and hole.turns.size() == 2 and hole.par == par0 and is_equal_approx(hole.length, len0), "a second stake further along the line is kept (%s)" % why_next)
+	var shown_yards := hole.turn_yards()
+	var shown_sum := 0
+	var named := hole.turn_line()
+	var named_ok := named != ""
+	for yard_bit in shown_yards:
+		shown_sum += yard_bit
+		if not named.contains("%d yd" % yard_bit):
+			named_ok = false
+	var first_snap := hole.route_snap(Vector2(hole.turns[0].x, hole.turns[0].z))
+	var first_m := float(shown_yards[0]) / Defs.YARDS
+	check(shown_yards.size() == hole.turns.size() + 1 and shown_sum == Defs.yards(hole.length) and named_ok, "the printed yards add up to the hole (%s, %d against %d)" % [named, shown_sum, Defs.yards(hole.length)])
+	check(absf(first_m - float(first_snap["along"])) <= 1.0, "the first stretch is the stake's distance along the line (%.2f against %.2f)" % [first_m, float(first_snap["along"])])
+	card.ensure(c, hole)
+	var diagram_yards := card.stretch_yards
+	var diagram_same := diagram_yards.size() == shown_yards.size()
+	for diagram_i in diagram_yards.size():
+		if diagram_i >= shown_yards.size() or diagram_yards[diagram_i] != shown_yards[diagram_i]:
+			diagram_same = false
+	check(diagram_same and diagram_yards.size() == shown_yards.size(), "the yardage diagram draws those same printed yards")
+	var held := sim.economy.money
+	var near_tee := hole.point_along((gap * 0.5) / hole.length)
+	var why_tee := sim.place_turn(hole, near_tee)
+	var near_green := hole.point_along(1.0 - (gap * 0.5) / hole.length)
+	var why_green := sim.place_turn(hole, near_green)
+	var first_along := float(hole.route_snap(Vector2(hole.turns[0].x, hole.turns[0].z))["along"])
+	var near_other := hole.point_along((first_along + gap * 0.5) / hole.length)
+	var why_near := sim.place_turn(hole, near_other)
+	check(why_tee != "" and why_green != "" and why_near != "" and hole.turns.size() == 2 and is_equal_approx(sim.economy.money, held), "a stake within the gap of the tee, the green or another stake is refused (%s / %s / %s)" % [why_tee, why_green, why_near])
+	var spent := sim.economy.money
+	check(sim.undo.undo() and hole.turns.size() == 1 and is_equal_approx(sim.economy.money, spent + price), "undo of a marker refunds it")
+	check(sim.undo.redo() and hole.turns.size() == 2 and is_equal_approx(sim.economy.money, spent), "redo of a marker charges it again")
+	var text := JSON.stringify(sim.to_dict())
+	var packed: Dictionary = JSON.parse_string(text)
+	var saved_holes: Array = packed["course"]["holes"]
+	var saved: Dictionary = saved_holes[0]
+	check(saved.has("turns"), "a save with turning points stores them")
+	var modern := Sim.from_dict(db, JSON.parse_string(text), gear)
+	var loaded: Hole = modern.course.holes[0]
+	var loaded_sum := 0
+	for loaded_yard in loaded.turn_yards():
+		loaded_sum += loaded_yard
+	check(loaded.turns.size() == 2 and loaded_sum == Defs.yards(loaded.length) and loaded.par == par0 and is_equal_approx(loaded.length, len0), "save and load keep the turning points, and the printed yards still add up")
+	saved.erase("turns")
+	var legacy := Sim.from_dict(db, packed, gear)
+	var old_hole: Hole = legacy.course.holes[0]
+	check(old_hole.turns.is_empty() and old_hole.par == par0 and is_equal_approx(old_hole.length, len0), "an old save loads with no turning points")
+	var hud := Hud.new()
+	add_child(hud)
+	hud.bind(sim)
+	hud.open_dock("holes")
+	var open_btn := _turning_button(hud.dock_body)
+	var open_ok := false
+	if open_btn != null:
+		open_ok = not open_btn.disabled
+	check(open_ok, "the turning-point button is on while the hole is under the limit")
+	var extra: Array[float] = [0.15, 0.50, 0.85, 0.22]
+	for fill_i in extra.size():
+		if hole.turns.size() >= cap:
+			break
+		var why_fill := sim.place_turn(hole, hole.point_along(extra[fill_i]))
+		check(why_fill == "" and hole.turns.size() <= cap, "a stake under the limit is taken (%s)" % why_fill)
+	check(hole.turns.size() == cap, "the hole can be filled to the turning-point limit")
+	hud.rebuild_dock()
+	var full_btn := _turning_button(hud.dock_body)
+	var full_ok := false
+	if full_btn != null:
+		full_ok = full_btn.disabled
+	check(full_ok, "the turning-point button is off at the limit")
+	var past_at := hole.point_along(0.55)
+	var cash_cap := sim.economy.money
+	var why_cap := sim.place_turn(hole, past_at)
+	check(why_cap != "" and hole.turns.size() == cap and is_equal_approx(sim.economy.money, cash_cap), "a stake past the limit is refused and charges nothing (%s)" % why_cap)
+	while hole.turns.size() > 0:
+		var gone: Vector3 = hole.turns[0]
+		hole.remove_turn(gone)
+	var corner_at := hole.point_along(0.5)
+	var best_turn := 0.0
+	var steps := 24
+	for step_i in range(1, steps):
+		var leg_a := hole.point_along(float(step_i - 1) / float(steps))
+		var leg_b := hole.point_along(float(step_i) / float(steps))
+		var leg_c := hole.point_along(float(step_i + 1) / float(steps))
+		var aim0 := Vector2(leg_b.x - leg_a.x, leg_b.z - leg_a.z)
+		var aim1 := Vector2(leg_c.x - leg_b.x, leg_c.z - leg_b.z)
+		if aim0.length_squared() < 0.01 or aim1.length_squared() < 0.01:
+			continue
+		var ang := absf(aim0.angle_to(aim1))
+		if ang > best_turn:
+			best_turn = ang
+			corner_at = leg_b
+	var why_corner := sim.place_turn(hole, corner_at)
+	check(why_corner == "" and hole.turns.size() == 1, "the dogleg corner can take a stake (%s)" % why_corner)
+	var stamp0 := hole._line_stamp()
+	var cash_route := sim.economy.money
+	var tee_tile := c.tile_of(hole.tee.x, hole.tee.z)
+	var pin_tile := c.tile_of(hole.design_pin().x, hole.design_pin().z)
+	for rough_y in range(tee_tile.y + 2, pin_tile.y + 1):
+		c.set_terrain(tee_tile.x, rough_y, Defs.T.ROUGH)
+	for rough_x in range(tee_tile.x + 1, pin_tile.x):
+		c.set_terrain(rough_x, pin_tile.y, Defs.T.ROUGH)
+	var paint_n: int = maxi(absi(pin_tile.x - tee_tile.x), absi(pin_tile.y - tee_tile.y))
+	for paint_i in paint_n + 1:
+		var paint_u := 0.0
+		if paint_n > 0:
+			paint_u = float(paint_i) / float(paint_n)
+		var px: int = tee_tile.x + int(round(float(pin_tile.x - tee_tile.x) * paint_u))
+		var py: int = tee_tile.y + int(round(float(pin_tile.y - tee_tile.y) * paint_u))
+		var was_ground: int = c.terrain[py * c.w + px]
+		if was_ground == Defs.T.TEE or was_ground == Defs.T.GREEN or was_ground == Defs.T.FAST_GREEN:
+			continue
+		c.set_terrain(px, py, Defs.T.FAIRWAY)
+	hole.update_metrics(c)
+	var stray := 0
+	for left_stake in hole.turns:
+		var left_snap := hole.route_snap(Vector2(left_stake.x, left_stake.z))
+		if float(left_snap["off"]) > on_line:
+			stray += 1
+	var route_sum := 0
+	for route_yard in hole.turn_yards():
+		route_sum += route_yard
+	check(hole._line_stamp() != stamp0 and stray == 0 and route_sum == Defs.yards(hole.length) and is_equal_approx(sim.economy.money, cash_route), "a new line drops a stake that has left it, without a refund, and the printed yards still add up (%d left)" % hole.turns.size())
+	print("  reroute left %d stake(s)" % hole.turns.size())
+	remove_child(hud)
+	hud.free()
+
+
+func _test_tee_and_stake() -> void:
+	print("-- tee and stake undo")
+	var sim := _sim("sandbox", 29)
+	var c := sim.course
+	for row in range(20, 70):
+		c.set_terrain(40, row, Defs.T.FAIRWAY)
+	c.set_terrain(40, 20, Defs.T.TEE)
+	c.set_terrain(40, 35, Defs.T.TEE)
+	for gy in range(-1, 2):
+		for gx in range(-1, 2):
+			c.set_terrain(40 + gx, 60 + gy, Defs.T.GREEN)
+	var hole := sim.add_hole(c.tile_center(40, 20), c.tile_center(40, 60))
+	check(hole != null, "a straight hole can take a middle tee and a stake")
+	if hole == null:
+		return
+	var len0 := hole.length
+	var par0 := hole.par
+	var tee_cost: float = sim.tee_price()
+	var stake_cost: float = sim.turn_price()
+	var purse := sim.economy.money
+	var why_tee := sim.place_tee(hole, "middle", c.tile_center(40, 35))
+	check(why_tee == "" and hole.has_tee("middle") and is_equal_approx(purse - sim.economy.money, tee_cost), "the middle tee goes down (%s)" % why_tee)
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "the middle tee leaves the length and the par alone")
+	var stake_at := hole.point_along(0.62)
+	var why_stake := sim.place_turn(hole, stake_at)
+	check(why_stake == "" and hole.turns.size() == 1 and is_equal_approx(purse - sim.economy.money, tee_cost + stake_cost), "the stake goes down after the tee (%s)" % why_stake)
+	var saved_yards := hole.turn_yards()
+	var stood: Vector3 = hole.turns[0]
+	var from_back := Vector2(hole.tee.x - stood.x, hole.tee.z - stood.z).length()
+	var from_mid := Vector2(hole.tee_middle.x - stood.x, hole.tee_middle.z - stood.z).length()
+	var back_yards := Defs.yards(from_back)
+	var mid_yards := Defs.yards(from_mid)
+	check(saved_yards.size() >= 2 and saved_yards[0] == back_yards and back_yards != mid_yards, "with the middle tee down, the first stretch is the stake's distance from the back tee (%d yd), not the middle (%d yd)" % [back_yards, mid_yards])
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "the stake leaves the length and the par alone")
+	var after_both := sim.economy.money
+	check(sim.undo.undo() and hole.turns.is_empty() and hole.has_tee("middle") and is_equal_approx(sim.economy.money, after_both + stake_cost), "undo takes the stake back and refunds it")
+	var bare := hole.turn_yards()
+	check(bare.size() == 1 and bare[0] == Defs.yards(hole.length), "after the stake is undone, the card is one stretch of the whole hole")
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "undoing the stake leaves the length and the par alone")
+	check(sim.undo.undo() and not hole.has_tee("middle") and hole.turns.is_empty() and is_equal_approx(sim.economy.money, purse), "undo takes the middle tee back and refunds it")
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "undoing the middle tee leaves the length and the par alone")
+	check(sim.undo.redo() and hole.has_tee("middle") and hole.turns.is_empty() and is_equal_approx(sim.economy.money, purse - tee_cost), "redo puts the middle tee back and charges it")
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "redoing the middle tee leaves the length and the par alone")
+	check(sim.undo.redo() and hole.has_tee("middle") and hole.turns.size() == 1 and is_equal_approx(sim.economy.money, purse - tee_cost - stake_cost), "redo puts the stake back and charges it")
+	var redone := hole.turn_yards()
+	var same_yards := redone.size() == saved_yards.size()
+	if same_yards:
+		for yard_i in redone.size():
+			if redone[yard_i] != saved_yards[yard_i]:
+				same_yards = false
+	check(same_yards, "after both are redone, the printed stretches match the stake that went down (%s against %s)" % [str(redone), str(saved_yards)])
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "redoing the stake leaves the length and the par alone")
 
 
 func _play_from(sim: Sim, hole: Hole, skill: float) -> Vector2:

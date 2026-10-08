@@ -1503,6 +1503,42 @@ func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 	return hole
 
 
+func turn_price() -> float:
+	return float(db.turns.get("price", 0.0))
+
+
+func turn_cap() -> int:
+	return int(db.turns.get("max", 4))
+
+
+## Mark a turning point on a hole that is already laid out. An empty string
+## means it is down; otherwise the reason it was refused. Par and length
+## stay as they are.
+func place_turn(hole: Hole, at: Vector3) -> String:
+	var on_line := float(db.turns.get("on_line", 3.0))
+	var gap := float(db.turns.get("gap", 4.0))
+	var cap := turn_cap()
+	var why := hole.refuse_turn(at, on_line, gap, cap)
+	if why != "":
+		return why
+	var price := turn_price()
+	if not economy.can_afford(price):
+		return "You can't afford that."
+	var snap := hole.route_snap(Vector2(at.x, at.z))
+	var flat: Vector2 = snap["point"]
+	var pos := course.on_ground(flat.x, flat.y)
+	var started := undo.begin()
+	if price > 0.0:
+		economy.spend("construction", price)
+		undo.note_charge(price)
+	hole.add_turn(pos)
+	undo.note_turn(hole, pos)
+	course.revision += 1
+	if started:
+		undo.commit()
+	return ""
+
+
 func tee_price() -> float:
 	return float(db.tees.get("price", 0.0))
 
