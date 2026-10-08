@@ -136,9 +136,10 @@ func air_phase(t: float) -> float:
 
 
 ## Fill in abilities from one overall skill number, 0 beginner .. 1 tour pro.
-func roll_stats(base_skill: float, rng: RandomNumberGenerator) -> void:
+func roll_stats(base_skill: float, rng: RandomNumberGenerator, progress: Dictionary) -> void:
 	skill = clampf(base_skill, 0.02, 0.99)
-	power = lerpf(0.74, 1.06, clampf(skill + rng.randfn(0.0, 0.12), 0.0, 1.0)) * rng.randf_range(0.97, 1.03)
+	var t := clampf(skill + rng.randfn(0.0, 0.12), 0.0, 1.0)
+	power = Members.power_at(t, progress) * rng.randf_range(0.97, 1.03)
 	accuracy = clampf(skill + rng.randfn(0.0, 0.1), 0.02, 0.99)
 	putting = clampf(skill + rng.randfn(0.0, 0.1), 0.02, 0.99)
 	imagination = clampf(skill + rng.randfn(0.0, 0.14), 0.02, 0.99)

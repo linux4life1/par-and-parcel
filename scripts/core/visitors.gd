@@ -221,7 +221,7 @@ func make_golfer(kind: String, base_skill: float) -> Golfer:
 	g.kind = kind
 	g.course = sim.course
 	g.ball.lava = sim.is_lava()
-	g.roll_stats(base_skill, rng)
+	g.roll_stats(base_skill, rng, sim.members.progress)
 	var first := sim.db.pick("pro_first" if kind == "pro" else "first", rng)
 	var last := sim.db.pick("last", rng)
 	g.name = first + " " + last
@@ -956,8 +956,9 @@ func on_hole_done(g: Golfer, hole: Hole, hole_i: int, group: Group) -> void:
 ## for the shots they have, is it a change from the last one, is it a slog?
 func _judge_design(g: Golfer, hole: Hole, n: int) -> void:
 	if hole.lab_ready:
-		var best := maxf(maxf(inverse_lerp(0.74, 1.06, g.power), g.accuracy), g.imagination)
-		var asks := [[1, inverse_lerp(0.74, 1.06, g.power), "length"], [2, g.accuracy, "accuracy"], [4, g.imagination, "imagination"]]
+		var length := Members.power_share(g.power, sim.members.progress)
+		var best := maxf(maxf(length, g.accuracy), g.imagination)
+		var asks := [[1, length, "length"], [2, g.accuracy, "accuracy"], [4, g.imagination, "imagination"]]
 		var suited := false
 		for a: Array in asks:
 			if hole.kind & int(a[0]) == 0:

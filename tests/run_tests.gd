@@ -65,6 +65,7 @@ func _ready() -> void:
 	_test_station()
 	_test_comments()
 	_test_lights_gap_awards()
+	_test_length_scale()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2524,7 +2525,7 @@ func _expert(sim: Sim) -> Golfer:
 	var g := Golfer.new()
 	g.kind = "lab"
 	g.skill = 0.82
-	g.power = lerpf(0.74, 1.06, 0.82)
+	g.power = Members.power_at(0.82, sim.members.progress)
 	g.accuracy = 0.82
 	g.imagination = 0.9
 	g.putting = 0.55
@@ -3851,3 +3852,27 @@ func _test_lights_gap_awards() -> void:
 	check(behind >= 0, "there is a tile just behind the tee, inside 14 m")
 	ground.terrain[behind] = Defs.T.WATER
 	check(not dry.touches_water(ground), "one water tile 13 m behind the tee does not make a water hole")
+
+
+func _test_length_scale() -> void:
+	print("-- one length scale")
+	var sim := _sim("three_holes", 2)
+	var progress: Dictionary = sim.members.progress
+	var lo := float(progress.get("power_floor", -1.0))
+	var hi := float(progress.get("power_cap", -1.0))
+	check(is_equal_approx(Members.power_at(0.0, progress), lo) and is_equal_approx(Members.power_at(1.0, progress), hi), "a new golfer's length comes from the progression data")
+	var shifted := progress.duplicate()
+	shifted["power_floor"] = 0.5
+	shifted["power_cap"] = 1.2
+	check(is_equal_approx(Members.power_at(0.0, shifted), 0.5) and is_equal_approx(Members.power_at(1.0, shifted), 1.2) and is_equal_approx(Members.power_share(1.2, shifted), 1.0), "a change in the progression data is the length scale")
+	var card := roundi(clampf(Members.power_share(Members.power_at(0.4, progress), progress), 0.0, 1.0) * 100.0)
+	check(card == 40, "the golfer card reads the same scale")
+	var rolled := Golfer.new()
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 11
+	rolled.roll_stats(0.5, dice, {"power_floor": 2.0, "power_cap": 2.0})
+	check(rolled.power >= 1.94 and rolled.power <= 2.06, "a flat length scale still leaves room for the small roll")
+	sim.members.progress["power_floor"] = 1.5
+	sim.members.progress["power_cap"] = 1.8
+	var lab_g := sim.lab._test_golfer(HoleLab.CLASSES[0])
+	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")

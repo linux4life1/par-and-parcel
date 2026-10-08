@@ -569,6 +569,24 @@ func to_dict() -> Dictionary:
 	}
 
 
+static var _known_themes := {}
+static var _known_themes_read := false
+
+
+## Theme ids from data/awards.json, read once. A load walks every hole.
+static func _theme_ids() -> Dictionary:
+	if _known_themes_read:
+		return _known_themes
+	_known_themes = {}
+	var awards: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/awards.json"))
+	if awards is Dictionary:
+		for row in awards.get("themes", []):
+			if row is Dictionary:
+				_known_themes[str(row.get("id", ""))] = true
+	_known_themes_read = true
+	return _known_themes
+
+
 static func from_dict(d: Dictionary) -> Hole:
 	var hole := Hole.new()
 	hole.tee = Vector3(d.tee[0], d.tee[1], d.tee[2])
@@ -592,12 +610,7 @@ static func from_dict(d: Dictionary) -> Hole:
 		hole.play_times.pop_front()
 	hole.award = str(d.get("award", ""))
 	hole.gap = float(d.get("gap", 0.0))
-	var known := {}
-	var awards: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/awards.json"))
-	if awards is Dictionary:
-		for row in awards.get("themes", []):
-			if row is Dictionary:
-				known[str(row.get("id", ""))] = true
+	var known := _theme_ids()
 	var th: Array = d.get("themes", [])
 	for id in th:
 		var name := str(id)
