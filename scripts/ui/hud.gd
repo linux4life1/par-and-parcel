@@ -698,6 +698,15 @@ func show_menu(again: bool = false) -> void:
 			if not ok:
 				Game.paused = _menu_was_paused
 				show_toast("The saved game could not be read.", "bad")],
+		["Share this course", func() -> void:
+			var path := Game.share_course()
+			hide_modal()
+			Game.paused = _menu_was_paused
+			if path == "":
+				show_toast("The course could not be shared.", "bad")
+			else:
+				show_toast("Shared as %s." % path.get_file(), "good")],
+		["Play a shared course", func() -> void: show_shared()],
 		["New game", func() -> void: show_scenarios()],
 		["Controls", func() -> void: show_controls()],
 		["Display and graphics", func() -> void: show_display()],
@@ -1015,6 +1024,36 @@ func show_controls() -> void:
 	modal_card.add_child(UIKit.para("Every camera move is also a button in the Camera bar at the bottom right of the screen. Hold a button to keep going.", 13))
 	var back := UIKit.button("Back", func() -> void: show_menu(true))
 	back.custom_minimum_size = Vector2(0, 38)
+	modal_card.add_child(back)
+	modal.visible = true
+
+
+## Courses saved from the menu, for a round on a friend's ground with your pro.
+func show_shared() -> void:
+	UIKit.clear(modal_card)
+	modal_card.custom_minimum_size = Vector2(520, 0)
+	modal_card.add_child(UIKit.label("Shared courses", 24))
+	modal_card.add_child(UIKit.para("A course shared from the menu. Your golfer comes with you. The club's money does not.", 14))
+	var files := Game.shared_courses()
+	if files.is_empty():
+		modal_card.add_child(UIKit.para("None yet. Share this course from the menu first.", 15, UIKit.WARN))
+	var listed: int = mini(files.size(), 6)
+	for i in listed:
+		var fn: String = files[i]
+		var b := UIKit.button(fn.trim_suffix(".ppcourse"), func() -> void:
+			hide_modal()
+			var ok: bool = await loading.run("Opening the shared course", Game.play_shared.bind(fn))
+			if ok:
+				show_toast("Playing %s. Your golfer came with you." % fn.trim_suffix(".ppcourse"), "good")
+			else:
+				Game.paused = _menu_was_paused
+				show_toast("That course could not be read.", "bad"))
+		b.custom_minimum_size = Vector2(0, 36)
+		modal_card.add_child(b)
+	if files.size() > listed:
+		modal_card.add_child(UIKit.para("%d more are in the shared folder." % (files.size() - listed), 13))
+	var back := UIKit.button("Back", func() -> void: show_menu(true))
+	back.custom_minimum_size = Vector2(0, 36)
 	modal_card.add_child(back)
 	modal.visible = true
 
