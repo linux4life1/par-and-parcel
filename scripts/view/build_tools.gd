@@ -26,6 +26,9 @@ var _tick := 0.0
 var _level := 0.0
 var _tee: Variant = null
 var _turn_hole := -1
+## When set, the hole tool places this set on an existing hole instead of a new one.
+var _tee_hole := -1
+var _tee_which := ""
 var _warned := -10.0
 var _marker: MeshInstance3D
 var _preview_tile := Vector2i(-999, -999)
@@ -88,6 +91,8 @@ func set_mode(m: String) -> void:
 	_down = false
 	_tee = null
 	_turn_hole = -1
+	_tee_hole = -1
+	_tee_which = ""
 	_preview_tile = Vector2i(-999, -999)
 	_preview_text = ""
 	preview_par = 0
@@ -111,6 +116,14 @@ func set_mode(m: String) -> void:
 func arm_turn(hole_i: int) -> void:
 	set_mode("turn")
 	_turn_hole = hole_i
+	tool_changed.emit()
+
+
+## The next click places a middle or forward tee on this hole.
+func arm_tee(hole_i: int, which: String) -> void:
+	set_mode("hole")
+	_tee_hole = hole_i
+	_tee_which = which
 	tool_changed.emit()
 
 
@@ -147,7 +160,12 @@ func hint() -> String:
 		"bulldoze":
 			body = "Drag to clear trees, scenery and buildings."
 		"hole":
-			if _tee == null:
+			if _tee_which != "":
+				var which_name := "forward"
+				if _tee_which == "middle":
+					which_name = "middle"
+				body = "Click a tee box on the line for the %s tee, closer to the green than the tee behind it. %s." % [which_name, Defs.money(sim.tee_price())]
+			elif _tee == null:
 				body = "Click where the tee goes."
 			else:
 				body = "Now click a green to place the pin. %s" % _preview_text
@@ -305,7 +323,7 @@ func _unhandled_input(event: InputEvent) -> void:
 			_click_turn(p)
 		elif mode == "hole":
 			_down = false
-			if sim.course.holes.size() >= sim.hole_cap():
+			if _tee_which == "" and sim.course.holes.size() >= sim.hole_cap():
 				_warn("The %s allows %d holes. Upgrade the clubhouse (Build, Clubhouse) to lay out more." % [sim.clubhouse_name().to_lower(), sim.hole_cap()])
 				return
 			_click_hole(p)
@@ -520,6 +538,9 @@ func _click_turn(p: Vector3) -> void:
 
 
 func _click_hole(p: Vector3) -> void:
+	if _tee_which != "":
+		_click_set(p)
+		return
 	var course := sim.course
 	var tile := course.tile_of(p.x, p.z)
 	if _tee == null:
@@ -557,6 +578,21 @@ func _click_hole(p: Vector3) -> void:
 	sim.toast.emit("Hole %d is a draft: par %d, %d yards. Test it, then open it to the public." % [course.holes.size(), hole.par, Defs.yards(hole.length)], "good")
 	set_mode("")
 	hole_added.emit(course.holes.size() - 1)
+
+
+func _click_set(p: Vector3) -> void:
+	if _tee_hole < 0 or _tee_hole >= sim.course.holes.size():
+		set_mode("")
+		return
+	var hole := sim.course.holes[_tee_hole]
+	var why := sim.place_tee(hole, _tee_which, p)
+	if why != "":
+		sim.toast.emit(why, "bad")
+		return
+	var yards := Defs.yards(hole.metres_of(_tee_which))
+	var named := _tee_which
+	sim.toast.emit("The %s tee is %d yards." % [named, yards], "good")
+	set_mode("")
 
 
 func _warn_broke() -> void:

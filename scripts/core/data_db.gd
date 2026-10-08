@@ -39,6 +39,8 @@ var ground: Dictionary = {}     # waste and stream prices, and the waste lie's t
 var pins: Dictionary = {}       # where the day's cup sits, and how it wears the green
 var yardage: Dictionary = {}    # the printed hole diagram on the scorecard
 var turns: Dictionary = {}      # stakes on the line of play, where a dogleg turns
+var tees: Dictionary = {}       # middle and forward tees, and who plays which
+var rating: Dictionary = {}    # scratch score and slope, apart from the 0–100 reputation rating
 var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
 var feed: Dictionary = {}
@@ -87,6 +89,9 @@ func _init() -> void:
 	pins = _load("pins")
 	yardage = _load("yardage")
 	turns = _load("turns")
+	tees = _load("tees")
+	rating = _load("rating")
+	CourseRating.use(rating)
 	names = _load("names")
 	feed = _load("feed")
 

@@ -10,6 +10,7 @@
 	"glyph": 1,
 	"label_gap": 8,
 	"tee_dot": 0.99,
+	"set_scale": 0.85,
 	"pin_dot": 0.88,
 	"turn_dot": 2.2,
 	"flag": 4.84,

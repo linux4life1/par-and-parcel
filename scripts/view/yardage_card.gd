@@ -24,6 +24,9 @@ var tee_px := Vector2.ZERO
 var pin_px := Vector2.ZERO
 ## Player-marked turning points, in picture pixels. Empty when the hole has none.
 var turn_px: Array[Vector2] = []
+## Middle and forward tees, when the hole has them. (-1, -1) otherwise.
+var middle_px := Vector2(-1.0, -1.0)
+var forward_px := Vector2(-1.0, -1.0)
 ## Length, in metres, of the line drawn on the card.
 var path_metres := 0.0
 
@@ -92,6 +95,7 @@ func _ends(hole: Hole) -> int:
 		h = _mix(h, int(round(p.x * 10.0)))
 		h = _mix(h, int(round(p.y * 10.0)))
 	h = _mix_turns(h, hole)
+	h = _mix_sets(h, hole)
 	return h
 
 
@@ -109,6 +113,7 @@ func _signature(course: Course, hole: Hole) -> int:
 		h = _mix(h, int(round(p.x * 10.0)))
 		h = _mix(h, int(round(p.y * 10.0)))
 	h = _mix_turns(h, hole)
+	h = _mix_sets(h, hole)
 	var box := _region(course, hole)
 	var x0 := int(box.x0)
 	var y0 := int(box.y0)
@@ -131,6 +136,23 @@ func _mix_turns(h: int, hole: Hole) -> int:
 	for m in hole.turns:
 		h = _mix(h, int(round(m.x * 10.0)))
 		h = _mix(h, int(round(m.z * 10.0)))
+	return h
+
+
+func _mix_sets(h: int, hole: Hole) -> int:
+	h = _mix_one(h, hole.tee_middle, hole.has_tee("middle"))
+	h = _mix_one(h, hole.tee_forward, hole.has_tee("forward"))
+	return h
+
+
+func _mix_one(h: int, p: Vector3, on: bool) -> int:
+	var flag := 0
+	if on:
+		flag = 1
+	h = _mix(h, flag)
+	if on:
+		h = _mix(h, int(round(p.x * 10.0)))
+		h = _mix(h, int(round(p.z * 10.0)))
 	return h
 
 
@@ -212,6 +234,7 @@ func _draw(course: Course, hole: Hole) -> void:
 	for i in range(1, line.size()):
 		_stroke(_to_px(line[i - 1]), _to_px(line[i]), thick, line_c)
 	var tee_r := float(_book.get("tee_dot", 0.99))
+	var set_scale := float(_book.get("set_scale", 0.85))
 	var pin_r := float(_book.get("pin_dot", 0.88))
 	var flag := float(_book.get("flag", 4.84))
 	tee_px = _to_px(Vector2(hole.tee.x, hole.tee.z))
@@ -222,6 +245,17 @@ func _draw(course: Course, hole: Hole) -> void:
 	_yards(line, ink, float(_book.get("label_gap", 8.0)))
 	var turn_c := _hex(str(colours.get("turn_mark", "8a5a2b")))
 	_turn_marks(hole, turn_c, ink)
+	var glyph := maxi(int(_book.get("glyph", 1)), 1)
+	middle_px = Vector2(-1.0, -1.0)
+	forward_px = Vector2(-1.0, -1.0)
+	if hole.has_tee("middle"):
+		middle_px = _to_px(Vector2(hole.tee_middle.x, hole.tee_middle.z))
+		_dot(middle_px, tee_r * set_scale, tee_c)
+		_number(int(round(middle_px.x)), int(round(middle_px.y)), Defs.yards(hole.length_middle), ink, glyph)
+	if hole.has_tee("forward"):
+		forward_px = _to_px(Vector2(hole.tee_forward.x, hole.tee_forward.z))
+		_dot(forward_px, tee_r * set_scale, tee_c)
+		_number(int(round(forward_px.x)), int(round(forward_px.y)), Defs.yards(hole.length_forward), ink, glyph)
 
 
 func _fit(line: PackedVector2Array, hole: Hole, width: int, height: int, pad: float) -> void:
@@ -242,6 +276,10 @@ func _fit(line: PackedVector2Array, hole: Hole, width: int, height: int, pad: fl
 	pts.append(Vector2(hole.pin.x, hole.pin.z))
 	for m in hole.turns:
 		pts.append(Vector2(m.x, m.z))
+	if hole.has_tee("middle"):
+		pts.append(Vector2(hole.tee_middle.x, hole.tee_middle.z))
+	if hole.has_tee("forward"):
+		pts.append(Vector2(hole.tee_forward.x, hole.tee_forward.z))
 	for p in pts:
 		var rel := p - _anchor
 		var across := rel.dot(_right)
@@ -307,7 +345,7 @@ func _turn_marks(hole: Hole, col: Color, ink: Color) -> void:
 		_dot(px, radius, col)
 	if hole.turns.is_empty():
 		return
-	var parts := hole.turn_lengths()
+	var parts := hole.turn_yards()
 	var spots: Array[Vector2] = [Vector2(hole.tee.x, hole.tee.z)]
 	for stake in hole.turns:
 		spots.append(Vector2(stake.x, stake.z))
@@ -318,7 +356,7 @@ func _turn_marks(hole: Hole, col: Color, ink: Color) -> void:
 			break
 		var mid := spots[i].lerp(spots[i + 1], 0.5)
 		var at := _to_px(mid)
-		_number(int(round(at.x)), int(round(at.y)), Defs.yards(parts[i]), ink, glyph)
+		_number(int(round(at.x)), int(round(at.y)), parts[i], ink, glyph)
 
 
 func _number(x: int, y: int, n: int, ink: Color, glyph: int) -> void:

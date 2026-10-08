@@ -63,6 +63,7 @@ var time := 0.0
 var open := true
 var playing_round := false   # a round is on the course; build history will not move
 var rating := 45.0          # 0..100 quality of the course as golfers see it
+var scratch_card := CourseRating.new()   # scratch score and slope; not `rating`
 var design := 0.0           # the layout's share of the rating
 var reputation := 30.0      # follows the rating slowly; drives how many turn up
 var buzz := 0.0             # short-lived publicity, good or bad
@@ -820,6 +821,13 @@ func clubhouse_door() -> Vector3:
 	return course.on_ground(c.x, c.z - 9.0)
 
 
+## Scratch score and slope for the holes that exist. Recomputed when the
+## course changes. An empty course has none.
+func playing_card() -> CourseRating:
+	scratch_card.ensure(self)
+	return scratch_card
+
+
 ## Remeasure any hole whose ground has changed, so par follows the fairway
 ## as it is repainted. The fingerprint is the one the hole lab already uses.
 func refresh_hole_lines() -> void:
@@ -1495,6 +1503,9 @@ func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 func turn_price() -> float:
 	return float(db.turns.get("price", 0.0))
 
+func turn_cap() -> int:
+	return int(db.turns.get("max", 4))
+
 
 ## Mark a turning point on a hole that is already laid out. An empty string
 ## means it is down; otherwise the reason it was refused. Par and length
@@ -1502,7 +1513,7 @@ func turn_price() -> float:
 func place_turn(hole: Hole, at: Vector3) -> String:
 	var on_line := float(db.turns.get("on_line", 3.0))
 	var gap := float(db.turns.get("gap", 4.0))
-	var cap := int(db.turns.get("max", 4))
+	var cap := turn_cap()
 	var why := hole.refuse_turn(at, on_line, gap, cap)
 	if why != "":
 		return why
@@ -1523,6 +1534,30 @@ func place_turn(hole: Hole, at: Vector3) -> String:
 		undo.commit()
 	return ""
 
+func tee_price() -> float:
+	return float(db.tees.get("price", 0.0))
+
+## Place a middle or forward tee on a hole that is already laid out. An empty
+## string means it is down; otherwise the reason it was refused.
+func place_tee(hole: Hole, which: String, at: Vector3) -> String:
+	var tile := course.tile_of(at.x, at.z)
+	var pos := course.tile_center(tile.x, tile.y)
+	var why := hole.refuse_tee(course, which, pos, float(db.tees.get("on_line", 3.0)))
+	if why != "":
+		return why
+	var price := tee_price()
+	if not economy.can_afford(price):
+		return "You can't afford that."
+	var started := undo.begin()
+	if price > 0.0:
+		economy.spend("construction", price)
+		undo.note_charge(price)
+	hole.write_tee(which, pos)
+	undo.note_tee(hole, which, pos, hole.metres_of(which))
+	course.revision += 1
+	if started:
+		undo.commit()
+	return ""
 
 func remove_hole(i: int) -> void:
 	if i < 0 or i >= course.holes.size():

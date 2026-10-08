@@ -237,11 +237,12 @@ func _begin_hole() -> void:
 		h.groups.append(group)
 	g.begin_hole()
 	sim.career.begin_hole(h)
-	g.ball.place(sim.course.on_ground(h.tee.x, h.tee.z))
+	var box := h.playing_tee(g.skill, sim.db.tees)
+	g.ball.place(sim.course.on_ground(box.x, box.z))
 	g.pos = Group.stance(g, h)
 	g.pos.y = sim.course.height_at(g.pos.x, g.pos.z)
 	g.prev = g.pos
-	message = "Hole %d  ·  Par %d  ·  %d yards" % [hole_i + 1, h.par, Defs.yards(h.length)]
+	message = "Hole %d  ·  Par %d  ·  %d yards" % [hole_i + 1, h.par, Defs.yards(h.metres_at(box))]
 	_setup_shot()
 
 

@@ -445,8 +445,26 @@ func _holes(body: VBoxContainer) -> Callable:
 			hud.open_dock("build")
 			hud.tools.arm_turn(i), "Mark a spot on the line of play where this hole changes direction")
 		turn_btn.add_theme_font_size_override("font_size", 12)
-		turn_btn.disabled = hole.turns.size() >= int(sim.db.turns.get("max", 4))
+		turn_btn.disabled = hole.turns.size() >= sim.turn_cap()
 		cv.add_child(turn_btn)
+		var tee_price := Defs.money(sim.tee_price())
+		var tee_text := UIKit.label(hole.tee_line(), 12, UIKit.MUTED)
+		tee_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		cv.add_child(tee_text)
+		var tee_btns := UIKit.hbox(6)
+		cv.add_child(tee_btns)
+		var mid_btn := UIKit.button(hole.tee_button("middle", tee_price), func() -> void:
+			hud.open_dock("build")
+			hud.tools.arm_tee(i, "middle"), "Place the middle tee on a tee box, on the line of play, closer to the green than the back tee")
+		mid_btn.disabled = hole.has_tee("middle")
+		mid_btn.add_theme_font_size_override("font_size", 12)
+		tee_btns.add_child(mid_btn)
+		var fwd_btn := UIKit.button(hole.tee_button("forward", tee_price), func() -> void:
+			hud.open_dock("build")
+			hud.tools.arm_tee(i, "forward"), "Place the forward tee on a tee box, on the line of play, closer to the green than the tee behind it")
+		fwd_btn.disabled = hole.has_tee("forward")
+		fwd_btn.add_theme_font_size_override("font_size", 12)
+		tee_btns.add_child(fwd_btn)
 		var gap_row := UIKit.hbox(6)
 		cv.add_child(gap_row)
 		gap_row.add_child(UIKit.label("Starter", 12, UIKit.MUTED))
@@ -483,8 +501,9 @@ func _holes(body: VBoxContainer) -> Callable:
 		cv.add_child(st)
 		var report := UIKit.para("", 12, UIKit.TEXT)
 		cv.add_child(report)
-		rows.append([kind, bars, st, report, paid, turn_text, turn_btn])
+		rows.append([kind, bars, st, report, paid, turn_text, turn_btn, tee_text, mid_btn, fwd_btn])
 	var card_plays := -1
+	var card_rev := -1
 	return func() -> void:
 		var now := ""
 		for hole in sim.course.holes:
@@ -495,8 +514,9 @@ func _holes(body: VBoxContainer) -> Callable:
 		var total_plays := 0
 		for hole in sim.course.holes:
 			total_plays += hole.plays
-		if total_plays != card_plays:
+		if total_plays != card_plays or sim.course.revision != card_rev:
 			card_plays = total_plays
+			card_rev = sim.course.revision
 			_scorecard(card_box)
 		var round_total := 0.0
 		var rated := 0
@@ -564,7 +584,16 @@ func _holes(body: VBoxContainer) -> Callable:
 			turn_lbl.text = hole.turn_line()
 			var turn_now: Button = row[6]
 			turn_now.text = "Turning point  %s" % Defs.money(sim.turn_price())
-			turn_now.disabled = hole.turns.size() >= int(sim.db.turns.get("max", 4))
+			turn_now.disabled = hole.turns.size() >= sim.turn_cap()
+			var tee_lbl: Label = row[7]
+			tee_lbl.text = hole.tee_line()
+			var mid_now: Button = row[8]
+			var fwd_now: Button = row[9]
+			var set_price := Defs.money(sim.tee_price())
+			mid_now.text = hole.tee_button("middle", set_price)
+			mid_now.disabled = hole.has_tee("middle")
+			fwd_now.text = hole.tee_button("forward", set_price)
+			fwd_now.disabled = hole.has_tee("forward")
 			var paid: Label = row[4]
 			if hole.payers == 0:
 				paid.text = "No fees yet"
@@ -670,6 +699,8 @@ func _scorecard(box: VBoxContainer) -> void:
 		notes.append("Timed holes so far add up to %s." % Defs.pace_text(sim.course.round_time()))
 	if slow >= 0:
 		notes.append("Slowest: hole %d, %s a group." % [slow + 1, Defs.pace_text(holes[slow].average_time())])
+	var played := sim.playing_card()
+	notes.append("Scratch %s    Slope %s" % [played.scratch_text(), played.slope_text()])
 	if not notes.is_empty():
 		cv.add_child(UIKit.para("  ".join(PackedStringArray(notes)), 12))
 	var said := sim.course.comment_report()
@@ -1433,6 +1464,9 @@ func _goals(body: VBoxContainer) -> Callable:
 		recs.add_child(UIKit.row("   from golfer satisfaction", "%d%%" % int(sim.visitors.average_satisfaction())))
 		recs.add_child(UIKit.row("   from course condition", "%d%%" % int(sim.grounds.condition * 100.0)))
 		recs.add_child(UIKit.row("   from design and amenities", "%d / 100" % int(sim.design)))
+		var played := sim.playing_card()
+		recs.add_child(UIKit.row("Scratch rating", played.scratch_text()))
+		recs.add_child(UIKit.row("Slope rating", played.slope_text()))
 		recs.add_child(UIKit.row("Reputation", "%d / 100" % int(sim.reputation)))
 		recs.add_child(UIKit.row("Holes", "%d  (par %d)" % [sim.course.holes.size(), sim.course.total_par()]))
 		recs.add_child(UIKit.row("Club members", str(sim.members.count())))

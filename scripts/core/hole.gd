@@ -4,6 +4,13 @@ extends RefCounted
 ## field the golfer AI steers by.
 
 var tee := Vector3.ZERO
+## Middle and forward tees. `tee` is the back tee the hole was laid out on,
+## and par and length stay measured from it. A zero x/z means that set was
+## never placed.
+var tee_middle := Vector3.ZERO
+var tee_forward := Vector3.ZERO
+var length_middle := 0.0
+var length_forward := 0.0
 var pin := Vector3.ZERO
 ## Where the pin was placed. Par and length are measured to here, so the
 ## day's cup can move along the green without rewriting the card.
@@ -181,6 +188,19 @@ func update_metrics(course: Course) -> void:
 	if now != before and plays > 0:
 		_shift_tally(before, now)
 	par = now
+	if has_tee("middle"):
+		length_middle = _remaining(tee_middle)
+	if has_tee("forward"):
+		length_forward = _remaining(tee_forward)
+	var limit := turn_on_line()
+	var stake_i := turns.size() - 1
+	while stake_i >= 0:
+		var stake := turns[stake_i]
+		var stake_snap := route_snap(Vector2(stake.x, stake.z))
+		if float(stake_snap["off"]) > limit:
+			turns.remove_at(stake_i)
+		stake_i -= 1
+	_sort_turns()
 
 
 ## What a hole from tee to pin would be called, without touching this one.
@@ -408,6 +428,10 @@ func snap_to_ground(course: Course) -> void:
 	pin.y = course.height_at(pin.x, pin.z)
 	if placed.length_squared() > 0.01:
 		placed.y = course.height_at(placed.x, placed.z)
+	if has_tee("middle"):
+		tee_middle.y = course.height_at(tee_middle.x, tee_middle.z)
+	if has_tee("forward"):
+		tee_forward.y = course.height_at(tee_forward.x, tee_forward.z)
 
 
 func average_score() -> float:
@@ -668,14 +692,37 @@ func turn_lengths() -> PackedFloat32Array:
 	return parts
 
 
+## Printed yards of each stretch. Rounding is of the running total, so the
+## numbers add up to the hole's length in yards.
+func turn_yards() -> PackedInt32Array:
+	var cuts: Array[float] = []
+	for mark in turns:
+		var snap := route_snap(Vector2(mark.x, mark.z))
+		cuts.append(clampf(float(snap["along"]), 0.0, length))
+	cuts.sort()
+	var shown := PackedInt32Array()
+	var prev_y := 0
+	for cut in cuts:
+		var at_y := Defs.yards(cut)
+		var step := at_y - prev_y
+		if step < 0:
+			step = 0
+		shown.append(step)
+		prev_y = at_y
+	var tail := Defs.yards(length) - prev_y
+	if tail < 0:
+		tail = 0
+	shown.append(tail)
+	return shown
+
+
 ## Yardage between the tee, the stakes and the pin, for the hole card.
 func turn_line() -> String:
 	if turns.is_empty():
 		return ""
-	var parts := turn_lengths()
 	var bits: PackedStringArray = []
-	for span in parts:
-		bits.append("%d yd" % Defs.yards(span))
+	for yard in turn_yards():
+		bits.append("%d yd" % yard)
 	return "  ·  ".join(bits)
 
 
@@ -730,8 +777,183 @@ func refuse_turn(at: Vector3, on_line: float, gap: float, cap: int) -> String:
 		if absf(float(other["along"]) - along) < gap:
 			return "That turn is already marked."
 	return ""
+## True when that set has been placed. The back tee always has.
+func has_tee(which: String) -> bool:
+	if which == "back":
+		return true
+	var p := tee_pos(which)
+	return Vector2(p.x, p.z).length_squared() > 0.25
 
 
+func tee_pos(which: String) -> Vector3:
+	if which == "middle":
+		return tee_middle
+	if which == "forward":
+		return tee_forward
+	return tee
+
+
+## Metres from this set to the pin, along the line the par is measured on.
+func metres_of(which: String) -> float:
+	if which == "middle":
+		return length_middle
+	if which == "forward":
+		return length_forward
+	return length
+
+
+## The same length, from a world position that is one of the tees.
+func metres_at(at: Vector3) -> float:
+	if has_tee("forward") and Vector2(at.x - tee_forward.x, at.z - tee_forward.z).length_squared() < 0.05:
+		return length_forward
+	if has_tee("middle") and Vector2(at.x - tee_middle.x, at.z - tee_middle.z).length_squared() < 0.05:
+		return length_middle
+	return length
+
+
+## Back, and middle and forward when those have been placed.
+func tee_line() -> String:
+	var text := "Back %d yd" % Defs.yards(length)
+	if has_tee("middle"):
+		text += "  ·  Middle %d yd" % Defs.yards(length_middle)
+	if has_tee("forward"):
+		text += "  ·  Forward %d yd" % Defs.yards(length_forward)
+	return text
+
+
+func tee_button(which: String, price: String) -> String:
+	var title := "Forward tee"
+	if which == "middle":
+		title = "Middle tee"
+	if has_tee(which):
+		return title
+	return "%s  %s" % [title, price]
+
+
+## Where a golfer of this skill tees off. Beginners use the forward tee,
+## average golfers the middle, and the rest the back. A missing set falls
+## back to the next tee back, never a tee further forward. The cuts are
+## data/tees.json, grounded in the handicap scale.
+func playing_tee(skill: float, book: Dictionary) -> Vector3:
+	var forward_below := float(book.get("forward_below", 0.40))
+	var middle_below := float(book.get("middle_below", 0.70))
+	var want := "back"
+	if skill < forward_below:
+		want = "forward"
+	elif skill < middle_below:
+		want = "middle"
+	var order: Array[String] = ["forward", "middle", "back"]
+	var start := order.find(want)
+	if start < 0:
+		start = order.size() - 1
+	for i in range(start, order.size()):
+		var id: String = order[i]
+		if has_tee(id):
+			return tee_pos(id)
+	return tee
+
+
+## Empty when the spot may take this set. Otherwise the reason it may not.
+## `on_line` is how far, in metres, the spot may sit off the line of play.
+func refuse_tee(course: Course, which: String, at: Vector3, on_line: float) -> String:
+	if which != "middle" and which != "forward":
+		return "That is not a tee."
+	if has_tee(which):
+		return "That tee is already there."
+	if course.terrain_at(at.x, at.z) != Defs.T.TEE:
+		return "That has to be on a tee box."
+	var tile := course.tile_of(at.x, at.z)
+	if not course.can_build(tile.x, tile.y):
+		return "You can't put a tee there."
+	var measured := route_measure(at)
+	if measured.y > on_line:
+		return "Put it on the line of play."
+	var left := length - measured.x
+	if left < 0.0:
+		left = 0.0
+	var order: Array[String] = ["back", "middle", "forward"]
+	var idx := order.find(which)
+	var behind_left := length
+	var behind_i := idx - 1
+	while behind_i >= 0:
+		var behind_name: String = order[behind_i]
+		if has_tee(behind_name):
+			behind_left = metres_of(behind_name)
+			break
+		behind_i -= 1
+	if left >= behind_left - 0.05:
+		return "It has to be closer to the green than the tee behind it."
+	var front_i := idx + 1
+	while front_i < order.size():
+		var front_name: String = order[front_i]
+		if has_tee(front_name):
+			if left <= metres_of(front_name) + 0.05:
+				return "It can't go past the tee in front."
+			break
+		front_i += 1
+	return ""
+
+
+func write_tee(which: String, at: Vector3) -> void:
+	var metres := _remaining(at)
+	if which == "middle":
+		tee_middle = at
+		length_middle = metres
+	elif which == "forward":
+		tee_forward = at
+		length_forward = metres
+
+
+func restore_tee(which: String, at: Vector3, metres: float) -> void:
+	if which == "middle":
+		tee_middle = at
+		length_middle = metres
+	elif which == "forward":
+		tee_forward = at
+		length_forward = metres
+
+
+func clear_set(which: String) -> void:
+	if which == "middle":
+		tee_middle = Vector3.ZERO
+		length_middle = 0.0
+	elif which == "forward":
+		tee_forward = Vector3.ZERO
+		length_forward = 0.0
+
+
+## Distance along the line of play from the back tee, and how far off it.
+func route_measure(at: Vector3) -> Vector2:
+	var pts := route
+	var spot := Vector2(at.x, at.z)
+	if pts.size() < 2:
+		var end := design_pin()
+		pts = PackedVector2Array([Vector2(tee.x, tee.z), Vector2(end.x, end.z)])
+	var best_along := 0.0
+	var best_off := 1.0e9
+	var walked := 0.0
+	for i in range(1, pts.size()):
+		var a: Vector2 = pts[i - 1]
+		var b: Vector2 = pts[i]
+		var seg := b - a
+		var seg_len := seg.length()
+		var u := 0.0
+		if seg_len > 0.0001:
+			u = clampf((spot - a).dot(seg) / (seg_len * seg_len), 0.0, 1.0)
+		var closest := a + seg * u
+		var off := closest.distance_to(spot)
+		if off < best_off:
+			best_off = off
+			best_along = walked + seg_len * u
+		walked += seg_len
+	return Vector2(best_along, best_off)
+
+
+func _remaining(at: Vector3) -> float:
+	var left := length - route_measure(at).x
+	if left < 0.0:
+		return 0.0
+	return left
 func to_dict() -> Dictionary:
 	var d := {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
@@ -748,11 +970,35 @@ func to_dict() -> Dictionary:
 		for m in turns:
 			pts.append([m.x, m.y, m.z])
 		d["turns"] = pts
+	var sets := {}
+	if has_tee("middle"):
+		sets["middle"] = [tee_middle.x, tee_middle.y, tee_middle.z]
+		sets["length_middle"] = length_middle
+	if has_tee("forward"):
+		sets["forward"] = [tee_forward.x, tee_forward.y, tee_forward.z]
+		sets["length_forward"] = length_forward
+	if not sets.is_empty():
+		d["tees"] = sets
 	return d
 
 
 static var _known_themes := {}
 static var _known_themes_read := false
+
+static var _cached_on_line := -1.0
+
+
+## How far, in metres, a turning point may sit off the line. data/turns.json.
+static func turn_on_line() -> float:
+	if _cached_on_line >= 0.0:
+		return _cached_on_line
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/turns.json"))
+	var limit := 3.0
+	if parsed is Dictionary:
+		var book: Dictionary = parsed
+		limit = float(book.get("on_line", 3.0))
+	_cached_on_line = limit
+	return _cached_on_line
 
 
 ## Theme ids from data/awards.json, read once. A load walks every hole.
@@ -782,6 +1028,16 @@ static func from_dict(d: Dictionary) -> Hole:
 		hole.pin_spot = 0
 	hole.pin_locked = bool(d.get("pin_locked", false))
 	hole.pin_due = int(d.get("pin_due", -1))
+	if d.has("tees"):
+		var sets: Dictionary = d["tees"]
+		if sets.has("middle"):
+			var mid_at: Array = sets["middle"]
+			hole.tee_middle = Vector3(float(mid_at[0]), float(mid_at[1]), float(mid_at[2]))
+			hole.length_middle = float(sets.get("length_middle", 0.0))
+		if sets.has("forward"):
+			var fwd_at: Array = sets["forward"]
+			hole.tee_forward = Vector3(float(fwd_at[0]), float(fwd_at[1]), float(fwd_at[2]))
+			hole.length_forward = float(sets.get("length_forward", 0.0))
 	hole.earned = float(d.get("earned", 0.0))
 	hole.payers = int(d.get("payers", 0))
 	hole.plays = int(d.get("plays", 0))
