@@ -63,6 +63,7 @@ func _ready() -> void:
 	_test_progress()
 	_test_accreditation()
 	_test_station()
+	_test_comments()
 	_test_course_file()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
@@ -3604,6 +3605,48 @@ func _test_accreditation() -> void:
 	check(_design_sum(stuffed) > 100.0 and is_equal_approx(stuffed.design, 100.0), "past the top, the lines still add up and the score stops at 100")
 
 
+func _test_comments() -> void:
+	print("-- comments and history")
+	var sim := _sim("three_holes", 3)
+	check(sim.course.comment_report().is_empty(), "a fresh course has nothing to report")
+	sim.course.holes[0].comments = {"scenery": 4.0, "wait": -1.0}
+	sim.course.holes[1].comments = {"scenery": 2.5, "water": -6.0}
+	sim.course.holes[2].comments = {"wait": -2.0}
+	var report := sim.course.comment_report()
+	check(report.size() == 3, "the report lists each thing golfers mention (%d)" % report.size())
+	check(str(report[0].tag) == "scenery" and is_equal_approx(float(report[0].total), 6.5), "praise on two holes is added together, and the strongest feeling is listed first")
+	check(str(report[1].tag) == "water" and is_equal_approx(float(report[1].total), -6.0), "a complaint on one hole is listed by how hard it hit")
+	check(str(report[2].tag) == "wait" and is_equal_approx(float(report[2].total), -3.0), "the same complaint on two holes is added together")
+	sim.rating = 64.0
+	sim.visitors.recent.clear()
+	for i in 8:
+		sim.visitors.recent.append(80.0)
+	var sat := sim.visitors.average_satisfaction()
+	sim._end_month(32)
+	var row: Dictionary = sim.economy.history[-1]
+	check(is_equal_approx(float(row.rating), 64.0) and is_equal_approx(float(row.satisfaction), sat), "a closed month remembers the rating and how happy golfers were")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var hist: Array = saved.history
+	var old: Dictionary = hist[0]
+	old.erase("rating")
+	old.erase("satisfaction")
+	var loaded := Sim.from_dict(db, saved, gear)
+	check(not loaded.economy.history[0].has("rating") and not loaded.economy.history[0].has("satisfaction"), "an older month, with no standing recorded, still loads")
+	loaded.rating = 40.0
+	loaded._end_month(64)
+	var again: Dictionary = loaded.economy.history[-1]
+	check(is_equal_approx(float(again.rating), 40.0) and again.has("satisfaction"), "the next month records the standing again")
+	var words: Dictionary = load("res://scripts/ui/panels.gd").get_script_constant_map().get("COMMENT_WORDS", {})
+	var named := true
+	for tag in ["dark", "night", "drink", "snack", "rain", "storm", "celebrity", "thirst", "hungry", "restroom"]:
+		if not words.has(tag):
+			named = false
+	check(named, "every feeling golfers carry off a hole has words in the report")
+	sim.visitors.recent.clear()
+	sim._end_month(96)
+	var quiet: Dictionary = sim.economy.history[-1]
+	check(not quiet.has("satisfaction"), "a month with no golfers draws no satisfaction point")
+
 ## A shared course is the ground and the holes. The pro travels; the club does not.
 func _test_course_file() -> void:
 	print("-- sharing a course")
@@ -3672,3 +3715,17 @@ func _test_course_file() -> void:
 	var missing_course: Dictionary = missing.course
 	missing_course.erase("health")
 	check(CourseFile.parse(JSON.stringify(missing)).is_empty(), "a course missing a layer is refused")
+	var one := CourseFile.host(db, pack, {}, gear)
+	var two := CourseFile.host(db, pack, {}, gear)
+	check(one.rng.seed != two.rng.seed, "two clubs started on a shared course do not roll the same dice")
+	var pinned := CourseFile.host(db, pack, {}, gear, 7)
+	check(pinned.rng.seed == 7, "a test can still pin the dice")
+	sim.course.holes[1].award = "top100"
+	sim.course.holes[1].plays = 40
+	var crowned := CourseFile.pack(sim)
+	var slim_holes: Array = crowned.course.holes
+	var slim_h: Dictionary = slim_holes[1]
+	check(slim_h.has("tee") and slim_h.has("pin") and slim_h.has("par") and slim_h.has("gap") and not slim_h.has("award") and not slim_h.has("plays") and not slim_h.has("themes") and not slim_h.has("earned") and not slim_h.has("comments"), "the shared file keeps the hole, not its history or its awards")
+	var hosted_plain := CourseFile.host(db, crowned, {}, gear, 9)
+	var back_h := hosted_plain.course.holes[1]
+	check(back_h.award == "" and back_h.plays == 0, "hole 1 comes back with no award, 0 plays and no themes")

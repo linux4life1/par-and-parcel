@@ -9,12 +9,27 @@ const VERSION := 1
 
 
 static func pack(sim: Sim) -> Dictionary:
+	var course: Dictionary = sim.course_dict()
+	var slim: Array = []
+	for h in course.get("holes", []):
+		if h is Dictionary:
+			var hd: Dictionary = h
+			slim.append({
+				"tee": hd.get("tee", []),
+				"pin": hd.get("pin", []),
+				"par": int(hd.get("par", 4)),
+				"length": float(hd.get("length", 0.0)),
+				"name": str(hd.get("name", "")),
+				"open": bool(hd.get("open", true)),
+				"gap": float(hd.get("gap", 0.0)),
+			})
+	course["holes"] = slim
 	return {
 		"kind": KIND,
 		"version": VERSION,
 		"name": sim.course_name,
 		"biome": str(sim.biome.get("id", "lush")),
-		"course": sim.course_dict(),
+		"course": course,
 	}
 
 
@@ -142,14 +157,14 @@ static func pro_of(sim: Sim) -> Dictionary:
 
 ## A new club on a friend's course. The purse is a new game's, and your pro
 ## is the one in `pro`. An empty pro plays as a new golfer.
-static func host(data: DataDB, pack: Dictionary, pro: Dictionary, gear: Gear = null) -> Sim:
+static func host(data: DataDB, pack: Dictionary, pro: Dictionary, gear: Gear = null, seed_value: int = 0) -> Sim:
 	var scen := DataDB.find(data.scenarios, "free_play")
 	if scen.is_empty():
 		scen = data.scenarios[0]
 	var blank: Dictionary = scen.duplicate(true)
 	blank["map"] = {"w": 8, "h": 8, "holes": 0}
 	var biome := str(pack.get("biome", "lush"))
-	var sim := Sim.new(data, blank, 1, gear, biome)
+	var sim := Sim.new(data, blank, seed_value, gear, biome)
 	var course_d: Dictionary = pack.course
 	sim.install_course(course_d)
 	sim.course_name = str(pack.get("name", sim.course_name))

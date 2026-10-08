@@ -89,9 +89,25 @@ var _marks: Array = []
 var _mark_scale := PackedFloat32Array()
 
 
+static var _fresh_n := 0
+
+
+## A seed for a new club. The clock alone repeats inside one second, so each
+## call takes its own tick and two clubs started together do not share dice.
+static func fresh_seed() -> int:
+	_fresh_n += 1
+	var n := int(Time.get_ticks_usec()) + _fresh_n
+	if n <= 0:
+		n = _fresh_n
+	return n
+
+
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
 	db = data
-	rng.seed = seed_value if seed_value != 0 else int(Time.get_unix_time_from_system())
+	# A seed of 0 is a fresh roll. The clock alone repeats inside one second,
+	# so each roll takes its own tick and two clubs started together do not
+	# share dice.
+	rng.seed = seed_value if seed_value != 0 else fresh_seed()
 	gear = shared_gear if shared_gear != null else Gear.new(db)
 	skills = Skills.new(db)
 	feed = Feed.new(self)
@@ -347,7 +363,7 @@ func _end_month(d: int) -> void:
 	var prev := Defs.date_parts(d - 1)
 	var label := "%s, Year %d" % [Defs.MONTH_NAMES[prev.month], prev.year]
 	var net := economy.net()
-	economy.close_month(label)
+	economy.close_month(label, rating, visitors.average_satisfaction() if not visitors.recent.is_empty() else -1.0)
 	toast.emit("%s closed: %s%s." % [Defs.MONTH_NAMES[prev.month], "profit of " if net >= 0.0 else "loss of ", Defs.money(absf(net))], "good" if net >= 0.0 else "bad")
 	month_ended.emit(label)
 
