@@ -3488,8 +3488,8 @@ func _test_comments() -> void:
 	sim.course.holes[2].comments = {"wait": -2.0}
 	var report := sim.course.comment_report()
 	check(report.size() == 3, "the report lists each thing golfers mention (%d)" % report.size())
-	check(str(report[0].tag) == "water" and is_equal_approx(float(report[0].total), -6.0), "the strongest feeling is listed first")
-	check(str(report[1].tag) == "scenery" and is_equal_approx(float(report[1].total), 6.5), "the same praise on two holes is added together")
+	check(str(report[0].tag) == "scenery" and is_equal_approx(float(report[0].total), 6.5), "praise on two holes is added together, and the strongest feeling is listed first")
+	check(str(report[1].tag) == "water" and is_equal_approx(float(report[1].total), -6.0), "a complaint on one hole is listed by how hard it hit")
 	check(str(report[2].tag) == "wait" and is_equal_approx(float(report[2].total), -3.0), "the same complaint on two holes is added together")
 	sim.rating = 64.0
 	sim.visitors.recent.clear()
