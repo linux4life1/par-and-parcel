@@ -68,6 +68,7 @@ var stats := {
 	"holes_built": 0, "player_wins": 0, "matches_won": 0, "homes": 0, "celebrity_homes": 0, "tantrums": 0, "windows": 0, "ricochets": 0, "night_holes": 0,
 }
 var career: Career
+var album: Array = []          # aces and tournament wins, kept for the golfer panel and the next course
 var clock := 7.0                # hour of the day, 0 to 24
 var clock_rate := 1.0           # 0 stops the clock (tests, screenshots)
 var told_dark := false          # the player has been told why golfers leave at dusk
@@ -240,6 +241,16 @@ func year() -> int:
 
 func date_text() -> String:
 	return Defs.date_text(day())
+
+
+## One page of the album: an ace, or a tournament the owner won.
+const ALBUM_MAX := 24
+
+
+func remember(kind: String, text: String) -> void:
+	album.append({"kind": kind, "text": text, "day": day()})
+	while album.size() > ALBUM_MAX:
+		album.pop_front()
 
 
 func _new_day(d: int) -> void:
@@ -1228,6 +1239,7 @@ func to_dict() -> Dictionary:
 		"members": members.to_list(), "clubhouse": clubhouse_level, "homes": homes, "gifts": gifts,
 		"feats": feats.done, "rivals": rivals, "best_rank": best_rank, "land_credits": land_credits, "debt_years": debt_years,
 		"difficulty": difficulty, "rng_seed": str(rng.seed), "rng_state": str(rng.state),
+		"album": album,
 	}
 	d["stories"] = stories.to_dict()
 	return d
@@ -1275,6 +1287,10 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	var st: Dictionary = d.get("stats", {})
 	for k: String in st:
 		sim.stats[k] = int(st[k])
+	sim.album = []
+	for page in d.get("album", []):
+		if page is Dictionary:
+			sim.album.append(page)
 	for v: float in d.get("recent", []):
 		sim.visitors.recent.append(v)
 	sim.skills.from_dict(d.get("skills", {}))

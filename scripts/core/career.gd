@@ -300,6 +300,8 @@ func hole_done(hole: Hole, score: int, picked_up: bool) -> int:
 			_bump("eagles")
 		if score == 1:
 			_bump("aces")
+			var called := hole.name if hole.name != "" else "an unnamed hole"
+			sim.remember("ace", "Ace on %s, %d yards, %s." % [called, Defs.yards(hole.length), sim.date_text()])
 		# in two from the sand: the shot out, and one more
 		var sand_at := int(hl.get("sand_at", -1))
 		if sand_at > 0 and score - sand_at <= 1:

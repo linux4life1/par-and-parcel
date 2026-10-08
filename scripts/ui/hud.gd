@@ -1109,7 +1109,11 @@ func show_scenarios(first_launch: bool = false) -> void:
 		v.add_child(filler)
 		var foot := UIKit.hbox()
 		v.add_child(foot)
-		foot.add_child(UIKit.label("Start with %s" % Defs.money(float(scen.money)), 13, UIKit.MUTED))
+		var brought := Game.carried_money()
+		if brought > 0.5:
+			foot.add_child(UIKit.label("Start with %s, plus %s from your last club" % [Defs.money(float(scen.money)), Defs.money(brought)], 13, UIKit.MUTED))
+		else:
+			foot.add_child(UIKit.label("Start with %s" % Defs.money(float(scen.money)), 13, UIKit.MUTED))
 		foot.add_child(UIKit.spacer())
 		var id := str(scen.id)
 		foot.add_child(UIKit.button("Play", func() -> void:

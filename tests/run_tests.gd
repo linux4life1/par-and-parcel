@@ -63,6 +63,7 @@ func _ready() -> void:
 	_test_progress()
 	_test_accreditation()
 	_test_station()
+	_test_easy_and_album()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -3592,3 +3593,66 @@ func _test_accreditation() -> void:
 	stuffed.clubhouse_level = 80
 	stuffed._update_rating(0.0)
 	check(_design_sum(stuffed) > 100.0 and is_equal_approx(stuffed.design, 100.0), "past the top, the lines still add up and the score stops at 100")
+
+
+func _test_easy_and_album() -> void:
+	print("-- too easy, the album, and a career that travels")
+	var sim := _sim("three_holes", 3)
+	for h in sim.course.holes:
+		h.open = true
+		h.lab_ready = true
+		h.kind = 0
+	var good := Golfer.new()
+	good.skill = 0.85
+	good.persona = {}
+	good.satisfaction = 60.0
+	sim.visitors._judge_design(good, sim.course.holes[0], 1)
+	check(float(good.gripes.get("easy", 0.0)) < -1.0, "a skilled golfer on a course of breathers says it is too easy")
+	var poor := Golfer.new()
+	poor.skill = 0.3
+	poor.persona = {}
+	poor.satisfaction = 60.0
+	sim.visitors._judge_design(poor, sim.course.holes[0], 1)
+	check(not poor.gripes.has("easy"), "a beginner on the same course does not")
+	sim.course.holes[1].kind = 5
+	sim.course.holes[2].kind = 5
+	var asked := Golfer.new()
+	asked.skill = 0.9
+	asked.persona = {}
+	asked.satisfaction = 60.0
+	sim.visitors._judge_design(asked, sim.course.holes[0], 1)
+	check(not asked.gripes.has("easy"), "one breather among harder holes is not too easy")
+	var words: Dictionary = load("res://scripts/ui/panels.gd").get_script_constant_map().get("COMMENT_WORDS", {})
+	check(str(words.get("easy", "")) == "it being too easy", "the hole report has words for too easy")
+	var named: Hole = sim.course.holes[0]
+	if named.name == "":
+		named.name = "Magnolia"
+	sim.career.hole_done(named, 1, false)
+	check(sim.album.size() == 1 and str(sim.album[0].get("kind", "")) == "ace" and str(sim.album[0].get("text", "")).contains(named.name), "an ace is written into the album")
+	var def: Dictionary = DataDB.find(db.tournaments, "club")
+	sim.tourney.active = {"def": def, "setup": "standard"}
+	sim.tourney.board.append({"g": null, "name": "You", "thru": sim.course.holes.size(), "to_par": -3, "total": 0})
+	sim.tourney._finish()
+	check(sim.album.size() == 2 and str(sim.album[-1].get("kind", "")) == "win" and str(sim.album[-1].get("text", "")).contains(str(def.name)), "a tournament win is written into the album")
+	var attr := str(sim.db.attributes[0].get("id", "power"))
+	sim.career.levels[attr] = 4
+	sim.economy.money = 44000.0
+	var packed := CareerBook.pack(sim)
+	var nxt := _sim("first_tee", 4)
+	var purse := nxt.economy.money
+	CareerBook.apply(nxt, packed)
+	check(is_equal_approx(nxt.economy.money, purse + 44000.0), "the next course starts with its own purse plus the bank you bring")
+	check(nxt.career.level(attr) == 4, "the pro's attributes come along")
+	check(nxt.album.size() == 2 and str(nxt.album[-1].get("kind", "")) == "win", "the album comes along")
+	var broke := _sim("weed_patch", 5)
+	var stake := broke.economy.money
+	var debt := CareerBook.pack(broke)
+	debt["money"] = -200.0
+	CareerBook.apply(broke, debt)
+	check(is_equal_approx(broke.economy.money, stake), "a debt does not follow you")
+	var kept := sim.to_dict()
+	var loaded := Sim.from_dict(db, kept, gear)
+	check(loaded.album.size() == sim.album.size() and str(loaded.album[0].get("kind", "")) == "ace", "a save keeps the album")
+	kept.erase("album")
+	var older := Sim.from_dict(db, kept, gear)
+	check(older.album.is_empty(), "an older save, with no album stored, still loads")

@@ -11,6 +11,10 @@ const STEP := 1.0 / 60.0
 const SAVE_FILE := "user://save.json"
 const TEST_SAVE_FILE := "user://save_test.json"   # screenshot and test runs never touch the real slot
 var SAVE_PATH := SAVE_FILE
+const CAREER_FILE := "user://career.json"
+const TEST_CAREER_FILE := "user://career_test.json"
+var CAREER_PATH := CAREER_FILE
+var _session_live := false   # the owner has started or loaded a game; the hidden first layout is not one
 const SETTINGS_PATH := "user://settings.cfg"
 ## Graphics presets, lightest first. See Main._apply_quality.
 const QUALITY_NAMES: Array[String] = ["Low", "Medium", "High", "Ultra"]
@@ -59,6 +63,7 @@ func _ready() -> void:
 		args[kv[0]] = kv[1] if kv.size() > 1 else "1"
 	if args.has("shot") or args.has("exit"):
 		SAVE_PATH = TEST_SAVE_FILE
+		CAREER_PATH = TEST_CAREER_FILE
 	_migrate_saves()
 	if args.has("quality"):
 		quality = clampi(int(args.quality), 0, QUALITY_NAMES.size() - 1)
@@ -272,12 +277,19 @@ func set_ui_scale(scale: float) -> void:
 		get_window().content_scale_factor = ui_scale
 
 
-func new_game(scenario_id: String, seed_value: int = 0, biome_id: String = "") -> void:
+func new_game(scenario_id: String, seed_value: int = 0, biome_id: String = "", take_career: bool = true) -> void:
+	if _session_live and sim != null:
+		_store_career()
 	var scen := DataDB.find(db.scenarios, scenario_id)
 	if scen.is_empty():
 		scen = db.scenarios[0]
 	sim = Sim.new(db, scen, seed_value, gear, biome_id)
 	sim.set_difficulty(difficulty)
+	if take_career:
+		_load_career()
+	_session_live = take_career
+	if not sim.scenario_ended.is_connected(_store_career):
+		sim.scenario_ended.connect(_store_career)
 	_acc = 0.0
 	speed = 1
 	paused = false
@@ -350,6 +362,7 @@ func save_game() -> bool:
 		return false
 	f.store_string(JSON.stringify(sim.to_dict()))
 	f.close()
+	_store_career()
 	return true
 
 
@@ -360,9 +373,39 @@ func load_game() -> bool:
 	if not (parsed is Dictionary) or not parsed.has("course"):
 		return false
 	sim = Sim.from_dict(db, parsed, gear)
+	_session_live = true
+	if not sim.scenario_ended.is_connected(_store_career):
+		sim.scenario_ended.connect(_store_career)
 	_acc = 0.0
 	speed = 1
 	paused = false
 	sim_changed.emit()
 	return true
+
+
+func carried_money() -> float:
+	if not FileAccess.file_exists(CAREER_PATH):
+		return 0.0
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
+	if not (parsed is Dictionary):
+		return 0.0
+	return maxf(float(parsed.get("money", 0.0)), 0.0)
+
+
+func _store_career(_won: bool = false) -> void:
+	if sim == null:
+		return
+	var f := FileAccess.open(CAREER_PATH, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(CareerBook.pack(sim)))
+	f.close()
+
+
+func _load_career() -> void:
+	if sim == null or not FileAccess.file_exists(CAREER_PATH):
+		return
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
+	if parsed is Dictionary:
+		CareerBook.apply(sim, parsed)
 
