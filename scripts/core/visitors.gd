@@ -235,6 +235,11 @@ func make_golfer(kind: String, base_skill: float) -> Golfer:
 		g.pace = 0.8
 	else:
 		g.set_persona(_pick_persona())
+	# Persona already leaves a mood between 5 and 95. Debt pulls it down only
+	# while the club owes money, and a clear balance must not cut that range.
+	var pen := sim.debt_arrival()
+	if pen < 0.0 and (kind == "public" or kind == "pro" or kind == "celebrity"):
+		g.satisfaction = clampf(g.satisfaction + pen, 5.0, 95.0)
 	_equip(g)
 	set_temper(g)
 	return g
