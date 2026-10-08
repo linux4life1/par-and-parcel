@@ -671,9 +671,11 @@ func roll_decel(t: int) -> float:
 
 
 ## Where the day's cup sits. Spot 0 is the placed pin. Spot 1 is toward the
-## tee, spot 2 is past the placed pin, and either one stops at the edge of
-## the green.
-func day_cup(hole: Hole, spot: int, front_m: float, back_m: float) -> Vector3:
+## tee, spot 2 is past the placed pin. A legal spot stays `edge` metres inside
+## the green and no steeper than `slope_max` percent. The walk keeps the legal
+## spot nearest the asked distance, or the middle when the front or the back
+## has none.
+func day_cup(hole: Hole, spot: int, front_m: float = 6.0, back_m: float = 6.0, edge: float = 2.0, slope_max: float = 4.0) -> Vector3:
 	var home := hole.placed if hole.placed.length_squared() > 0.01 else hole.pin
 	if spot == 0:
 		return on_ground(home.x, home.z)
@@ -685,15 +687,32 @@ func day_cup(hole: Hole, spot: int, front_m: float, back_m: float) -> Vector3:
 	var metres := front_m if spot == 1 else back_m
 	var step := Defs.TILE * 0.5
 	var best := home
+	var best_d := -1.0
 	var travelled := 0.0
 	while travelled + 0.01 < metres:
 		var next := minf(travelled + step, metres)
 		var p := home + dir * next
-		if not Defs.is_green(terrain_at(p.x, p.z)):
-			break
-		best = p
+		if _cup_clear(p.x, p.z, edge, slope_max):
+			best = p
+			best_d = next
 		travelled = next
+	if best_d < 0.0:
+		return on_ground(home.x, home.z)
 	return on_ground(best.x, best.z)
+
+
+## True when a cup here is on the green, `edge` metres clear of the fringe,
+## and no steeper than `slope_max` percent.
+func _cup_clear(x: float, z: float, edge: float, slope_max: float) -> bool:
+	if not Defs.is_green(terrain_at(x, z)):
+		return false
+	if edge > 0.0:
+		for k in 8:
+			var a := float(k) * TAU / 8.0
+			if not Defs.is_green(terrain_at(x + cos(a) * edge, z + sin(a) * edge)):
+				return false
+	var grade := float(Slope.read(self, x, z)["percent"])
+	return grade <= slope_max
 
 
 ## Move the pin off the centre line by metres, staying on the green.

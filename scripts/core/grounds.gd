@@ -199,9 +199,20 @@ func step(dt: float) -> void:
 
 ## Extra wear on the green around each cup, so a pin that stays put tires
 ## the same spot and a pin that moves spreads it. `dt` is sim seconds.
+## Nothing is added unless a greenkeeper is actually moving pins. The rate
+## uses the same difficulty and skill multipliers as the rest of the turf.
 func wear_around_pins(dt: float) -> void:
+	if sim.crew.count("greenkeeper") < 1 or sim.tourney.pins_held():
+		return
+	var moving := false
+	for hole in sim.course.holes:
+		if not hole.pin_locked:
+			moving = true
+			break
+	if not moving:
+		return
 	var spec: Dictionary = sim.db.pins
-	var rate := float(spec.get("wear", 0.0)) * dt
+	var rate := float(spec.get("wear", 0.0)) * dt * sim.skills.mult("wear") * sim.diff("wear")
 	if rate <= 0.0 or sim.course.holes.is_empty():
 		return
 	var reach := int(spec.get("radius", 2))

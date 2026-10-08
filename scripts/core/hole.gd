@@ -10,6 +10,8 @@ var pin := Vector3.ZERO
 var placed := Vector3.ZERO
 ## 0 middle, 1 front, 2 back. The names live in data/pins.json.
 var pin_spot := 0
+## The owner asked the greenkeepers to leave this cup where it is.
+var pin_locked := false
 var par := 4
 var length := 0.0
 ## Centreline of the hole the way it is meant to be played, tee to pin, in
@@ -594,7 +596,7 @@ func touches_water(course: Course) -> bool:
 func to_dict() -> Dictionary:
 	return {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
-		"placed": [placed.x, placed.y, placed.z], "pin_spot": pin_spot,
+		"placed": [placed.x, placed.y, placed.z], "pin_spot": pin_spot, "pin_locked": pin_locked,
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
@@ -632,6 +634,7 @@ static func from_dict(d: Dictionary) -> Hole:
 	else:
 		hole.placed = hole.pin
 		hole.pin_spot = 0
+	hole.pin_locked = bool(d.get("pin_locked", false))
 	hole.earned = float(d.get("earned", 0.0))
 	hole.payers = int(d.get("payers", 0))
 	hole.plays = int(d.get("plays", 0))
