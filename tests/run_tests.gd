@@ -5951,14 +5951,14 @@ func _test_cup_target() -> void:
 	check(at_held > at_new + 1.0, "the routing field is rebuilt when the cup moves")
 
 
-## One week, eight seeds. A month of both cups, eight times, still left the
-## headless step over eight minutes, and this comparison was most of that.
+## Two months, four seeds. One week finished with both cups near zero weeds
+## and condition near 1, so the 3-point and 0.02 guards could not fail.
 ## A seed may not finish worse than the locked pin by more than 3 weed
 ## points or 0.02 condition, so a good seed cannot cancel a bad one.
 ## The mean still has to stay inside a point.
 func _test_pin_seasons() -> void:
-	print("-- eight seasons of one week, the day's cup against a pin left where it was placed")
-	var seeds: Array[int] = [51, 7, 99, 12345, 3, 13, 21, 42]
+	print("-- four seasons of two months, the day's cup against a pin left where it was placed")
+	var seeds: Array[int] = [51, 7, 99, 42]
 	var weed_sum := 0.0
 	var cond_sum := 0.0
 	for seed_value in seeds:
@@ -5985,7 +5985,7 @@ func _pin_season(seed_value: int) -> Vector2:
 	turning.events.timer = 99999.0
 	for hole in still.course.holes:
 		hole.pin_locked = true
-	var days := 7
+	var days := 2 * Defs.DAYS_PER_MONTH
 	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
 	for _i in steps:
 		still.step(1.0 / 60.0)
