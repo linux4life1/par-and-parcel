@@ -1,7 +1,7 @@
 class_name Crew
 extends RefCounted
 ## Hired staff. Greenkeepers mow and weed, exterminators clear pests,
-## marshals keep play moving.
+## marshals keep play moving, and a porter picks up the litter.
 
 class Member:
 	extends RefCounted
@@ -202,6 +202,9 @@ func _find_job(m: Member) -> void:
 	if m.role.id == "beverage":
 		_find_drinks_job(m)
 		return
+	if m.role.id == "porter":
+		_find_porter_job(m)
+		return
 	if m.role.id == "club_pro":
 		# the pro stays by the clubhouse, greeting arrivals, unless posted
 		if m.has_home:
@@ -334,6 +337,47 @@ func _find_home_job(m: Member) -> void:
 	m.state = 1
 
 
+## Litter and a broken window, nearest first. The whole map, no dice.
+func _find_porter_job(m: Member) -> void:
+	var course := sim.course
+	var spec: Dictionary = sim.db.litter
+	var show := float(spec.get("show", 0.45))
+	var window := float(spec.get("window", 1.0))
+	var reach := float(spec.get("score_reach", 400.0))
+	var n := course.w * course.h
+	var best := -1
+	var best_score := float(spec.get("score_floor", 0.05))
+	for i in n:
+		if _claimed.has(i):
+			continue
+		var mess := 0.0
+		if course.repair[i] != 0:
+			mess = window
+		elif course.litter[i] >= show:
+			mess = course.litter[i]
+		else:
+			continue
+		var cx := (i % course.w + 0.5) * Defs.TILE
+		var cz := (int(i / course.w) + 0.5) * Defs.TILE
+		if not _in_home(m, Vector3(cx, 0.0, cz)):
+			continue
+		var dist := Vector2(cx - m.pos.x, cz - m.pos.z).length()
+		var score := mess - dist / reach
+		if score > best_score:
+			best_score = score
+			best = i
+	if best < 0:
+		if m.has_home:
+			_go_home(m)
+		else:
+			m.timer = 2.5
+		return
+	m.target_i = best
+	_claimed[best] = true
+	m.target = course.tile_center(best % course.w, int(best / course.w))
+	m.state = 1
+
+
 ## The drinks cart heads for whichever group is thirstiest.
 func _find_drinks_job(m: Member) -> void:
 	var best: Group = null
@@ -399,6 +443,9 @@ func _finish_job(m: Member) -> void:
 	_claimed.erase(i)
 	m.target_i = -1
 	m.jobs_done += 1
+	if m.role.id == "porter":
+		_clear_mess(course, i)
+		return
 	var tx := i % course.w
 	var ty := i / course.w
 	var reach := 2      # a mower pass or a treatment covers a five by five patch
@@ -412,3 +459,25 @@ func _finish_job(m: Member) -> void:
 			elif Defs.T_GRASS[course.terrain[j]]:
 				course.health[j] = minf(1.0, course.health[j] + 0.9)
 				course.weeds[j] = 0.0
+
+
+## Pick up the litter and board the window, on a small patch, then stop.
+func _clear_mess(course: Course, i: int) -> void:
+	var spec: Dictionary = sim.db.litter
+	var clean := float(spec.get("clean", 1.0))
+	var patch := int(spec.get("patch", 1))
+	var show := float(spec.get("show", 0.45))
+	var tx := i % course.w
+	var ty := int(i / course.w)
+	for y in range(ty - patch, ty + patch + 1):
+		for x in range(tx - patch, tx + patch + 1):
+			if not course.in_bounds(x, y):
+				continue
+			var j := y * course.w + x
+			var before: float = course.litter[j]
+			var after := clampf(before - clean, 0.0, 1.0)
+			if not is_equal_approx(before, after):
+				course.litter[j] = after
+				if (before < show and after >= show) or (before >= show and after < show):
+					course.litter_rev += 1
+			course.repair[j] = 0

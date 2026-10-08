@@ -288,6 +288,9 @@ func build(shirt: Color, pants: Color, skin: Color, hat: Color, prop: String, cr
 			cart.scale = Vector3.ONE * 0.75
 			cart.position = Vector3(0.2, 0, 0.9)
 			body.add_child(cart)
+		"bag":
+			var sack := _mat(Color(0.28, 0.24, 0.18), 0.85)
+			_add(spine, _capsule(0.11, 0.2), sack, Vector3(-0.16, 0.12, 0.06))
 	club.visible = _has_club
 	for k in 3:
 		var s := MeshInstance3D.new()
