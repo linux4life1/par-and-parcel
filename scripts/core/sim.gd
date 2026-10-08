@@ -71,6 +71,8 @@ var career: Career
 var clock := 7.0                # hour of the day, 0 to 24
 var clock_rate := 1.0           # 0 stops the clock (tests, screenshots)
 var told_dark := false          # the player has been told why golfers leave at dusk
+var _light_ids: Array[int] = []
+var _light_ready := false
 var _slow := 0.0
 var _day := 0
 var _scenery := {}
@@ -104,9 +106,6 @@ static func fresh_seed() -> int:
 
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
 	db = data
-	# A seed of 0 is a fresh roll. The clock alone repeats inside one second,
-	# so each roll takes its own tick and two clubs started together do not
-	# share dice.
 	rng.seed = seed_value if seed_value != 0 else fresh_seed()
 	gear = shared_gear if shared_gear != null else Gear.new(db)
 	skills = Skills.new(db)
@@ -331,6 +330,7 @@ func _end_year(year_done: int) -> void:
 			toast.emit("The club ended the year in debt. The board is watching.", "bad")
 	else:
 		debt_years = 0
+	_judge_themes()
 	feats.check()
 
 
@@ -351,6 +351,7 @@ func _check_awards() -> void:
 			buzz += 12.0
 			toast.emit("Hole %d, %s, is in the Dream Eighteen: the best eighteen holes anywhere." % [i + 1, hole.name], "good")
 			feed.say("top18", null, {"hole": i + 1}, true, "Great Golf Holes", "GreatGolfHoles")
+	_slip_themes()
 
 
 func _end_month(d: int) -> void:
@@ -370,9 +371,143 @@ func _end_month(d: int) -> void:
 
 func monthly_upkeep() -> float:
 	var t := course.holes.size() * 15.0
+	var share := light_on_share()
 	for o in course.objects:
-		t += Defs.O_UPKEEP[o]
+		var cost := float(Defs.O_UPKEEP[int(o)])
+		if _light_kind(int(o)):
+			cost *= share
+		t += cost
 	return t
+
+
+## The share of a day the floodlights and lamp posts are switched on:
+## sunset until sunrise. Their upkeep is that share of the listed amount.
+## A building that also glows still pays in full.
+func light_on_share() -> float:
+	var hours := Defs.SUNRISE - Defs.SUNSET
+	if hours <= 0.0:
+		hours += 24.0
+	return clampf(hours / 24.0, 0.0, 1.0)
+
+
+func _light_kind(o: int) -> bool:
+	if not _light_ready:
+		_light_ready = true
+		for name in db.lights.get("kinds", []):
+			var i := Defs.O_NAMES.find(str(name))
+			if i >= 0:
+				_light_ids.append(i)
+	return _light_ids.has(o)
+
+
+## How long the starter holds the next party, in the steps the panel offers.
+func starter_step() -> float:
+	return float(db.starter.get("step", 15.0))
+
+
+func starter_max() -> float:
+	return float(db.starter.get("max", 90.0))
+
+
+func nudge_gap(hole: Hole, dir: int) -> void:
+	var step := starter_step()
+	hole.gap = clampf(hole.gap + step * float(dir), 0.0, starter_max())
+
+
+## "No hold", or the gap on the course clock.
+func starter_text(hole: Hole) -> String:
+	if hole.gap <= 0.0:
+		return "No hold"
+	return "Holds %s" % Defs.pace_text(hole.gap)
+
+
+func theme_name(id: String) -> String:
+	var row := _theme(id)
+	if row.is_empty():
+		return id
+	return str(row.get("name", id))
+
+
+## The extra share of a green fee a themed award adds. One award, one share.
+func theme_fee(hole: Hole) -> float:
+	var bonus := 0.0
+	var seen := {}
+	for id in hole.themes:
+		var key := str(id)
+		if seen.has(key):
+			continue
+		seen[key] = true
+		bonus += float(_theme(key).get("fee", 0.0))
+	return bonus
+
+
+func _theme(id: String) -> Dictionary:
+	for row in db.awards.get("themes", []):
+		if row is Dictionary and str(row.get("id", "")) == id:
+			return row
+	return {}
+
+
+## Still the hole the award was given for: loved, played, and still that kind.
+func _theme_holds(hole: Hole, row: Dictionary) -> bool:
+	if row.is_empty() or not hole.open or not hole.lab_ready or hole.kind == 0:
+		return false
+	if hole.plays < int(row.get("plays", 20)) or hole.fun < float(row.get("fun", 68.0)):
+		return false
+	var id := str(row.get("id", ""))
+	if id == "par3":
+		return hole.par == 3
+	if id == "water":
+		return hole.touches_water(course)
+	if id == "night":
+		return hole.lit_enough(course)
+	return false
+
+
+## Take a themed award back the day the hole stops deserving it.
+func _slip_themes() -> void:
+	for hole in course.holes:
+		var i := hole.themes.size() - 1
+		while i >= 0:
+			var id := hole.themes[i]
+			if not _theme_holds(hole, _theme(id)):
+				hole.themes.remove_at(i)
+				var who := hole.name if hole.name != "" else "Hole %d" % (course.holes.find(hole) + 1)
+				toast.emit("%s no longer deserves the %s." % [who, theme_name(id)], "bad")
+			i -= 1
+
+
+## Once a year, name the best hole of each theme. A hole that has slipped
+## already lost it. A better hole takes it over.
+func _judge_themes() -> void:
+	for row in db.awards.get("themes", []):
+		if not (row is Dictionary):
+			continue
+		var spec: Dictionary = row
+		var id := str(spec.get("id", ""))
+		if id == "":
+			continue
+		var best: Hole = null
+		var best_fun := -1.0
+		for hole in course.holes:
+			if not _theme_holds(hole, spec):
+				continue
+			if hole.fun > best_fun:
+				best = hole
+				best_fun = hole.fun
+		for hole in course.holes:
+			var has := hole.themes.has(id)
+			if hole == best:
+				if not has:
+					hole.themes.append(id)
+					var who := hole.name if hole.name != "" else "Hole %d" % (course.holes.find(hole) + 1)
+					toast.emit("%s is named %s." % [who, theme_name(id)], "good")
+					feed.say(id, null, {"hole": course.holes.find(hole) + 1}, true, "Golf Enquirer", "GolfEnquirer")
+			elif has:
+				hole.themes.erase(id)
+				if best == null:
+					var who := hole.name if hole.name != "" else "Hole %d" % (course.holes.find(hole) + 1)
+					toast.emit("%s no longer deserves the %s." % [who, theme_name(id)], "bad")
 
 
 # ------------------------------------------------------- course standing

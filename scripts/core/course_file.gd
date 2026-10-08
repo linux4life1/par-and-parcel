@@ -13,16 +13,7 @@ static func pack(sim: Sim) -> Dictionary:
 	var slim: Array = []
 	for h in course.get("holes", []):
 		if h is Dictionary:
-			var hd: Dictionary = h
-			slim.append({
-				"tee": hd.get("tee", []),
-				"pin": hd.get("pin", []),
-				"par": int(hd.get("par", 4)),
-				"length": float(hd.get("length", 0.0)),
-				"name": str(hd.get("name", "")),
-				"open": bool(hd.get("open", true)),
-				"gap": float(hd.get("gap", 0.0)),
-			})
+			slim.append(_slim_hole(h))
 	course["holes"] = slim
 	return {
 		"kind": KIND,
@@ -74,9 +65,9 @@ static func _course_safe(course: Dictionary) -> bool:
 	var tiles := w * h
 	if not _bytes(course.get("heights", ""), (w + 1) * (h + 1) * 4):
 		return false
-	if not _bytes(course.get("terrain", ""), tiles):
+	if not _kinds(course.get("terrain", ""), tiles, Defs.T_NAMES.size()):
 		return false
-	if not _bytes(course.get("objects", ""), tiles):
+	if not _kinds(course.get("objects", ""), tiles, Defs.O_NAMES.size()):
 		return false
 	for key in ["wet", "health", "weeds", "pests"]:
 		if not _bytes(course.get(str(key), ""), tiles * 4):
@@ -86,7 +77,30 @@ static func _course_safe(course: Dictionary) -> bool:
 			return false
 	elif course.has("hot") and not _bytes(course.get("hot", ""), tiles):
 		return false
+	if course.has("mood") and not _bytes(course.get("mood", ""), tiles * 4):
+		return false
+	if course.has("volcanoes"):
+		var vols: Variant = course.get("volcanoes", [])
+		if not (vols is Array):
+			return false
+		for item in vols:
+			if not (item is Dictionary):
+				return false
 	return true
+
+
+## The hole a shared file is allowed to keep. Awards, plays and earnings
+## stay at the club that earned them.
+static func _slim_hole(hd: Dictionary) -> Dictionary:
+	return {
+		"tee": hd.get("tee", []),
+		"pin": hd.get("pin", []),
+		"par": int(hd.get("par", 4)),
+		"length": float(hd.get("length", 0.0)),
+		"name": str(hd.get("name", "")),
+		"open": bool(hd.get("open", true)),
+		"gap": float(hd.get("gap", 0.0)),
+	}
 
 
 ## Each hole needs a tee and a pin of three numbers, standing on the map.
@@ -133,6 +147,16 @@ static func _two_numbers(v: Variant) -> bool:
 
 static func _number(v: Variant) -> bool:
 	return v is int or v is float
+
+
+static func _kinds(v: Variant, n: int, limit: int) -> bool:
+	if not _bytes(v, n):
+		return false
+	var raw := Marshalls.base64_to_raw(str(v))
+	for b in raw:
+		if int(b) >= limit:
+			return false
+	return true
 
 
 static func _bytes(v: Variant, n: int) -> bool:
@@ -198,7 +222,14 @@ static func host(data: DataDB, pack: Dictionary, pro: Dictionary, gear: Gear = n
 	blank["map"] = {"w": 8, "h": 8, "holes": 0}
 	var biome := str(pack.get("biome", "lush"))
 	var sim := Sim.new(data, blank, seed_value, gear, biome)
-	var course_d: Dictionary = pack.course
+	var course_d: Dictionary = (pack.course as Dictionary).duplicate(true)
+	course_d["green_decel"] = 1.0
+	course_d["rough_power"] = 1.0
+	var slim: Array = []
+	for h in course_d.get("holes", []):
+		if h is Dictionary:
+			slim.append(_slim_hole(h))
+	course_d["holes"] = slim
 	sim.install_course(course_d)
 	sim.course_name = str(pack.get("name", sim.course_name))
 	sim.clubhouse_level = sim.level_for_holes(sim.course.holes.size())

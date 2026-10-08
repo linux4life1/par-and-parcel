@@ -1,0 +1,8 @@
+{
+	"_about": "Once a year the best open hole of each theme is named, if golfers love it (fun) and enough of them have played it. A breather does not qualify. The award adds 'fee' to what the hole pays, and it is taken back the day the hole slips under the bar or stops being that kind of hole.",
+	"themes": [
+		{"id": "par3", "name": "Best par 3", "fun": 68, "plays": 20, "fee": 0.06},
+		{"id": "water", "name": "Best water hole", "fun": 68, "plays": 20, "fee": 0.06},
+		{"id": "night", "name": "Best night hole", "fun": 68, "plays": 20, "fee": 0.06}
+	]
+}

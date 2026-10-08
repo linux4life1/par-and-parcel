@@ -176,7 +176,7 @@ func _queue(dt: float, sim: Sim) -> void:
 		state = S.LEAVING
 		return
 	var k := hole.line_index(self, hole_i)
-	if k == 0 and _tee_free(hole):
+	if k == 0 and _tee_free(hole) and not hole.starter_holds(sim.time):
 		hole.teeing_group = self
 		hole.line.erase(self)
 		_begin_hole(sim, hole)
@@ -224,6 +224,7 @@ func _begin_hole(sim: Sim, hole: Hole) -> void:
 	turn = null
 	wait = 0.0
 	forced = false
+	hole.tee_at = sim.time
 	if not hole.groups.has(self):
 		hole.groups.append(self)
 	state = S.PLAY

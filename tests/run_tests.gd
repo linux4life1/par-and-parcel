@@ -65,6 +65,7 @@ func _ready() -> void:
 	_test_station()
 	_test_comments()
 	_test_course_file()
+	_test_lights_gap_awards()
 	_test_length_scale()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
@@ -3729,7 +3730,7 @@ func _test_course_file() -> void:
 	check(slim_h.has("tee") and slim_h.has("pin") and slim_h.has("par") and slim_h.has("gap") and not slim_h.has("award") and not slim_h.has("plays") and not slim_h.has("themes") and not slim_h.has("earned") and not slim_h.has("comments"), "the shared file keeps the hole, not its history or its awards")
 	var hosted_plain := CourseFile.host(db, crowned, {}, gear, 9)
 	var back_h := hosted_plain.course.holes[1]
-	check(back_h.award == "" and back_h.plays == 0, "hole 1 comes back with no award, 0 plays and no themes")
+	check(back_h.award == "" and back_h.plays == 0, "hole 1 comes back with no award and 0 plays")
 	var no_tee: Dictionary = pack.duplicate(true)
 	var no_tee_holes: Array = no_tee.course.holes
 	var no_tee_h: Dictionary = no_tee_holes[0]
@@ -3741,6 +3742,264 @@ func _test_course_file() -> void:
 	var off_h: Dictionary = off_holes[0]
 	off_h["pin"] = [float(off_course.w) * Defs.TILE + 5.0, 0.0, 10.0]
 	check(CourseFile.parse(JSON.stringify(off)).is_empty(), "a pin outside the map is refused")
+	var pair: Dictionary = pack.duplicate(true)
+	var pair_holes: Array = pair.course.holes
+	var pair_h: Dictionary = pair_holes[0]
+	pair_h["pin"] = [10.0, 0.0]
+	check(CourseFile.parse(JSON.stringify(pair)).is_empty(), "a two-number pin is refused")
+	var painted: Dictionary = pack.duplicate(true)
+	var painted_course: Dictionary = painted.course
+	var terrain_bytes := Marshalls.base64_to_raw(str(painted_course.terrain))
+	terrain_bytes[0] = 200
+	painted_course.terrain = Marshalls.raw_to_base64(terrain_bytes)
+	check(CourseFile.parse(JSON.stringify(painted)).is_empty(), "a terrain byte of 200 is refused")
+	var dirty: Dictionary = pack.duplicate(true)
+	var dirty_holes: Array = dirty.course.holes
+	var dirty_h: Dictionary = dirty_holes[0]
+	dirty_h["award"] = "top100"
+	dirty_h["plays"] = 500
+	dirty_h["earned"] = 3
+	var hosted_dirty := CourseFile.host(db, dirty, {}, gear, 4)
+	var dirty_back := hosted_dirty.course.holes[0]
+	check(dirty_back.award == "" and dirty_back.plays == 0, "a file whose hole carries an award, a play count and earnings hosts with none of them")
+	var home_pins: Array[Vector3] = []
+	for h in sim.course.holes:
+		home_pins.append(h.pin)
+	sim.economy.money = 100000.0
+	sim.rating = 80.0
+	check(sim.tourney.schedule("club", "stern"), "a stern week can be booked")
+	sim.tourney.on_day(int(sim.tourney.scheduled.day))
+	var stern_pack := CourseFile.pack(sim)
+	var stern_course: Dictionary = stern_pack.course
+	var stern_holes: Array = stern_course.holes
+	var pins_home := stern_holes.size() == home_pins.size()
+	for i in stern_holes.size():
+		var hd: Dictionary = stern_holes[i]
+		var pin_a: Array = hd.pin
+		var got := Vector3(float(pin_a[0]), float(pin_a[1]), float(pin_a[2]))
+		if i >= home_pins.size() or got.distance_to(home_pins[i]) >= 0.05:
+			pins_home = false
+	check(pins_home and is_equal_approx(float(stern_course.green_decel), 1.0) and is_equal_approx(float(stern_course.rough_power), 1.0), "packing during a stern week keeps the pre-event pins and the usual greens and rough")
+	var slick: Dictionary = pack.duplicate(true)
+	var slick_course: Dictionary = slick.course
+	slick_course["green_decel"] = 0.0
+	slick_course["rough_power"] = 0.0
+	var hosted_slick := CourseFile.host(db, slick, {}, gear, 3)
+	check(is_equal_approx(hosted_slick.course.green_decel, 1.0) and is_equal_approx(hosted_slick.course.rough_power, 1.0), "a file that claims frictionless greens still plays at the usual pace")
+
+
+func _test_lights_gap_awards() -> void:
+	print("-- lights on a schedule, the starter's gap, and themed awards")
+	var sim := _sim("three_holes", 41)
+	sim.economy.money = 400000.0
+	var hole := sim.course.holes[0]
+	var before := sim.monthly_upkeep()
+	var share := (24.0 - (Defs.SUNSET - Defs.SUNRISE)) / 24.0
+	check(is_equal_approx(sim.light_on_share(), share), "light upkeep follows sunset to sunrise (%.0f%% of the day)" % (share * 100.0))
+	check(not sim.db.lights.has("dusk") and not sim.db.lights.has("dawn"), "the light data does not keep a second copy of sunset and sunrise")
+	var n := _light_hole(sim, hole)
+	check(n > 0 and hole.lit_enough(sim.course), "floodlights along the hole light it")
+	var lit_cost := sim.monthly_upkeep()
+	check(is_equal_approx(lit_cost - before, float(n) * float(Defs.O_UPKEEP[Defs.O.FLOODLIGHT]) * share), "a floodlight's upkeep is only the hours it is on")
+	var lamp := 0
+	var stand := 0
+	var c := sim.course
+	for y in range(4, c.h - 4):
+		if lamp == 1 and stand == 1:
+			break
+		for x in range(4, c.w - 4):
+			if lamp == 0 and sim.place_object(x, y, Defs.O.LAMP) == 1:
+				lamp = 1
+			elif stand == 0 and sim.place_object(x, y, Defs.O.DRINK_STAND) == 1:
+				stand = 1
+			if lamp == 1 and stand == 1:
+				break
+	check(lamp == 1 and stand == 1, "a lamp post and a drink stand go up")
+	var expect := float(Defs.O_UPKEEP[Defs.O.LAMP]) * share + float(Defs.O_UPKEEP[Defs.O.DRINK_STAND])
+	check(is_equal_approx(sim.monthly_upkeep() - lit_cost, expect), "a lamp post is on the same schedule, and a building that glows still pays in full")
+
+	var s2 := _sim("three_holes", 42)
+	s2.open = false
+	s2.events.timer = 99999.0
+	var h2 := s2.course.holes[0]
+	check(not h2.starter_holds(s2.time), "with no gap, the next party is not held")
+	h2.gap = 0.0
+	s2.nudge_gap(h2, -1)
+	check(is_equal_approx(h2.gap, 0.0), "the starter gap stops at zero")
+	h2.gap = s2.starter_max()
+	s2.nudge_gap(h2, 1)
+	check(is_equal_approx(h2.gap, s2.starter_max()), "the starter gap stops at the maximum")
+	var a := s2.visitors.add_group("public", 1, 0.5)
+	var b := s2.visitors.add_group("public", 1, 0.5)
+	var guard := 0
+	var waiting: Group = null
+	while guard < 60 * 240:
+		s2.step(1.0 / 60.0)
+		guard += 1
+		for gr in [a, b]:
+			if gr.turn != null and gr.turn.phase == Golfer.P.AIM and gr.turn.timer > 0.2:
+				gr.turn.timer = 0.05
+		var queued: Group = a if a.state == Group.S.QUEUE else (b if b.state == Group.S.QUEUE else null)
+		if queued != null and h2.teeing_group == null and h2.starter_holds(s2.time):
+			waiting = queued
+			break
+	check(waiting != null and waiting.state == Group.S.QUEUE, "the starter holds the next party after the tee is free")
+	_run(s2, 8.0)
+	check(waiting != null and waiting.state == Group.S.QUEUE and h2.starter_holds(s2.time), "and keeps holding them for the gap")
+	h2.gap = 0.0
+	guard = 0
+	while guard < 60 * 30 and waiting != null and waiting.state != Group.S.PLAY:
+		s2.step(1.0 / 60.0)
+		guard += 1
+	check(waiting != null and waiting.state == Group.S.PLAY and h2.teeing_group == waiting, "with the gap cleared, that party takes the free tee")
+
+	var s3 := _sim("three_holes", 43)
+	s3.economy.money = 400000.0
+	var holes := s3.course.holes
+	for h in holes:
+		h.lab_ready = true
+		h.open = true
+		h.kind = 0
+		h.plays = 40
+		h.fun = 99.0
+		h.par = 3
+	s3._judge_themes()
+	check(holes[0].themes.is_empty(), "a breather is not named, however much golfers love it")
+	for h in holes:
+		h.kind = 1
+		h.plays = 10
+		h.fun = 50.0
+		h.par = 4
+	var p3 := holes[0]
+	p3.par = 3
+	p3.plays = 25
+	p3.fun = 80.0
+	var lesser := holes[1]
+	lesser.par = 3
+	lesser.plays = 25
+	lesser.fun = 72.0
+	holes[2].par = 4
+	holes[2].plays = 40
+	holes[2].fun = 95.0
+	holes[2].kind = 2
+	s3._judge_themes()
+	check(p3.themes.has("par3") and not lesser.themes.has("par3") and not holes[2].themes.has("par3"), "the best par 3 is named, and a higher-scoring par 4 is not")
+	var g := s3.visitors.make_golfer("public", 0.5)
+	g.persona = {}
+	g.wealth = 0.5
+	var paid := s3.visitors.worth(g, p3)
+	p3.themes.clear()
+	var plain := s3.visitors.worth(g, p3)
+	var fee := float(s3._theme("par3").get("fee", 0.0))
+	check(fee > 0.0 and is_equal_approx(paid, plain * (1.0 + fee)), "the award adds the fee from the data")
+	p3.themes.append("par3")
+	p3.fun = 40.0
+	s3._slip_themes()
+	check(not p3.themes.has("par3"), "the award is taken back when the hole slips")
+	for h in holes:
+		h.fun = 50.0
+		h.themes.clear()
+	var water := holes[1]
+	water.par = 4
+	water.kind = 2
+	water.plays = 25
+	water.fun = 84.0
+	var spot := water.pin
+	var tile := s3.course.tile_of(spot.x, spot.z)
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var tx := tile.x + dx
+			var ty := tile.y + dy
+			if s3.course.in_bounds(tx, ty):
+				s3.course.terrain[ty * s3.course.w + tx] = Defs.T.WATER
+	check(water.touches_water(s3.course), "water beside the pin makes it a water hole")
+	s3._judge_themes()
+	check(water.themes.has("water") and not p3.themes.has("water"), "the best water hole is named")
+	for h in holes:
+		h.fun = 50.0
+	var night := holes[2]
+	night.par = 4
+	night.kind = 2
+	night.plays = 25
+	night.fun = 86.0
+	check(_light_hole(s3, night) > 0 and night.lit_enough(s3.course), "lights make a night hole")
+	s3._judge_themes()
+	check(night.themes.has("night"), "the best night hole is named")
+	p3.gap = 30.0
+	p3.themes.append("par3")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(s3.to_dict()))
+	var back := Sim.from_dict(db, saved, gear)
+	check(is_equal_approx(back.course.holes[0].gap, 30.0) and back.course.holes[0].themes.has("par3"), "a save keeps the starter gap and the awards")
+	var course_d: Dictionary = saved.course
+	var hs: Array = course_d.holes
+	var h0: Dictionary = hs[0]
+	h0.erase("themes")
+	h0.erase("gap")
+	var old := Sim.from_dict(db, saved, gear)
+	check(old.course.holes[0].gap == 0.0 and old.course.holes[0].themes.is_empty(), "an older save, with neither stored, still loads")
+	var stacked: Dictionary = JSON.parse_string(JSON.stringify(s3.to_dict()))
+	var stacked_course: Dictionary = stacked.course
+	var stacked_holes: Array = stacked_course.holes
+	var stacked_h: Dictionary = stacked_holes[0]
+	stacked_h["themes"] = ["par3", "par3", "bogus"]
+	var once := Sim.from_dict(db, stacked, gear)
+	var once_h := once.course.holes[0]
+	check(once_h.themes.size() == 1 and str(once_h.themes[0]) == "par3" and is_equal_approx(once.theme_fee(once_h), 0.06), "a repeated award in a save loads once, and the fee is 6%")
+	for i in s3.course.objects.size():
+		if s3.course.objects[i] == Defs.O.FLOODLIGHT:
+			s3.remove_object(i % s3.course.w, i / s3.course.w)
+	check(not night.lit_enough(s3.course), "the night hole goes dark when the lights come down")
+	s3._check_awards()
+	check(not night.themes.has("night"), "the night award is lost at the next daily check")
+	p3.fun = 80.0
+	p3.plays = 40
+	p3.par = 4
+	p3.themes.clear()
+	p3.themes.append("par3")
+	s3._check_awards()
+	check(not p3.themes.has("par3"), "a hole that is no longer a par 3 loses the award")
+	p3.par = 3
+	p3.open = false
+	p3.themes.clear()
+	p3.themes.append("par3")
+	s3._check_awards()
+	check(not p3.themes.has("par3"), "a closed hole loses the award")
+	p3.open = true
+	p3.fun = 75.0
+	p3.themes.clear()
+	p3.themes.append("par3")
+	lesser.par = 3
+	lesser.fun = 90.0
+	lesser.plays = 40
+	lesser.kind = 1
+	lesser.open = true
+	lesser.lab_ready = true
+	lesser.themes.clear()
+	s3._judge_themes()
+	check(lesser.themes.has("par3") and not p3.themes.has("par3"), "a better hole takes the award at the next yearly judging")
+	var dry_sim := _sim("three_holes", 44)
+	var dry := dry_sim.course.holes[0]
+	var ground := dry_sim.course
+	for i in ground.terrain.size():
+		if ground.terrain[i] == Defs.T.WATER:
+			ground.terrain[i] = Defs.T.ROUGH
+	check(not dry.touches_water(ground), "with the water painted out, the hole is dry")
+	var origin := Vector2(dry.tee.x, dry.tee.z)
+	var dir := dry.direction_at(0.0)
+	var behind := -1
+	var back_m := 13.0
+	while back_m > 8.0 and behind < 0:
+		var aim := origin - dir * back_m
+		var tx := int(floor(aim.x / Defs.TILE))
+		var tz := int(floor(aim.y / Defs.TILE))
+		if ground.in_bounds(tx, tz):
+			var center := Vector2((float(tx) + 0.5) * Defs.TILE, (float(tz) + 0.5) * Defs.TILE)
+			if center.distance_to(origin) < 14.0 and (center - origin).dot(dir) < -6.0:
+				behind = tz * ground.w + tx
+		back_m -= 0.5
+	check(behind >= 0, "there is a tile just behind the tee, inside 14 m")
+	ground.terrain[behind] = Defs.T.WATER
+	check(not dry.touches_water(ground), "one water tile 13 m behind the tee does not make a water hole")
 
 
 func _test_length_scale() -> void:
