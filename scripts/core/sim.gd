@@ -893,13 +893,31 @@ func hire(role_id: String) -> bool:
 func to_dict() -> Dictionary:
 	var staff := []
 	for m in crew.members:
-		staff.append(m.role.id)
+		if m.has_home:
+			staff.append({"role": m.role.id, "home": [m.home.x, m.home.y, m.home.z]})
+		else:
+			staff.append(m.role.id)
+	# The event itself is not saved. A mid-event save must not leave the
+	# tucked pins, the fast greens or the thick rough behind.
+	var course_d := course.to_dict()
+	if not tourney._pin_home.is_empty():
+		course_d["green_decel"] = 1.0
+		course_d["rough_power"] = 1.0
+		var hs: Array = course_d.get("holes", [])
+		for i in course.holes.size():
+			var hole: Hole = course.holes[i]
+			if i >= hs.size() or not tourney._pin_home.has(hole):
+				continue
+			var pin: Vector3 = tourney._pin_home[hole]
+			var hd: Dictionary = hs[i]
+			hd["pin"] = [pin.x, pin.y, pin.z]
+			hs[i] = hd
 	var d := {
 		"version": 1, "scenario": scenario.def.get("id", "free_play"), "status": scenario.status,
 		"name": course_name, "time": time, "clock": clock, "career": career.to_dict(), "money": economy.money, "rating": rating, "reputation": reputation,
 		"buzz": buzz, "stats": stats, "recent": visitors.recent, "staff": staff, "skills": skills.to_dict(),
 		"player": player.to_dict(), "hosted": tourney.hosted, "history": economy.history,
-		"weather": weather.kind, "course": course.to_dict(), "biome": str(biome.get("id", "lush")),
+		"weather": weather.kind, "course": course_d, "biome": str(biome.get("id", "lush")),
 		"members": members.to_list(), "clubhouse": clubhouse_level, "homes": homes, "gifts": gifts,
 		"feats": feats.done, "rivals": rivals, "best_rank": best_rank, "land_credits": land_credits, "debt_years": debt_years,
 		"difficulty": difficulty, "rng_seed": str(rng.seed), "rng_state": str(rng.state),
@@ -959,8 +977,15 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	for k: String in hosted:
 		sim.tourney.hosted[k] = int(hosted[k])
 	sim.weather.kind = int(d.get("weather", 0))
-	for role_id: String in d.get("staff", []):
-		sim.crew.hire(role_id)
+	for entry in d.get("staff", []):
+		if entry is String:
+			sim.crew.hire(str(entry))
+		elif entry is Dictionary:
+			var row: Dictionary = entry
+			var hired := sim.crew.hire(str(row.get("role", "")))
+			var hv: Array = row.get("home", [])
+			if hired != null and hv.size() >= 3:
+				sim.crew.station(hired, Vector3(float(hv[0]), float(hv[1]), float(hv[2])))
 	sim.grounds.refresh_layout()
 	# After everything that drew on the blank game's dice, so play continues
 	# from the save and not from the clock.

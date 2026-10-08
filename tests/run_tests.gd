@@ -57,8 +57,10 @@ func _ready() -> void:
 	_test_mood_map()
 	_test_draft_hole()
 	_test_pace()
+	_test_setup()
 	_test_landmarks()
 	_test_progress()
+	_test_station()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2828,6 +2830,60 @@ func _test_pace() -> void:
 	check(later.hole_i == 1 and absf(later.hole_time - 4.0) < 0.001, "a party further along keeps the time on the hole they are still playing")
 
 
+func _test_setup() -> void:
+	print("-- tournament setup")
+	var sim := _sim("three_holes", 11)
+	var c := sim.course
+	var hole := c.holes[0]
+	var home := hole.pin
+	var tile := c.tile_of(home.x, home.z)
+	c.guard = false
+	for dy in range(-4, 5):
+		for dx in range(-4, 5):
+			c.set_terrain(tile.x + dx, tile.y + dy, Defs.T.GREEN)
+	check(is_equal_approx(c.roll_decel(Defs.T.GREEN), Defs.T_DECEL[Defs.T.GREEN]), "an ordinary week stops a putt the usual way")
+	var g := sim.visitors.make_golfer("public", 0.5)
+	var plain := g.lie_power(Defs.T.ROUGH)
+	var def: Dictionary = sim.db.tournaments[0]
+	var friendly := sim.tourney.expected_income(def, "friendly")
+	var stern := sim.tourney.expected_income(def, "stern")
+	check(stern > friendly, "a stern week sells more tickets (%.0f against %.0f)" % [stern, friendly])
+	sim.economy.money = 100000.0
+	sim.rating = 80.0
+	check(not sim.tourney.schedule("club", "no-such-setup"), "an unknown setup is refused")
+	check(sim.tourney.schedule("club", "stern"), "the club championship can be booked stern")
+	var booked := str(sim.tourney.scheduled.get("setup", ""))
+	check(booked == "stern", "the booking remembers the setup")
+	var homes: Array[Vector3] = []
+	for h in c.holes:
+		homes.append(h.pin)
+	hole.field_at(c, hole.pin.x, hole.pin.z, 0.0)
+	sim.tourney.on_day(int(sim.tourney.scheduled.day))
+	check(is_equal_approx(c.green_decel, 0.72) and is_equal_approx(c.roll_decel(Defs.T.GREEN), Defs.T_DECEL[Defs.T.GREEN] * 0.72), "the greens are faster for the event")
+	check(g.lie_power(Defs.T.ROUGH, c) < plain and is_equal_approx(g.lie_power(Defs.T.TEE, c), g.lie_power(Defs.T.TEE)), "the rough is thicker and the tee is not")
+	check(hole.pin.distance_to(home) > 1.0 and c.terrain_at(hole.pin.x, hole.pin.z) == Defs.T.GREEN, "the pin is tucked and still on the green")
+	check(absf(hole.field_at(c, hole.pin.x, hole.pin.z, 20.0)) < 0.05, "the routing field puts the pin at the tuck")
+	var packed: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var loaded := Sim.from_dict(db, packed, gear)
+	var pins_back := true
+	for i in loaded.course.holes.size():
+		if loaded.course.holes[i].pin.distance_to(homes[i]) >= 0.05:
+			pins_back = false
+	check(is_equal_approx(loaded.course.green_decel, 1.0) and is_equal_approx(loaded.course.rough_power, 1.0) and pins_back, "a save during the event puts the greens, the rough and every pin back")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(c.to_dict()))
+	saved.erase("green_decel")
+	saved.erase("rough_power")
+	var legacy := Course.from_dict(saved)
+	check(is_equal_approx(legacy.green_decel, 1.0) and is_equal_approx(legacy.rough_power, 1.0), "an old save plays the course as the members do")
+	sim.remove_hole(0)
+	sim.tourney._finish()
+	var own := true
+	for i in c.holes.size():
+		if c.holes[i].pin.distance_to(homes[i + 1]) >= 0.05:
+			own = false
+	check(is_equal_approx(c.green_decel, 1.0) and is_equal_approx(c.rough_power, 1.0) and own and c.holes.size() == homes.size() - 1, "removing hole 1 mid-event leaves every other pin at its own pre-event spot")
+
+
 func _test_landmarks() -> void:
 	print("-- landmark powers")
 	var kinds: Array = db.landmarks.get("kinds", [])
@@ -2872,6 +2928,91 @@ func _test_landmarks() -> void:
 	sim.grounds._cursor = inside
 	sim.grounds.step(1.0)
 	check(c.weeds[inside] < c.weeds[outside], "a weed inside the circle grows less than one outside (%.3f against %.3f)" % [c.weeds[inside], c.weeds[outside]])
+
+
+func _test_station() -> void:
+	print("-- stationing staff")
+	check(db.home_radius > 20.0, "a post's radius comes from the staff data (%.0f m)" % db.home_radius)
+	var sim := _sim("three_holes", 4)
+	var c := sim.course
+	var keeper := sim.crew.hire("greenkeeper")
+	var marshal := sim.crew.hire("marshal")
+	var tx := -1
+	var ty := -1
+	for y in range(20, c.h - 20):
+		if tx >= 0:
+			break
+		for x in range(20, c.w - 20):
+			if c.terrain[y * c.w + x] == Defs.T.ROUGH:
+				tx = x
+				ty = y
+				break
+	check(tx >= 0, "the starter course has rough to station a greenkeeper on")
+	var home := c.tile_center(tx, ty)
+	sim.crew.station(keeper, home)
+	check(keeper.has_home and keeper.home.distance_to(home) < 1.0, "stationing a greenkeeper gives them that spot")
+	var reach := ceili(sim.crew.home_radius() / Defs.TILE) + 1
+	for oy in range(-reach, reach + 1):
+		for ox in range(-reach, reach + 1):
+			var x := tx + ox
+			var y := ty + oy
+			if c.in_bounds(x, y):
+				var i := y * c.w + x
+				c.health[i] = 1.0
+				c.weeds[i] = 0.0
+				c.pests[i] = 0.0
+	var near := ty * c.w + tx
+	c.health[near] = 0.0
+	c.weeds[near] = 1.0
+	var far_i := (ty + 30) * c.w + tx
+	c.health[far_i] = 0.0
+	c.weeds[far_i] = 1.0
+	keeper.pos = home
+	keeper.state = 0
+	keeper.timer = 0.0
+	sim.crew._find_job(keeper)
+	check(keeper.target_i == near, "a stationed greenkeeper takes the worn turf at their post, not the ground outside it")
+	var near_gr := sim.visitors.add_group("public", 1, 0.4)
+	near_gr.wait = 20.0
+	near_gr.members[0].pos = home
+	var far_gr := sim.visitors.add_group("public", 1, 0.4)
+	far_gr.wait = 80.0
+	far_gr.members[0].pos = c.tile_center(tx, ty + 40)
+	sim.crew.station(marshal, home)
+	marshal.pos = c.tile_center(tx + 20, ty)
+	sim.crew._find_marshal_job(marshal)
+	check(marshal.target.distance_to(near_gr.members[0].pos) < 15.0, "a stationed marshal goes to the queue inside the circle")
+	check(marshal.target.distance_to(far_gr.members[0].pos) > 100.0, "and leaves the longer queue outside it")
+	near_gr.wait = 0.0
+	far_gr.wait = 0.0
+	sim.crew._find_marshal_job(marshal)
+	check(marshal.target.distance_to(marshal.home) < 1.0, "with nobody waiting in the circle, the marshal walks back to the post")
+	sim.crew.clear_station(marshal)
+	near_gr.wait = 20.0
+	far_gr.wait = 80.0
+	sim.crew._find_marshal_job(marshal)
+	check(marshal.target.distance_to(far_gr.members[0].pos) < 20.0, "with no post, the marshal goes to the longest wait on the course")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var saw_home := false
+	var saw_string := false
+	for entry in saved.staff:
+		if entry is String:
+			saw_string = true
+		elif entry is Dictionary:
+			var row: Dictionary = entry
+			if row.has("home"):
+				saw_home = true
+	check(saw_home and saw_string, "a post is saved with the member, and staff without one stay a role name")
+	var back := Sim.from_dict(db, saved, gear)
+	var posted := 0
+	for m in back.crew.members:
+		if m.has_home:
+			posted += 1
+			check(m.home.distance_to(home) < 1.0, "a loaded post is the same spot")
+	check(posted == 1 and back.crew.members.size() == 2, "the post survives a save, and so does the member who roams")
+	saved["staff"] = ["marshal"]
+	var legacy := Sim.from_dict(db, saved, gear)
+	check(legacy.crew.members.size() == 1 and not legacy.crew.members[0].has_home, "an old save, with only role names, still hires them and they roam")
 
 
 func _test_bar_and_vending() -> void:
