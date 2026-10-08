@@ -1,0 +1,7 @@
+{
+	"spots": ["middle", "front", "back"],
+	"front": 6,
+	"back": 6,
+	"radius": 2,
+	"wear": 0.0004
+}

@@ -194,6 +194,33 @@ func step(dt: float) -> void:
 				_acc_weed += 1.0
 			if pv > 0.3:
 				_acc_pest += 1.0
+	wear_around_pins(dt)
+
+
+## Extra wear on the green around each cup, so a pin that stays put tires
+## the same spot and a pin that moves spreads it. `dt` is sim seconds.
+func wear_around_pins(dt: float) -> void:
+	var spec: Dictionary = sim.db.pins
+	var rate := float(spec.get("wear", 0.0)) * dt
+	if rate <= 0.0 or sim.course.holes.is_empty():
+		return
+	var reach := int(spec.get("radius", 2))
+	var course := sim.course
+	var seen := {}
+	for hole in course.holes:
+		var t := course.tile_of(hole.pin.x, hole.pin.z)
+		for ty in range(t.y - reach, t.y + reach + 1):
+			for tx in range(t.x - reach, t.x + reach + 1):
+				if not course.in_bounds(tx, ty):
+					continue
+				var i := ty * course.w + tx
+				if seen.has(i) or not Defs.is_green(course.terrain[i]):
+					continue
+				var centre := course.tile_center(tx, ty)
+				if Vector2(centre.x - hole.pin.x, centre.z - hole.pin.z).length() > float(reach) * Defs.TILE:
+					continue
+				seen[i] = true
+				course.health[i] = maxf(0.0, course.health[i] - rate)
 
 
 ## Keep the bin and source lists current. Rebuilt only when an object moves,

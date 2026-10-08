@@ -29,10 +29,22 @@ var sim: Sim
 var members: Array[Member] = []
 var _claimed := {}
 var _next_id := 1
+## The cup a greenkeeper still has to mow, after the morning move. One tile,
+## then they go back to the weeds.
+var pin_cut := -1
 
 
 func _init(s: Sim) -> void:
 	sim = s
+
+
+func post_pins(points: Array[Vector3]) -> void:
+	if points.is_empty():
+		return
+	var p := points[0]
+	var t := sim.course.tile_of(p.x, p.z)
+	if sim.course.in_bounds(t.x, t.y):
+		pin_cut = t.y * sim.course.w + t.x
 
 
 func count(role_id: String) -> int:
@@ -255,11 +267,22 @@ func _find_job(m: Member) -> void:
 		if score > best_score:
 			best_score = score
 			best = i
+	# The morning cup is one more patch to mow. Weeds close by still win.
+	if m.role.id == "greenkeeper" and pin_cut >= 0 and not _claimed.has(pin_cut):
+		var cut := pin_cut
+		var cx := (cut % course.w + 0.5) * Defs.TILE
+		var cz := (int(cut / course.w) + 0.5) * Defs.TILE
+		var score := 0.55 - Vector2(cx - m.pos.x, cz - m.pos.z).length() / 300.0
+		if score > best_score:
+			best_score = score
+			best = cut
 	if best < 0:
 		m.timer = 2.5
 		return
 	m.target_i = best
 	_claimed[best] = true
+	if best == pin_cut:
+		pin_cut = -1
 	m.target = course.tile_center(best % course.w, best / course.w)
 	m.state = 1
 

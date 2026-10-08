@@ -297,6 +297,7 @@ func _new_day(d: int) -> void:
 		_end_month(d)
 	if d % Defs.DAYS_PER_YEAR == 0 and d > 0:
 		_end_year(d / Defs.DAYS_PER_YEAR)
+	move_pins()
 
 
 # ------------------------------------------------------- names and standing
@@ -1400,6 +1401,50 @@ func move_hole(i: int, dir: int) -> bool:
 
 func hire(role_id: String) -> bool:
 	return crew.hire(role_id) != null
+
+
+## Move each cup to today's spot on the green. A greenkeeper has to be on
+## staff, and a tournament that is holding the pins is left alone. Par and
+## length stay on the pin that was placed.
+func move_pins() -> void:
+	if crew.count("greenkeeper") < 1 or tourney.pins_held():
+		return
+	var spec: Dictionary = db.pins
+	var front_m := float(spec.get("front", 8.0))
+	var back_m := float(spec.get("back", 8.0))
+	var names: Array = spec.get("spots", [])
+	var today := day()
+	var moved := false
+	var visits: Array[Vector3] = []
+	for i in course.holes.size():
+		var hole := course.holes[i]
+		if not hole.groups.is_empty() or hole.teeing_group != null or not hole.line.is_empty():
+			continue
+		var spot := 0
+		if names.size() > 0:
+			spot = (today + i) % names.size()
+		var cup := course.day_cup(hole, spot, front_m, back_m)
+		hole.pin_spot = spot
+		if hole.pin.distance_squared_to(cup) > 0.01:
+			hole.pin = cup
+			moved = true
+		visits.append(hole.pin)
+	if not moved:
+		return
+	course.revision += 1
+	course.holes_changed.emit()
+	crew.post_pins(visits)
+	toast.emit("The greenkeepers have moved the pins.", "info")
+
+
+## middle, front, back, or held while a tournament has the pins.
+func pin_spot_name(hole: Hole) -> String:
+	if tourney.pins_held():
+		return "held"
+	var names: Array = db.pins.get("spots", [])
+	if hole.pin_spot < 0 or hole.pin_spot >= names.size():
+		return "middle"
+	return str(names[hole.pin_spot])
 
 
 # ---------------------------------------------------------- save and load

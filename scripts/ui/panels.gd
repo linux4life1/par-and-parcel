@@ -507,6 +507,10 @@ func _holes(body: VBoxContainer) -> Callable:
 			if hole.plays > 0:
 				txt = "Average %.1f  ·  %d played  ·  best %d" % [hole.average_score(), hole.plays, hole.best]
 			txt += "  ·  fun %d" % int(hole.fun)
+			if sim.tourney.pins_held():
+				txt += "\nSunday pin, held for the tournament."
+			else:
+				txt += "\nThe pin is in the %s of the green." % sim.pin_spot_name(hole)
 			var lit := int(round(hole.lit_share(sim.course) * 100.0))
 			if hole.lit_enough(sim.course):
 				txt += "\nLit for night golf (%d%% of the hole)" % lit

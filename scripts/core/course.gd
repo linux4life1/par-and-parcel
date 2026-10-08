@@ -568,6 +568,8 @@ func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 	var hole := Hole.new()
 	hole.tee = on_ground(tee.x, tee.z)
 	hole.pin = on_ground(pin.x, pin.z)
+	hole.placed = hole.pin
+	hole.pin_spot = 0
 	hole.update_metrics(self)
 	holes.append(hole)
 	revision += 1
@@ -666,6 +668,32 @@ func roll_decel(t: int) -> float:
 	if Defs.is_green(t):
 		d *= green_decel
 	return d
+
+
+## Where the day's cup sits. Spot 0 is the placed pin. Spot 1 is toward the
+## tee, spot 2 is past the placed pin, and either one stops at the edge of
+## the green.
+func day_cup(hole: Hole, spot: int, front_m: float, back_m: float) -> Vector3:
+	var home := hole.placed if hole.placed.length_squared() > 0.01 else hole.pin
+	if spot == 0:
+		return on_ground(home.x, home.z)
+	var away := Vector3(home.x - hole.tee.x, 0.0, home.z - hole.tee.z)
+	if away.length_squared() < 0.01:
+		away = Vector3(0.0, 0.0, 1.0)
+	away = away.normalized()
+	var dir := -away if spot == 1 else away
+	var metres := front_m if spot == 1 else back_m
+	var step := Defs.TILE * 0.5
+	var best := home
+	var travelled := 0.0
+	while travelled + 0.01 < metres:
+		var next := minf(travelled + step, metres)
+		var p := home + dir * next
+		if not Defs.is_green(terrain_at(p.x, p.z)):
+			break
+		best = p
+		travelled = next
+	return on_ground(best.x, best.z)
 
 
 ## Move the pin off the centre line by metres, staying on the green.

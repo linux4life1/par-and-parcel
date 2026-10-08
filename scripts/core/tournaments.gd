@@ -335,6 +335,10 @@ func _sort() -> void:
 
 
 ## Put the chosen setup on the course: green speed, rough, and tucked pins.
+func pins_held() -> bool:
+	return not _pin_home.is_empty()
+
+
 func apply_setup(id: String) -> void:
 	if not _pin_home.is_empty():
 		clear_setup()

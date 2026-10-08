@@ -75,6 +75,7 @@ func _ready() -> void:
 	_test_slope()
 	_test_debt_welcome()
 	_test_close_structure()
+	_test_pins()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -5042,3 +5043,60 @@ func _test_storm_resign() -> void:
 	mem.on_depart(last)
 	check(not mem.roster.has(card), "the third strike resigns them")
 	check(Members.strike_limit(0) == 1 and Members.strike_limit(-3) == 1, "a resign strike count below 1 is raised to 1")
+
+
+func _test_pins() -> void:
+	print("-- rotating pins")
+	var sim := _sim("sandbox", 41)
+	var c := sim.course
+	check(sim.paint(40, 50, 6, Defs.T.GREEN) > 0, "a green big enough for three pin spots")
+	var hole := sim.add_hole(c.tile_center(40, 28), c.tile_center(40, 50))
+	check(hole != null, "a hole is laid out on that green")
+	if hole == null:
+		return
+	var placed := hole.pin
+	var par := hole.par
+	var length := hole.length
+	sim.time = Defs.DAY_SECONDS
+	sim.move_pins()
+	check(hole.pin.distance_squared_to(placed) < 0.01 and hole.pin_spot == 0, "with no greenkeeper the pin stays where it was placed")
+	check(sim.hire("greenkeeper"), "a greenkeeper is hired")
+	sim.move_pins()
+	check(hole.pin.z < placed.z - 1.0 and Defs.is_green(c.terrain_at(hole.pin.x, hole.pin.z)), "the next day the cup moves toward the tee and stays on the green")
+	check(hole.par == par and is_equal_approx(hole.length, length) and hole.placed.distance_squared_to(placed) < 0.01, "par and length stay on the placed pin")
+	check(sim.pin_spot_name(hole) == "front", "the day's spot is the front")
+	var keeper: Crew.Member = sim.crew.members[0]
+	keeper.pos = hole.pin
+	keeper.state = 0
+	keeper.timer = 0.0
+	sim.crew.step(0.05)
+	check(keeper.state == 1 and c.tile_of(keeper.target.x, keeper.target.z) == c.tile_of(hole.pin.x, hole.pin.z), "the greenkeeper walks to the new cup")
+	var under := c.tile_of(hole.pin.x, hole.pin.z)
+	var ui := under.y * c.w + under.x
+	var far := 10 * c.w + 10
+	c.terrain[far] = Defs.T.GREEN
+	c.health[ui] = 1.0
+	c.health[far] = 1.0
+	sim.grounds.wear_around_pins(200.0)
+	check(c.health[ui] < c.health[far] - 0.05 and is_equal_approx(c.health[far], 1.0), "the green around the cup wears and a green far away does not")
+	var saved := Sim.from_dict(db, JSON.parse_string(JSON.stringify(sim.to_dict())), gear)
+	var loaded: Hole = saved.course.holes[0]
+	check(loaded.pin.distance_squared_to(hole.pin) < 0.01 and loaded.placed.distance_squared_to(hole.placed) < 0.01 and loaded.pin_spot == hole.pin_spot, "a save keeps the day's cup and the placed pin")
+	var raw := hole.to_dict()
+	raw.erase("placed")
+	raw.erase("pin_spot")
+	var old := Hole.from_dict(raw)
+	check(old.placed.distance_squared_to(old.pin) < 0.01 and old.pin_spot == 0, "an older save, with no placed pin, treats the cup as the middle")
+	sim.time = Defs.DAY_SECONDS * 2.0
+	sim.move_pins()
+	check(hole.pin.z > placed.z + 1.0 and hole.pin_spot == 2, "the day after, the cup is past the placed pin")
+	sim.time = Defs.DAY_SECONDS * 3.0
+	sim.move_pins()
+	check(hole.pin.distance_squared_to(placed) < 0.25 and hole.pin_spot == 0, "on the third day the cup is back in the middle")
+	var held := hole.pin
+	sim.tourney.apply_setup("stern")
+	var sunday := hole.pin
+	check(sunday.distance_squared_to(held) > 0.25, "the stern setup tucks the pin for Sunday")
+	sim.time = Defs.DAY_SECONDS * 4.0
+	sim.move_pins()
+	check(hole.pin.distance_squared_to(sunday) < 0.01 and sim.pin_spot_name(hole) == "held", "a day during the tournament does not move the Sunday pin")
