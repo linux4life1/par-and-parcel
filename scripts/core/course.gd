@@ -27,6 +27,8 @@ var locked := PackedByteArray()       # 1 where the land is not yours yet
 var hot := PackedByteArray()          # 1 on the volcano: nothing can be built
 var guard := false                    # when set, edits skip locked and hot tiles
 var clear_cost := 0.0                 # extra cost run up by the last paint call
+var green_decel := 1.0                # tournament setup: multiplies how fast a putt stops
+var rough_power := 1.0                # tournament setup: multiplies the rough's share of a full swing
 var _objects_dirty := false
 var biome: Dictionary = {}            # what the land is; decides what each object looks like
 var _solids: Solids = null
@@ -548,6 +550,37 @@ func set_open(hole: Hole, on: bool) -> void:
 	holes_changed.emit()
 
 
+## How quickly a rolling ball stops on this ground. A tournament can speed
+## or slow the greens without touching any other surface.
+func roll_decel(t: int) -> float:
+	var d: float = Defs.T_DECEL[t]
+	if t == Defs.T.GREEN:
+		d *= green_decel
+	return d
+
+
+## Move the pin off the centre line by metres, staying on the green.
+## Returns where it was.
+func tuck_pin(hole: Hole, metres: float) -> Vector3:
+	var was := hole.pin
+	if metres <= 0.05:
+		return was
+	var back := hole.tee - hole.pin
+	back.y = 0.0
+	if back.length_squared() < 0.01:
+		back = Vector3(1, 0, 0)
+	var side := Vector3(-back.z, 0.0, back.x).normalized()
+	for i in 9:
+		var dist := metres * (1.0 - float(i) / 8.0)
+		var p := was + side * dist
+		if terrain_at(p.x, p.z) == Defs.T.GREEN:
+			hole.pin = on_ground(p.x, p.z)
+			revision += 1
+			holes_changed.emit()
+			return was
+	return was
+
+
 func total_par() -> int:
 	var p := 0
 	for hole in holes:
@@ -577,6 +610,8 @@ func to_dict() -> Dictionary:
 		"volcanoes": volcanoes,
 		"locked": Marshalls.raw_to_base64(locked),
 		"hot": Marshalls.raw_to_base64(hot),
+		"green_decel": green_decel,
+		"rough_power": rough_power,
 	}
 
 
@@ -602,6 +637,8 @@ static func from_dict(d: Dictionary) -> Course:
 	if d.has("locked"):
 		c.locked = Marshalls.base64_to_raw(d.locked)
 		c.hot = Marshalls.base64_to_raw(d.hot)
+	c.green_decel = float(d.get("green_decel", 1.0))
+	c.rough_power = float(d.get("rough_power", 1.0))
 	c.guard = true
 	for hd: Dictionary in d.holes:
 		var hole := Hole.from_dict(hd)

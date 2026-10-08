@@ -1,0 +1,8 @@
+{
+	"_about": "How a tournament is set up for the week. green_decel multiplies how quickly a ball stops on the green (below 1 is a faster green). rough_power multiplies how much of a full swing the rough allows (below 1 is thicker). pin_tuck is how far, in metres, each pin is moved off the centre line, staying on the green. gate multiplies ticket income.",
+	"setups": [
+		{"id": "friendly", "name": "Friendly", "green_decel": 1.18, "rough_power": 1.1, "pin_tuck": 0, "gate": 0.85, "blurb": "Slower greens, lighter rough, pins left alone. A smaller gate."},
+		{"id": "standard", "name": "Standard", "green_decel": 1, "rough_power": 1, "pin_tuck": 0, "gate": 1, "blurb": "The course as the members play it."},
+		{"id": "stern", "name": "Stern", "green_decel": 0.72, "rough_power": 0.8, "pin_tuck": 6, "gate": 1.35, "blurb": "Faster greens, thicker rough, pins tucked off the centre. The gate pays more."}
+	]
+}

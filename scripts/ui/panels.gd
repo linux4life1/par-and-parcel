@@ -864,6 +864,24 @@ func _tournaments(body: VBoxContainer) -> Callable:
 	var sim := hud.sim
 	var t := sim.tourney
 	body.add_child(UIKit.para("You put up the prize purse. Sponsors and ticket sales pay you back, and pay more when the players like the course. The course closes to the public while an event is on. Each event can be held once a year."))
+	var choice := ["standard"]
+	var setup_ids: Array[String] = []
+	var setup_blurbs: Array[String] = []
+	var setup_btns: Array[Button] = []
+	var setup_row := UIKit.hbox(4)
+	body.add_child(setup_row)
+	setup_row.add_child(UIKit.label("Setup", 13, UIKit.MUTED))
+	for s: Dictionary in sim.db.setups:
+		var sid := str(s.id)
+		setup_ids.append(sid)
+		setup_blurbs.append(str(s.blurb))
+		var b := UIKit.button(str(s.name), func() -> void: choice[0] = sid)
+		b.toggle_mode = true
+		b.add_theme_font_size_override("font_size", 13)
+		setup_row.add_child(b)
+		setup_btns.append(b)
+	var setup_blurb := UIKit.para("", 13, UIKit.MUTED)
+	body.add_child(setup_blurb)
 	var status := UIKit.card(Color(0.3, 0.7, 0.4, 0.14))
 	body.add_child(status)
 	var sv := UIKit.vbox(4)
@@ -903,7 +921,7 @@ func _tournaments(body: VBoxContainer) -> Callable:
 		fh.add_child(reason)
 		fh.add_child(UIKit.spacer())
 		var id := str(def.id)
-		var host := UIKit.button("Host it", func() -> void: t.schedule(id))
+		var host := UIKit.button("Host it", func() -> void: t.schedule(id, choice[0]))
 		fh.add_child(host)
 		rows.append([def, money, reason, host, done])
 	return func() -> void:
@@ -930,7 +948,8 @@ func _tournaments(body: VBoxContainer) -> Callable:
 		elif not t.scheduled.is_empty():
 			var def: Dictionary = t.scheduled.def
 			s_title.text = "%s: booked" % def.name
-			s_body.text = "Starts %s, in %d days. Get the course in shape." % [Defs.date_text(int(t.scheduled.day)), int(t.scheduled.day) - sim.day()]
+			var setup := t.setup_of(str(t.scheduled.get("setup", "standard")))
+			s_body.text = "Starts %s, in %d days, %s setup. Get the course in shape." % [Defs.date_text(int(t.scheduled.day)), int(t.scheduled.day) - sim.day(), str(setup.get("name", "Standard"))]
 			s_board.visible = false
 			cancel.visible = true
 			status.visible = true
@@ -943,10 +962,14 @@ func _tournaments(body: VBoxContainer) -> Callable:
 			status.visible = true
 		else:
 			status.visible = false
+		for i in setup_btns.size():
+			setup_btns[i].set_pressed_no_signal(setup_ids[i] == choice[0])
+			if setup_ids[i] == choice[0]:
+				setup_blurb.text = setup_blurbs[i]
 		for row: Array in rows:
 			var def: Dictionary = row[0]
 			var why := t.can_host(def)
-			(row[1] as Label).text = "Purse %s  ·  expected income %s" % [Defs.money(float(def.purse)), Defs.money(t.expected_income(def))]
+			(row[1] as Label).text = "Purse %s  ·  expected income %s" % [Defs.money(float(def.purse)), Defs.money(t.expected_income(def, choice[0]))]
 			(row[2] as Label).text = why
 			(row[3] as Button).disabled = why != ""
 			var n := int(t.hosted.get(str(def.id), 0))

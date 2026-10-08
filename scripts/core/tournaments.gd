@@ -29,6 +29,7 @@ var _gallery_rng := RandomNumberGenerator.new()   # its own dice: the crowd neve
 var size_override := 0       # tests and screenshots: force the gallery's size
 var _knot := {}              # the knot of spectators being filled while the gallery is laid out
 var _knot_left := 0
+var _pin_home: Dictionary = {}   # Hole -> Vector3, where that pin was before the tuck
 
 
 func _init(s: Sim) -> void:
@@ -54,15 +55,25 @@ func can_host(def: Dictionary) -> String:
 	return ""
 
 
-func expected_income(def: Dictionary) -> float:
-	return (float(def.sponsor) + float(def.gate) * sim.rating) * sim.skills.mult("tourney_income")
+func setup_of(id: String) -> Dictionary:
+	var found := DataDB.find(sim.db.setups, id)
+	if not found.is_empty():
+		return found
+	return DataDB.find(sim.db.setups, "standard")
 
 
-func schedule(id: String) -> bool:
+func expected_income(def: Dictionary, setup_id: String = "standard") -> float:
+	var gate := float(def.gate) * float(setup_of(setup_id).get("gate", 1.0))
+	return (float(def.sponsor) + gate * sim.rating) * sim.skills.mult("tourney_income")
+
+
+func schedule(id: String, setup_id: String = "standard") -> bool:
 	var def := DataDB.find(sim.db.tournaments, id)
 	if def.is_empty() or can_host(def) != "":
 		return false
-	scheduled = {"def": def, "day": sim.day() + int(def.lead_days)}
+	if DataDB.find(sim.db.setups, setup_id).is_empty():
+		return false
+	scheduled = {"def": def, "day": sim.day() + int(def.lead_days), "setup": setup_id}
 	sim.feed.say("tournament_announce", null, {"event": def.name}, true)
 	sim.toast.emit("%s booked for %s." % [def.name, Defs.date_text(int(scheduled.day))], "good")
 	return true
@@ -82,11 +93,13 @@ func on_day(d: int) -> void:
 
 func _start() -> void:
 	var def: Dictionary = scheduled.def
+	var setup_id := str(scheduled.get("setup", "standard"))
 	scheduled = {}
 	if sim.course.holes.is_empty():
 		sim.toast.emit("%s was called off: there are no holes to play." % def.name, "bad")
 		return
-	active = {"def": def, "to_spawn": int(def.field), "spawn_t": 6.0, "groups": []}
+	active = {"def": def, "to_spawn": int(def.field), "spawn_t": 6.0, "groups": [], "setup": setup_id}
+	apply_setup(setup_id)
 	board.clear()
 	sim.open = false
 	player_in = false
@@ -321,8 +334,43 @@ func _sort() -> void:
 		return int(a.thru) > int(b.thru))
 
 
+## Put the chosen setup on the course: green speed, rough, and tucked pins.
+func apply_setup(id: String) -> void:
+	if not _pin_home.is_empty():
+		clear_setup()
+	var s := setup_of(id)
+	sim.course.green_decel = float(s.get("green_decel", 1.0))
+	sim.course.rough_power = float(s.get("rough_power", 1.0))
+	var tuck := float(s.get("pin_tuck", 0.0))
+	_pin_home.clear()
+	for hole in sim.course.holes:
+		_pin_home[hole] = sim.course.tuck_pin(hole, tuck)
+
+
+## Greens, rough and pins go back to how the members play them.
+## A hole taken out during the event is skipped: its home pin is not
+## written onto whichever hole now sits at that index.
+func clear_setup() -> void:
+	var moved := false
+	for hole in sim.course.holes:
+		if not _pin_home.has(hole):
+			continue
+		var back: Vector3 = _pin_home[hole]
+		if hole.pin.distance_squared_to(back) > 0.0001:
+			hole.pin = back
+			moved = true
+	_pin_home.clear()
+	sim.course.green_decel = 1.0
+	sim.course.rough_power = 1.0
+	if moved:
+		sim.course.revision += 1
+		sim.course.holes_changed.emit()
+
+
 func _finish() -> void:
 	var def: Dictionary = active.def
+	var setup_id := str(active.get("setup", "standard"))
+	clear_setup()
 	active = {}
 	sim.open = true
 	var holes := sim.course.holes.size()
@@ -345,7 +393,7 @@ func _finish() -> void:
 	var avg_sat := sat / maxf(count, 1.0)
 	var mult := sim.skills.mult("tourney_income")
 	var sponsor := float(def.sponsor) * (0.6 + 0.8 * avg_sat / 100.0) * mult
-	var gate := float(def.gate) * sim.rating * (1.0 - 0.4 * sim.weather.rain) * mult
+	var gate := float(def.gate) * float(setup_of(setup_id).get("gate", 1.0)) * sim.rating * (1.0 - 0.4 * sim.weather.rain) * mult
 	var purse := float(def.purse)
 	# The owner keeps a share of the purse for a top-three finish.
 	var place := -1

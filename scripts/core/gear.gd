@@ -93,15 +93,15 @@ func _first_club(lie: int) -> int:
 
 
 ## The longest total distance this golfer can hit from a lie.
-func max_total(g: Golfer, lie: int) -> float:
+func max_total(g: Golfer, lie: int, course: Course = null) -> float:
 	var ci := _first_club(lie)
-	return total_at(ci, full_speed(g, ci) * g.lie_power(lie))
+	return total_at(ci, full_speed(g, ci) * g.lie_power(lie, course))
 
 
 ## Shortest club that covers the distance. Returns [club index, launch speed].
-func pick(g: Golfer, dist: float, lie: int) -> Array:
+func pick(g: Golfer, dist: float, lie: int, course: Course = null) -> Array:
 	var first := _first_club(lie)
-	var lp := g.lie_power(lie)
+	var lp := g.lie_power(lie, course)
 	for ci in range(n_clubs - 1, first - 1, -1):
 		if ci == putter_i:
 			continue

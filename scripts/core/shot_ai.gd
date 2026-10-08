@@ -33,7 +33,7 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 
 	var gear := sim.gear
 	var base_ang := to_pin.angle()
-	var maxd := gear.max_total(g, lie)
+	var maxd := gear.max_total(g, lie, course)
 	var dists: Array[float] = []
 	if d <= maxd:
 		dists.append(d)
@@ -73,7 +73,7 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 	var aim := best_target - p2
 	var dist := aim.length()
 	var heading := aim.angle()
-	var pick := gear.pick(g, dist, lie)
+	var pick := gear.pick(g, dist, lie, course)
 	var ci: int = pick[0]
 	var speed: float = pick[1]
 	# Golfers allow for the lie, the wind, the slope and wet ground: the
@@ -87,7 +87,7 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 			miss = miss.normalized() * dist * 0.4
 		aim = best_target - miss * comp - p2
 		heading = aim.angle()
-		pick = gear.pick(g, aim.length(), lie)
+		pick = gear.pick(g, aim.length(), lie, course)
 		ci = pick[0]
 		speed = pick[1]
 	return {"putt": false, "ci": ci, "speed": speed, "heading": heading, "dist": dist,
@@ -181,7 +181,7 @@ static func putt_speed(sim: Sim, g: Golfer, from: Vector3, to: Vector3, over: fl
 	var wetv := 0.2
 	if ti >= 0:
 		wetv = course.wet[ti] * g.ball.m_wet
-	var decel: float = Defs.T_DECEL[Defs.T.GREEN] * (1.0 + 1.6 * wetv) / g.ball.m_roll
+	var decel: float = course.roll_decel(Defs.T.GREEN) * (1.0 + 1.6 * wetv) / g.ball.m_roll
 	if wetv < 0.12:
 		decel *= 0.88
 	var d := Vector2(to.x - from.x, to.z - from.z).length()
@@ -259,7 +259,7 @@ static func strike(sim: Sim, g: Golfer) -> void:
 		var sit_power := float(lr.power)
 		if sit_power < 1.0:
 			# a golfer who reads the lie swings harder to make up for it
-			speed = minf(speed / lerpf(1.0, sit_power, 0.75 * g.imagination), sim.gear.full_speed(g, pl.ci) * g.lie_power(lie))
+			speed = minf(speed / lerpf(1.0, sit_power, 0.75 * g.imagination), sim.gear.full_speed(g, pl.ci) * g.lie_power(lie, sim.course))
 		speed *= sit_power
 		var bs: float = brand.get("spread", 1.0)
 		var sig := g.spread() * bs * Defs.T_LIE_SPREAD[lie] * float(lr.spread) * (1.0 + blind * 0.45)
