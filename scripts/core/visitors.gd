@@ -616,7 +616,7 @@ func plan_stop(gr: Group) -> Dictionary:
 				var toward := (here - spot)
 				toward.y = 0.0
 				var front := spot + toward.normalized() * 4.0 if toward.length() > 0.1 else spot
-				best = {"kind": kind, "pos": sim.course.on_ground(front.x, front.z), "timer": 4.0}
+				best = {"kind": kind, "pos": sim.course.on_ground(front.x, front.z), "spot": spot, "timer": 4.0}
 	return best
 
 

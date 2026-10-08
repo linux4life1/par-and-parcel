@@ -1281,7 +1281,8 @@ func _show_structure(tile: Vector2i) -> void:
 		inspect(null)
 		return
 	var off := c.is_closed(i)
-	var tip := "Switch it back on." if off else "Switch it off to stop the upkeep. Golfers cannot use it, and it throws no light, until you open it again."
+	var still := off and c.open_month[i] != 0
+	var tip := "Switch it back on." if off else "Switch it off. Golfers cannot use it, and it throws no light, until you open it again. The saving starts next month."
 	var head := UIKit.hbox()
 	inspector_body.add_child(head)
 	head.add_child(UIKit.label(sim.object_name(o), 17))
@@ -1291,8 +1292,10 @@ func _show_structure(tile: Vector2i) -> void:
 			return
 		_update_inspector(true), tip))
 	inspector_body.add_child(UIKit.label("Closed" if off else "Open", 13, UIKit.BAD if off else UIKit.GOOD))
-	var bill := 0.0 if off else float(Defs.O_UPKEEP[o])
+	var bill := 0.0 if off and not still else float(Defs.O_UPKEEP[o])
 	inspector_body.add_child(UIKit.row("Upkeep", "%s a month" % Defs.money(bill)))
+	if still:
+		inspector_body.add_child(UIKit.label("The saving starts next month.", 13, UIKit.MUTED))
 
 
 # ------------------------------------------------------------- per frame

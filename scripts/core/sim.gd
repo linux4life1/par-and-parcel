@@ -346,6 +346,7 @@ func _end_month(d: int) -> void:
 	economy.earn("real_estate", homes * 45.0)
 	economy.spend("wages", crew.monthly_wages())
 	economy.spend("upkeep", monthly_upkeep())
+	course.settle_month()
 	if economy.money < 0.0:
 		economy.spend("interest", -economy.money * 0.02)
 	var prev := Defs.date_parts(d - 1)
@@ -361,9 +362,13 @@ func monthly_upkeep() -> float:
 	var share := light_on_share()
 	var objs := course.objects
 	for i in objs.size():
-		if course.is_closed(i):
-			continue
 		var o := int(objs[i])
+		if o == 0:
+			continue
+		# Open now, or open earlier this month: closing just before the bill
+		# does not make the month free.
+		if course.is_closed(i) and course.open_month[i] == 0:
+			continue
 		var cost := float(Defs.O_UPKEEP[o])
 		if _light_kind(o):
 			cost *= share
@@ -880,9 +885,19 @@ func build_block(o: int) -> String:
 	var need: int = Defs.O_MIN_HOLES[o]
 	if course.holes.size() < need and str(scenario.def.get("id", "")) != "sandbox":
 		return "Needs %d holes" % need
-	if o == Defs.O.LANDMARK and int(visitors.amenity_counts().get("landmark", 0)) >= 2 and int(gifts.get(o, 0)) == 0:
+	if o == Defs.O.LANDMARK and _landmarks_standing() >= 2 and int(gifts.get(o, 0)) == 0:
 		return "Two landmarks is the limit"
 	return ""
+
+
+## Landmarks standing on the course, open or closed. Closing one does not
+## free the slot.
+func _landmarks_standing() -> int:
+	var n := 0
+	for i in course.objects.size():
+		if int(course.objects[i]) == Defs.O.LANDMARK:
+			n += 1
+	return n
 
 
 func place_object(tx: int, ty: int, o: int) -> int:
