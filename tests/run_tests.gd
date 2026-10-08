@@ -2734,12 +2734,29 @@ func _test_hole_preview() -> void:
 	check(tools.preview_warn, "a hole shorter than the data's short line is a warning")
 	var lost := Vector3(-30.0, 0.0, tee.z)
 	var missed: Dictionary = Hole.measure(c, tee, lost)
-	check(not bool(missed.playable), "a pin the route cannot reach is not playable")
+	check(not bool(missed.playable), "a pin off the map is not playable")
 	tools._preview_tile = Vector2i(-999, -999)
 	tools._preview_text = ""
 	tools.hover = lost
 	tools._update_preview()
-	check(tools.preview_warn, "an unplayable path is a warning")
+	check(tools.preview_warn, "a pin off the map is a warning")
+	var fx := 90
+	var fy := 50
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
+			c.terrain[(fy + oy) * c.w + (fx + ox)] = Defs.T.WATER
+			c.objects[(fy + oy) * c.w + (fx + ox)] = 0
+	c.terrain[fy * c.w + fx] = Defs.T.GREEN
+	var fence_pin := c.tile_center(fx, fy)
+	var fence_tee := c.tile_center(fx, fy + 20)
+	var fenced: Dictionary = Hole.measure(c, fence_tee, fence_pin)
+	check(not bool(fenced.playable) and float(fenced.length) >= short_m, "a green fenced in by water, on the map, is not playable (%.0f m)" % float(fenced.length))
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools._tee = fence_tee
+	tools.hover = fence_pin
+	tools._update_preview()
+	check(tools.preview_warn, "an on-map pin the route cannot reach is a warning")
 	for y in range(0, 42):
 		for x in range(0, 48):
 			var wi := y * c.w + x
@@ -2780,6 +2797,21 @@ func _test_hole_preview() -> void:
 	tools._preview_frame = tools._preview_due
 	tools._update_preview(true)
 	check(tools._preview_searches == mid + 1, "a paced look searches once the throttle has passed (%d frames)" % every)
+	tools._preview_frame = 0
+	tools._preview_due = 0
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools._tee = tee
+	tools.hover = pin
+	tools.mode = "hole"
+	var back := tools._preview_searches
+	tools._process(0.0)
+	check(tools._preview_searches == back + 1, "hovering a tile searches")
+	tools.hover = null
+	tools._process(0.0)
+	tools.hover = pin
+	tools._process(0.0)
+	check(tools._preview_searches == back + 2, "leaving the ground and coming back to the same tile searches again")
 	tools.free()
 
 

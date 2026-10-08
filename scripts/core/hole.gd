@@ -181,7 +181,8 @@ func _polyline_length(pts: PackedVector2Array) -> float:
 
 ## Cheapest 8-connected tile path from tee to pin, then pulled tight wherever
 ## the straight segment stays on fairway, tee, green or cart path with no trees.
-## `reached` is false when the pin is not a tile the path could stand on.
+## `reached` is false when the pin is off the map, or on the map but fenced
+## in by water so the search has no tile to step in from.
 func _route(course: Course) -> Dictionary:
 	var a := Vector2(tee.x, tee.z)
 	var b := Vector2(pin.x, pin.z)
@@ -192,6 +193,8 @@ func _route(course: Course) -> Dictionary:
 	var tt := course.tile_of(tee.x, tee.z)
 	var pt := course.tile_of(pin.x, pin.z)
 	if not course.in_bounds(tt.x, tt.y) or not course.in_bounds(pt.x, pt.y):
+		return {"line": chord, "reached": false}
+	if _pin_sealed(course, pt):
 		return {"line": chord, "reached": false}
 	var fx := clampi(mini(tt.x, pt.x) - margin, 0, course.w - 1)
 	var fy := clampi(mini(tt.y, pt.y) - margin, 0, course.h - 1)
@@ -270,6 +273,23 @@ func _route(course: Course) -> Dictionary:
 		pts.append(Vector2(center.x, center.z))
 	pts.append(b)
 	return {"line": _smooth(course, pts), "reached": true}
+
+
+## True when every neighbour of the pin is water or off the map, so the
+## search cannot step onto it. A carry across open water still connects,
+## because that pin has a dry tile beside it.
+func _pin_sealed(course: Course, pt: Vector2i) -> bool:
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
+			if ox == 0 and oy == 0:
+				continue
+			var nx := pt.x + ox
+			var ny := pt.y + oy
+			if not course.in_bounds(nx, ny):
+				continue
+			if course.terrain[ny * course.w + nx] != Defs.T.WATER:
+				return false
+	return true
 
 
 func _play_cost(course: Course, tx: int, ty: int) -> float:

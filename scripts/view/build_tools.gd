@@ -161,30 +161,36 @@ func radius_m() -> float:
 
 
 func _process(delta: float) -> void:
-	if sim == null or terrain == null:
+	if sim == null:
 		return
-	terrain.set_land_rect(Rect2i())
-	if mode == "land" and enabled and hover != null:
-		terrain.hide_brush()
-		var hp: Vector3 = hover
-		var parcel := sim.course.parcel_of(int(hp.x / Defs.TILE), int(hp.z / Defs.TILE))
-		var ok := sim.course.parcel_for_sale(parcel)
-		terrain.set_land_rect(sim.course.parcel_rect(parcel), Color(0.5, 1.0, 0.6) if ok else Color(1.0, 0.45, 0.4))
-	elif station_for != null and enabled and hover != null:
-		terrain.set_brush(hover, sim.crew.home_radius(), Color(0.95, 0.75, 0.35))
-	elif mode == "" or not enabled or hover == null:
-		terrain.hide_brush()
-	else:
-		var col := Color(1.0, 1.0, 1.0)
-		if mode == "bulldoze":
-			col = Color(1.0, 0.5, 0.4)
-		elif mode == "hole":
-			col = Color(0.4, 0.75, 1.0)
-		terrain.set_brush(hover, radius_m(), col)
+	if terrain != null:
+		terrain.set_land_rect(Rect2i())
+		if mode == "land" and enabled and hover != null:
+			terrain.hide_brush()
+			var hp: Vector3 = hover
+			var parcel := sim.course.parcel_of(int(hp.x / Defs.TILE), int(hp.z / Defs.TILE))
+			var ok := sim.course.parcel_for_sale(parcel)
+			terrain.set_land_rect(sim.course.parcel_rect(parcel), Color(0.5, 1.0, 0.6) if ok else Color(1.0, 0.45, 0.4))
+		elif station_for != null and enabled and hover != null:
+			terrain.set_brush(hover, sim.crew.home_radius(), Color(0.95, 0.75, 0.35))
+		elif mode == "" or not enabled or hover == null:
+			terrain.hide_brush()
+		else:
+			var col := Color(1.0, 1.0, 1.0)
+			if mode == "bulldoze":
+				col = Color(1.0, 0.5, 0.4)
+			elif mode == "hole":
+				col = Color(0.4, 0.75, 1.0)
+			terrain.set_brush(hover, radius_m(), col)
 	_preview_frame += 1
 	if mode == "hole" and _tee != null and hover != null:
 		_update_preview(true)
 	elif mode == "hole" and hover == null:
+		# Forget the tile, or coming back to it would skip the search and
+		# leave the line hidden.
+		_preview_text = ""
+		_preview_tile = Vector2i(-999, -999)
+		_preview_due = _preview_frame
 		if _ribbon != null:
 			_ribbon.visible = false
 		_hide_tag()
