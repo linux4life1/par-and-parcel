@@ -438,6 +438,24 @@ func _holes(body: VBoxContainer) -> Callable:
 			], false), "Remove this hole")
 		close.add_theme_font_size_override("font_size", 12)
 		h2.add_child(close)
+		var tee_price := Defs.money(sim.tee_price())
+		var tee_text := UIKit.label(hole.tee_line(), 12, UIKit.MUTED)
+		tee_text.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		cv.add_child(tee_text)
+		var tee_btns := UIKit.hbox(6)
+		cv.add_child(tee_btns)
+		var mid_btn := UIKit.button(hole.tee_button("middle", tee_price), func() -> void:
+			hud.open_dock("build")
+			hud.tools.arm_tee(i, "middle"), "Place the middle tee on a tee box, on the line of play, closer to the green than the back tee")
+		mid_btn.disabled = hole.has_tee("middle")
+		mid_btn.add_theme_font_size_override("font_size", 12)
+		tee_btns.add_child(mid_btn)
+		var fwd_btn := UIKit.button(hole.tee_button("forward", tee_price), func() -> void:
+			hud.open_dock("build")
+			hud.tools.arm_tee(i, "forward"), "Place the forward tee on a tee box, on the line of play, closer to the green than the tee behind it")
+		fwd_btn.disabled = hole.has_tee("forward")
+		fwd_btn.add_theme_font_size_override("font_size", 12)
+		tee_btns.add_child(fwd_btn)
 		var gap_row := UIKit.hbox(6)
 		cv.add_child(gap_row)
 		gap_row.add_child(UIKit.label("Starter", 12, UIKit.MUTED))
@@ -474,7 +492,7 @@ func _holes(body: VBoxContainer) -> Callable:
 		cv.add_child(st)
 		var report := UIKit.para("", 12, UIKit.TEXT)
 		cv.add_child(report)
-		rows.append([kind, bars, st, report, paid])
+		rows.append([kind, bars, st, report, paid, tee_text, mid_btn, fwd_btn])
 	var card_plays := -1
 	return func() -> void:
 		var now := ""
@@ -551,6 +569,15 @@ func _holes(body: VBoxContainer) -> Callable:
 				txt += "\nAbout %s a group, waiting included" % Defs.pace_text(hole.average_time())
 			(row[2] as Label).text = txt
 			(row[3] as Label).text = _hole_report(hole)
+			var tee_lbl: Label = row[5]
+			tee_lbl.text = hole.tee_line()
+			var mid_now: Button = row[6]
+			var fwd_now: Button = row[7]
+			var set_price := Defs.money(sim.tee_price())
+			mid_now.text = hole.tee_button("middle", set_price)
+			mid_now.disabled = hole.has_tee("middle")
+			fwd_now.text = hole.tee_button("forward", set_price)
+			fwd_now.disabled = hole.has_tee("forward")
 			var paid: Label = row[4]
 			if hole.payers == 0:
 				paid.text = "No fees yet"
