@@ -268,6 +268,9 @@ const COMMENT_WORDS := {
 	"wait": "waiting", "weeds": "weeds", "pests": "pest damage", "wet": "wet ground",
 	"greens": "the greens", "greens_bad": "poor greens", "hit": "being hit by balls", "eruption": "the volcano", "tired": "the walk",
 	"amenity": "the facilities", "rest": "the bench", "prestige": "its reputation", "story": "the company", "putt": "missed putts",
+	"dark": "unlit holes", "night": "golf under the lights", "drink": "the drinks", "snack": "the food",
+	"rain": "the rain", "storm": "the storms", "celebrity": "seeing a celebrity",
+	"thirst": "nowhere to drink", "hungry": "nothing to eat", "restroom": "no restroom",
 }
 
 
@@ -598,6 +601,18 @@ func _scorecard(box: VBoxContainer) -> void:
 		notes.append("Slowest: hole %d, %s a group." % [slow + 1, Defs.pace_text(holes[slow].average_time())])
 	if not notes.is_empty():
 		cv.add_child(UIKit.para("  ".join(PackedStringArray(notes)), 12))
+	var said := sim.course.comment_report()
+	if not said.is_empty():
+		cv.add_child(UIKit.gap(4))
+		cv.add_child(UIKit.label("WHAT GOLFERS SAY", 12, UIKit.ACCENT))
+		for row in said:
+			var tag := str(row.tag)
+			if not COMMENT_WORDS.has(tag):
+				continue
+			var total := float(row.total)
+			var words := str(COMMENT_WORDS[tag])
+			var shown := "%+.1f" % total
+			cv.add_child(UIKit.row(words, shown, UIKit.GOOD if total >= 0.0 else UIKit.BAD))
 
 
 ## The complaint golfers make most about a hole, in a few words.
@@ -831,6 +846,12 @@ func _money(body: VBoxContainer) -> Callable:
 	body.add_child(table)
 	body.add_child(UIKit.gap(4))
 	body.add_child(UIKit.heading("Earlier months"))
+	var legend := UIKit.hbox(12)
+	body.add_child(legend)
+	legend.add_child(UIKit.label("Rating", 12, UIKit.GOLD))
+	legend.add_child(UIKit.label("Satisfaction", 12, UIKit.BLUE))
+	var chart := UIKit.HistoryChart.new()
+	body.add_child(chart)
 	var hist := UIKit.vbox(3)
 	body.add_child(hist)
 	return func() -> void:
@@ -850,6 +871,13 @@ func _money(body: VBoxContainer) -> Callable:
 		table.add_child(UIKit.row("Staff wages", Defs.money(sim.crew.monthly_wages())))
 		table.add_child(UIKit.row("Upkeep", Defs.money(sim.monthly_upkeep())))
 		UIKit.clear(hist)
+		var rate := PackedFloat32Array()
+		var happy := PackedFloat32Array()
+		for past in e.history:
+			var month: Dictionary = past
+			rate.append(float(month.rating) if month.has("rating") else -1.0)
+			happy.append(float(month.satisfaction) if month.has("satisfaction") else -1.0)
+		chart.set_series(rate, happy)
 		if e.history.is_empty():
 			hist.add_child(UIKit.label("Nothing yet. Books close on the last day of each month.", 13, UIKit.MUTED))
 		for i in range(e.history.size() - 1, maxi(e.history.size() - 9, -1), -1):
