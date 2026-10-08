@@ -69,6 +69,7 @@ func _ready() -> void:
 	_test_firm()
 	_test_lights_gap_awards()
 	_test_length_scale()
+	_test_slope()
 	_test_debt_welcome()
 	_test_close_structure()
 	print("%d checks, %d failed" % [checks, failures])
@@ -4358,6 +4359,129 @@ func _test_length_scale() -> void:
 	sim.members.progress["power_cap"] = 1.8
 	var lab_g := sim.lab._test_golfer(HoleLab.CLASSES[0])
 	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")
+
+
+func _test_slope() -> void:
+	print("-- slope")
+	var c := Course.new(8, 8)
+	var flat := Slope.read(c, 20.0, 20.0)
+	check(is_equal_approx(float(flat.percent), 0.0), "flat ground reads 0 percent")
+	var fall0: Vector2 = flat.fall
+	check(fall0 == Vector2.ZERO, "flat ground has no fall")
+	var stride := c.w + 1
+	for vy in c.h + 1:
+		for vx in c.w + 1:
+			c.heights[vy * stride + vx] = float(vx) * 0.5
+	var mid := Slope.read(c, 20.0, 20.0)
+	check(is_equal_approx(float(mid.percent), 10.0), "a half-metre rise across a tile is 10 percent")
+	var fall: Vector2 = mid.fall
+	check(fall.x < -0.99 and absf(fall.y) < 0.01, "that patch falls toward -x")
+	var said := Slope.words(mid, Vector2(-1.0, 0.0))
+	check(said == "10% downhill", "the reading names the fall (%s)" % said)
+	for vy in c.h + 1:
+		for vx in c.w + 1:
+			c.heights[vy * stride + vx] = float(vy) * 0.25
+	var down := Slope.read(c, 20.0, 20.0)
+	check(is_equal_approx(float(down.percent), 5.0), "a quarter-metre rise across a tile is 5 percent")
+	var fallz: Vector2 = down.fall
+	check(absf(fallz.x) < 0.01 and fallz.y < -0.99, "that patch falls toward -z")
+	var lay := Course.new(8, 8)
+	var ball := Vector3(2.5, 0.0, 2.5)
+	var hole_at := Vector3(22.5, 0.0, 2.5)
+	var off := Slope.along(lay, ball, hole_at)
+	var at_ball := Slope.read(lay, ball.x, ball.z)
+	check(is_equal_approx(float(off.percent), float(at_ball.percent)), "with no green, the line falls back to the ball")
+	var sw := lay.w + 1
+	for vy in lay.h + 1:
+		for vx in lay.w + 1:
+			lay.heights[vy * sw + vx] = 0.0
+	lay.heights[0 * sw + 3] = 2.0
+	lay.heights[1 * sw + 3] = 2.0
+	lay.heights[0 * sw + 5] = 0.5
+	lay.heights[1 * sw + 5] = 0.5
+	lay.terrain[4] = Defs.T.GREEN
+	var on := Slope.along(lay, ball, hole_at)
+	check(is_equal_approx(float(on.percent), 10.0), "the line samples the green and skips the steeper rough (%.2f)" % float(on.percent))
+	check(Slope.near_green(lay, 22.5, 2.5), "standing on the green counts as near it")
+	check(Slope.near_green(lay, 31.5, 2.5), "within the data's near distance still counts")
+	check(not Slope.near_green(lay, 40.0, 2.5), "far from every green does not")
+	var hidden := Slope.mark(0.2)
+	check(not bool(hidden.get("show", true)), "below the minimum there are no marks")
+	var gentle := Slope.mark(0.4)
+	var steep := Slope.mark(4.0)
+	check(bool(gentle.get("show", false)) and float(steep.get("space", 9.0)) < float(gentle.get("space", 0.0)), "steeper ground gets closer marks")
+	check(float(steep.get("length", 0.0)) > float(gentle.get("length", 0.0)), "steeper ground gets longer marks")
+	var ink := Color(0.2, 0.3, 0.4, 0.5)
+	check(Slope.aim_tint(1.0, 0.0, ink).is_equal_approx(ink), "flat ground keeps the ordinary ink")
+	check(Slope.aim_tint(0.0, 3.0, ink).is_equal_approx(ink), "a side slope does not change the ink")
+	check(Hud.OVERLAY_NAMES.size() == Slope.OVERLAY + 1 and Hud.OVERLAY_NAMES[Slope.OVERLAY] == "Slope", "slope is the overlay after lights")
+	var hud := Hud.new()
+	add_child(hud)
+	var tv := TerrainView.new()
+	hud.terrain = tv
+	hud.set_overlay(Slope.OVERLAY)
+	check(int(tv.material.get_shader_parameter("overlay")) == Slope.OVERLAY, "the slope overlay turns on")
+	check(hud.overlay_btns[Slope.OVERLAY].button_pressed and not hud.overlay_btns[0].button_pressed, "the slope button is the one pressed")
+	check(hud.slope_key.visible and hud.slope_key.text == Slope.legend(), "the slope legend shows the data scales")
+	check(float(Slope.book().get("green_full", 0.0)) < float(Slope.book().get("course_full", 0.0)), "greens use a finer scale than the rest of the course")
+	hud.set_overlay(0)
+	check(int(tv.material.get_shader_parameter("overlay")) == 0 and not hud.overlay_btns[Slope.OVERLAY].button_pressed, "the slope overlay turns off")
+	var marks := SlopeArrows.new()
+	add_child(marks)
+	var mi := marks.get_child(0) as MultiMeshInstance3D
+	check(mi != null and mi.multimesh != null and mi.multimesh.mesh != null, "the downhill marks are a multimesh")
+	var small := Course.new(8, 8)
+	tv.bind(small)
+	var small_img := tv._slope_tex.get_image()
+	check(small_img.get_width() == 8 and small_img.get_height() == 8, "an 8 by 8 course shades an 8 by 8 slope")
+	var wide := Course.new(12, 10)
+	var wide_stride := wide.w + 1
+	for vy in wide.h + 1:
+		for vx in wide.w + 1:
+			wide.heights[vy * wide_stride + vx] = float(vx) * 0.5
+	tv.bind(wide)
+	var wide_img := tv._slope_tex.get_image()
+	check(wide_img.get_width() == 12 and wide_img.get_height() == 10, "a different course replaces the slope shade at the new size")
+	check(is_equal_approx(wide_img.get_pixel(0, 0).r, 10.0), "the new shade is that course's grade")
+	var home := _sim("three_holes", 2)
+	home.course.guard = false
+	marks.overlay_on = true
+	marks.set_sim(home)
+	var gx := -1
+	var gy := -1
+	for y in range(2, home.course.h - 2):
+		for x in range(2, home.course.w - 2):
+			if home.course.objects[y * home.course.w + x] != 0:
+				continue
+			if home.course.set_terrain(x, y, Defs.T.GREEN):
+				gx = x
+				gy = y
+				break
+		if gx >= 0:
+			break
+	check(gx >= 0, "a tile can be painted green for the marks")
+	if gx >= 0:
+		var hs := home.course.w + 1
+		home.course.heights[gy * hs + gx] = 0.0
+		home.course.heights[gy * hs + gx + 1] = 1.0
+		home.course.heights[(gy + 1) * hs + gx] = 0.0
+		home.course.heights[(gy + 1) * hs + gx + 1] = 1.0
+		home.course.tiles_changed.emit(Rect2i(gx, gy, 1, 1))
+		home.course.heights_changed.emit(Rect2i(gx, gy, 1, 1))
+	marks._process(0.3)
+	check(marks._mm.instance_count > 0, "the first course draws downhill marks")
+	var away := _sim("three_holes", 3)
+	marks.set_sim(away)
+	check(marks._mm.instance_count == 0, "loading another course clears the downhill marks")
+	marks.set_sim(null)
+	remove_child(marks)
+	marks.free()
+	hud.terrain = null
+	remove_child(hud)
+	hud.free()
+	# A node left out of the tree is not freed at quit, and its shader is
+	# then reported as a leak after the check line.
+	tv.free()
 
 
 func _test_debt_welcome() -> void:
