@@ -19,7 +19,7 @@ const SUNRISE := 5.5              # hours
 const SUNSET := 20.5
 const TWILIGHT := 1.0             # hours dusk and dawn each last
 
-enum T { ROUGH, FAIRWAY, GREEN, TEE, BUNKER, WATER, DEEP_ROUGH, PATH, ROCK, ASH, FIRM, FAST_GREEN }
+enum T { ROUGH, FAIRWAY, GREEN, TEE, BUNKER, WATER, DEEP_ROUGH, PATH, ROCK, ASH, FIRM, FAST_GREEN, WASTE, STREAM }
 enum O {
 	NONE, OAK, PINE, BUSH, FLOWERS, BENCH, DRINK_STAND, RESTROOM, CLUBHOUSE,
 	SNACK_BAR, BALL_WASHER, BOULDER, BRIDGE, CART_BARN, PUTTING_GREEN, DRIVING_RANGE,
@@ -29,37 +29,42 @@ enum O {
 
 # WATER is the liquid hazard of the biome: water in most places, lava on the
 # volcano. ROCK and ASH are left behind by eruptions and cannot be painted.
-# FIRM and FAST_GREEN are paints: a firmer fairway, and a quicker green.
-const T_NAMES: Array[String] = ["Rough", "Fairway", "Green", "Tee box", "Bunker", "Water", "Deep rough", "Cart path", "Rock", "Scorched ground", "Firm fairway", "Fast green"]
-const T_COST: Array[int] = [1, 3, 15, 10, 5, 8, 1, 4, 0, 0, 4, 22]
+# FIRM and FAST_GREEN keep ids 10 and 11. WASTE and STREAM come after them,
+# so an older save still reads a firm fairway and a fast green.
+# A waste area is sandy scrub: cheaper than a bunker, and never raked.
+# A stream is a narrow water line. Prices for both live in data/ground.json.
+const T_NAMES: Array[String] = ["Rough", "Fairway", "Green", "Tee box", "Bunker", "Water", "Deep rough", "Cart path", "Rock", "Scorched ground", "Firm fairway", "Fast green", "Waste area", "Stream"]
+const T_COST: Array[int] = [1, 3, 15, 10, 5, 8, 1, 4, 0, 0, 4, 22, 2, 3]
 ## Extra cost per tile to build over what is already there.
-const T_CLEAR: Array[int] = [0, 0, 0, 0, 0, 4, 0, 0, 12, 2, 0, 0]
+const T_CLEAR: Array[int] = [0, 0, 0, 0, 0, 4, 0, 0, 12, 2, 0, 0, 0, 0]
 ## Rolling deceleration in m/s^2. Firm ground and a fast green stop the ball later.
-const T_DECEL: Array[float] = [5.0, 2.0, 0.6, 1.8, 12.0, 0.0, 9.0, 1.0, 1.4, 8.0, 1.35, 0.38]
+## A waste area stops the ball between the rough and a bunker. A stream stops it.
+const T_DECEL: Array[float] = [5.0, 2.0, 0.6, 1.8, 12.0, 0.0, 9.0, 1.0, 1.4, 8.0, 1.35, 0.38, 8.0, 0.0]
 ## Share of vertical speed kept on a bounce.
-const T_BOUNCE: Array[float] = [0.25, 0.42, 0.36, 0.40, 0.05, 0.0, 0.14, 0.65, 0.68, 0.08, 0.48, 0.32]
+const T_BOUNCE: Array[float] = [0.25, 0.42, 0.36, 0.40, 0.05, 0.0, 0.14, 0.65, 0.68, 0.08, 0.48, 0.32, 0.14, 0.0]
 ## Share of forward speed kept on a bounce.
-const T_KEEP: Array[float] = [0.50, 0.72, 0.62, 0.70, 0.15, 0.0, 0.35, 0.85, 0.8, 0.25, 0.80, 0.72]
+const T_KEEP: Array[float] = [0.50, 0.72, 0.62, 0.70, 0.15, 0.0, 0.35, 0.85, 0.8, 0.25, 0.80, 0.72, 0.32, 0.0]
 ## How well a spinning ball grips the surface: a green bites, a path does not.
-const T_GRIP: Array[float] = [0.4, 0.7, 1.0, 0.7, 0.1, 0.0, 0.25, 0.3, 0.25, 0.2, 0.55, 1.05]
+const T_GRIP: Array[float] = [0.4, 0.7, 1.0, 0.7, 0.1, 0.0, 0.25, 0.3, 0.25, 0.2, 0.55, 1.05, 0.22, 0.0]
 ## The terrain's key in data/lies.json.
-const T_KEYS: Array[String] = ["rough", "fairway", "green", "tee", "bunker", "water", "deep_rough", "path", "rock", "ash", "firm", "fast_green"]
+const T_KEYS: Array[String] = ["rough", "fairway", "green", "tee", "bunker", "water", "deep_rough", "path", "rock", "ash", "firm", "fast_green", "waste", "stream"]
 ## Shot power and spread multipliers for a ball lying on this terrain.
-const T_LIE_POWER: Array[float] = [0.88, 1.0, 1.0, 1.0, 0.72, 0.0, 0.68, 0.95, 0.62, 0.8, 1.0, 1.0]
-const T_LIE_SPREAD: Array[float] = [1.4, 1.0, 1.0, 0.9, 1.7, 1.0, 2.1, 1.1, 2.3, 1.5, 0.95, 1.0]
+## Waste matches data/lies.json. A stream is not a lie: the ball is in the water.
+const T_LIE_POWER: Array[float] = [0.88, 1.0, 1.0, 1.0, 0.72, 0.0, 0.68, 0.95, 0.62, 0.8, 1.0, 1.0, 0.8, 0.0]
+const T_LIE_SPREAD: Array[float] = [1.4, 1.0, 1.0, 0.9, 1.7, 1.0, 2.1, 1.1, 2.3, 1.5, 0.95, 1.0, 1.55, 1.0]
 ## How unattractive the terrain is as a route for the golfer AI.
-const T_ROUTE: Array[float] = [1.25, 1.0, 1.0, 1.0, 1.9, 2.6, 1.7, 1.1, 2.2, 1.5, 1.0, 1.0]
-const T_GRASS: Array[bool] = [true, true, true, true, false, false, true, false, false, false, true, true]
-## Turf health lost per second without care.
-const T_WEAR: Array[float] = [0.00003, 0.00012, 0.00025, 0.0002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.00008, 0.00032]
+const T_ROUTE: Array[float] = [1.25, 1.0, 1.0, 1.0, 1.9, 2.6, 1.7, 1.1, 2.2, 1.5, 1.0, 1.0, 1.55, 2.6]
+const T_GRASS: Array[bool] = [true, true, true, true, false, false, true, false, false, false, true, true, false, false]
+## Turf health lost per second without care. Waste is not kept turf.
+const T_WEAR: Array[float] = [0.00003, 0.00012, 0.00025, 0.0002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.00008, 0.00032, 0.0, 0.0]
 ## Drying speed multiplier.
-const T_DRY: Array[float] = [1.0, 1.1, 1.35, 1.2, 1.8, 0.0, 0.8, 2.0, 2.0, 1.4, 1.25, 1.45]
+const T_DRY: Array[float] = [1.0, 1.1, 1.35, 1.2, 1.8, 0.0, 0.8, 2.0, 2.0, 1.4, 1.25, 1.45, 1.6, 0.0]
 ## Weed pressure multiplier.
-const T_WEED: Array[float] = [1.0, 0.8, 0.5, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.45, 0.35]
-## How much greenkeepers care about this terrain.
-const T_CARE: Array[float] = [0.35, 1.5, 3.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.6, 3.4]
+const T_WEED: Array[float] = [1.0, 0.8, 0.5, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.45, 0.35, 0.0, 0.0]
+## How much greenkeepers care about this terrain. A waste area is not raked.
+const T_CARE: Array[float] = [0.35, 1.5, 3.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.6, 3.4, 0.0, 0.0]
 ## Effort to walk across, for path finding. Negative means impassable.
-const T_WALK: Array[float] = [1.1, 1.0, 2.0, 1.2, 2.2, -1.0, 1.6, 0.45, 2.2, 1.4, 0.95, 2.0]
+const T_WALK: Array[float] = [1.1, 1.0, 2.0, 1.2, 2.2, -1.0, 1.6, 0.45, 2.2, 1.4, 0.95, 2.0, 1.45, -1.0]
 
 const O_NAMES: Array[String] = [
 	"None", "Oak tree", "Pine tree", "Bush", "Flower bed", "Bench", "Drink stand", "Restroom", "Clubhouse",
@@ -131,6 +136,11 @@ static func is_green(t: int) -> bool:
 ## Fairway, green or tee: the short grass a ball can spin back on.
 static func is_short(t: int) -> bool:
 	return is_fairway(t) or is_green(t) or t == T.TEE
+
+
+## Water, or a stream. A waste area is not one of these: it is played as a lie.
+static func is_liquid(t: int) -> bool:
+	return t == T.WATER or t == T.STREAM
 
 
 static func money(v: float) -> String:

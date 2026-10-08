@@ -1,0 +1,6 @@
+{
+	"_about": "What a waste area and a stream cost to paint, per tile. A bunker is listed so the waste stays cheaper than one. A waste area is sandy scrub: it is not raked, so its care is zero, and a ball there is trouble between the rough and a bunker, not a penalty. A stream is a narrow line of water drawn downhill.",
+	"waste": {"cost": 2, "care": 0.0, "trouble": 48.0},
+	"stream": {"cost": 3},
+	"bunker": {"cost": 5}
+}

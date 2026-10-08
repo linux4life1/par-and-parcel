@@ -83,7 +83,7 @@ func _near_water(course: Course, tx: int, ty: int) -> bool:
 	for d: Vector2i in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 		var nx := tx + d.x
 		var ny := ty + d.y
-		if course.in_bounds(nx, ny) and course.terrain[ny * course.w + nx] == Defs.T.WATER:
+		if course.in_bounds(nx, ny) and Defs.is_liquid(course.terrain[ny * course.w + nx]):
 			return true
 	return false
 
@@ -151,6 +151,9 @@ func step(dt: float) -> void:
 			course.mood[i] = md * exp(-MOOD_FADE * edt)
 		else:
 			course.mood[i] = 0.0
+		if t == Defs.T.STREAM:
+			course.wet[i] = 1.0
+			continue
 		if t == Defs.T.WATER:
 			course.wet[i] = 0.0 if lava else 1.0
 			continue

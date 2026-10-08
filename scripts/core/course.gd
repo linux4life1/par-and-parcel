@@ -136,7 +136,7 @@ func water_near(x: float, z: float, radius: float) -> bool:
 			var dz := (float(tz) + 0.5) * Defs.TILE - z
 			if dx * dx + dz * dz > r2:
 				continue
-			if terrain[tz * w + tx] == Defs.T.WATER:
+			if Defs.is_liquid(terrain[tz * w + tx]):
 				return true
 	return false
 
@@ -272,7 +272,7 @@ func blocks_walk(tx: int, ty: int) -> bool:
 	if not in_bounds(tx, ty):
 		return true
 	var i := ty * w + tx
-	return terrain[i] == Defs.T.WATER and objects[i] != Defs.O.BRIDGE
+	return Defs.is_liquid(terrain[i]) and objects[i] != Defs.O.BRIDGE
 
 
 ## False for land you do not own and for the slopes of a volcano.
@@ -389,6 +389,9 @@ func set_terrain(tx: int, ty: int, t: int) -> bool:
 	if t == Defs.T.WATER:
 		_level_water(tx, ty)
 		wet[i] = 1.0
+	elif t == Defs.T.STREAM:
+		# A stream keeps the slope it was drawn on. It is not levelled into a pond.
+		wet[i] = 1.0
 	if Defs.T_GRASS[t]:
 		health[i] = maxf(health[i], 0.9)
 	else:
@@ -422,6 +425,82 @@ func paint(cx: int, cy: int, radius: int, t: int) -> int:
 	return n
 
 
+## Tiles from a to b, one step at a time, both ends included.
+static func tile_line(a: Vector2i, b: Vector2i) -> Array[Vector2i]:
+	var out: Array[Vector2i] = []
+	var x := a.x
+	var y := a.y
+	var dx := absi(b.x - a.x)
+	var dy := absi(b.y - a.y)
+	var sx := 1 if b.x >= a.x else -1
+	var sy := 1 if b.y >= a.y else -1
+	var err := dx - dy
+	while true:
+		out.append(Vector2i(x, y))
+		if x == b.x and y == b.y:
+			break
+		var e2 := err * 2
+		if e2 > -dy:
+			err -= dy
+			x += sx
+		if e2 < dx:
+			err += dx
+			y += sy
+	return out
+
+
+## Height of the last tile this call accepted, and whether it accepted any.
+## A drag passes the previous call's height back in as `follow`.
+var stream_took := false
+var stream_held := 0.0
+
+
+## Paint a one-tile stream along these tiles, in the order they were dragged.
+## `follow` is the height of the last tile already accepted on this drag, or
+## a huge number when the drag has not accepted one yet. Every tile, including
+## the first, has to be no higher than that. The ground is not flattened.
+func lay_stream(tiles: Array[Vector2i], follow: float = 1.0e20) -> int:
+	var n := 0
+	clear_cost = 0.0
+	var have := follow < 1.0e19
+	var prev_h := follow
+	stream_took = false
+	stream_held = follow
+	var minx := 100000
+	var miny := 100000
+	var maxx := -1
+	var maxy := -1
+	for tile in tiles:
+		if not in_bounds(tile.x, tile.y):
+			continue
+		var h := tile_center(tile.x, tile.y).y
+		if have and h > prev_h + 0.02:
+			continue
+		var i := tile.y * w + tile.x
+		var already := terrain[i] == Defs.T.STREAM
+		var changed := false
+		if not already:
+			changed = set_terrain(tile.x, tile.y, Defs.T.STREAM)
+		if not already and not changed:
+			continue
+		if changed:
+			n += 1
+		have = true
+		prev_h = h
+		stream_took = true
+		stream_held = h
+		minx = mini(minx, tile.x)
+		miny = mini(miny, tile.y)
+		maxx = maxi(maxx, tile.x)
+		maxy = maxi(maxy, tile.y)
+	if n > 0:
+		tiles_changed.emit(Rect2i(minx - 1, miny - 1, maxx - minx + 3, maxy - miny + 3))
+	if _objects_dirty:
+		_objects_dirty = false
+		objects_changed.emit()
+	return n
+
+
 func _level_water(tx: int, ty: int) -> void:
 	# Ponds stay flat: join the level of a neighbouring water tile if there is one.
 	var level := INF
@@ -448,8 +527,8 @@ func set_object(tx: int, ty: int, o: int) -> bool:
 		return false
 	if guard and (locked[i] != 0 or hot[i] != 0):
 		return false
-	# Only a bridge can stand in the hazard, and a bridge can stand nowhere else.
-	if o != 0 and (terrain[i] == Defs.T.WATER) != (o == Defs.O.BRIDGE):
+	# Only a bridge can stand in the water or a stream, and a bridge nowhere else.
+	if o != 0 and Defs.is_liquid(terrain[i]) != (o == Defs.O.BRIDGE):
 		return false
 	_note_tile(i)
 	var lights: bool = Defs.O_LIGHT[objects[i]] > 0.0 or Defs.O_LIGHT[o] > 0.0
@@ -581,7 +660,7 @@ func _corner_is_locked(vx: int, vy: int) -> bool:
 		for tx in [vx - 1, vx]:
 			if in_bounds(tx, ty):
 				var i: int = ty * w + tx
-				if terrain[i] == Defs.T.WATER:
+				if Defs.is_liquid(terrain[i]):
 					return true
 				if guard and (locked[i] != 0 or hot[i] != 0):
 					return true

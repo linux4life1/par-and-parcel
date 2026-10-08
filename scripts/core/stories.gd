@@ -619,7 +619,7 @@ func _water_near(tx: int, ty: int, reach: int) -> bool:
 		for dx in range(-reach, reach + 1):
 			var x := tx + dx
 			var y := ty + dy
-			if course.in_bounds(x, y) and course.terrain[y * course.w + x] == Defs.T.WATER:
+			if course.in_bounds(x, y) and Defs.is_liquid(course.terrain[y * course.w + x]):
 				return true
 	return false
 
