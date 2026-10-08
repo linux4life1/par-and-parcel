@@ -1,10 +1,10 @@
 {
-  "_about": "The practice green and the driving range. green_cost and range_cost are what they cost to build, and green_upkeep and range_upkeep are the monthly bills. Those four match the build tables. A visitor who putts on the practice green pays nothing; green_mood is how much satisfaction rises, before personality and the difficulty slider. A bucket on the range costs bucket, charged once on arrival and booked as range income, and range_mood is the satisfaction rise.",
-  "green_cost": 900,
-  "green_upkeep": 30,
-  "green_mood": 1.5,
-  "range_cost": 2000,
-  "range_upkeep": 70,
-  "range_mood": 1.5,
-  "bucket": 4.0
+	"_about": "The practice green and the driving range. green_cost and range_cost are what they cost to build, and green_upkeep and range_upkeep are the monthly bills. A visitor who putts on the practice green pays nothing; green_mood is how much satisfaction rises, before personality and the difficulty slider. A bucket on the range costs bucket, charged once on arrival and booked as range income, and range_mood is the satisfaction rise. The short grass in front of the bays is drawn on the range's own tile and claims no ground.",
+	"green_cost": 900,
+	"green_upkeep": 30,
+	"green_mood": 1.5,
+	"range_cost": 2000,
+	"range_upkeep": 70,
+	"range_mood": 1.5,
+	"bucket": 4.0
 }

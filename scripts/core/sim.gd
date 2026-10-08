@@ -150,6 +150,7 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	course_name = "%s %s %s" % [db.pick("course_first", rng), db.pick("course_second", rng), db.pick("course_suffix", rng)]
 	course = CourseGen.generate(map, rng, biome)
 	course.biome = biome
+	course.bind_switch(Callable(self, "can_switch"))
 	nav = Nav.new(course)
 	undo = UndoLog.new(self)
 	_bind_undo()
@@ -477,6 +478,17 @@ func object_upkeep(o: int) -> float:
 	if o == Defs.O.DRIVING_RANGE:
 		return float(book.get("range_upkeep", 0.0))
 	return float(Defs.O_UPKEEP[o])
+
+
+## A structure with a monthly bill can be switched off. The bill is
+## `object_upkeep`, so the practice file decides the green and the range.
+## A bridge stays open: people are still walking it.
+func can_switch(o: int) -> bool:
+	if o == Defs.O.BRIDGE or o <= 0:
+		return false
+	if o != Defs.O.PUTTING_GREEN and o != Defs.O.DRIVING_RANGE and o >= Defs.O_UPKEEP.size():
+		return false
+	return object_upkeep(o) > 0.0
 
 
 ## The share of a day the floodlights and lamp posts are switched on:
@@ -1729,6 +1741,7 @@ func course_dict() -> Dictionary:
 func install_course(course_d: Dictionary) -> void:
 	course = Course.from_dict(course_d)
 	course.biome = biome
+	course.bind_switch(Callable(self, "can_switch"))
 	nav = Nav.new(course)
 	if undo != null:
 		undo.clear()

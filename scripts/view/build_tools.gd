@@ -285,7 +285,7 @@ func _unhandled_input(event: InputEvent) -> void:
 						var at: Vector3 = spot
 						var tile := sim.course.tile_of(at.x, at.z)
 						var ci := tile.y * sim.course.w + tile.x
-						if sim.course.in_bounds(tile.x, tile.y) and sim.course.can_switch(int(sim.course.objects[ci])):
+						if sim.course.in_bounds(tile.x, tile.y) and sim.can_switch(int(sim.course.objects[ci])):
 							world.selected = null
 							selection_changed.emit(tile)
 							return

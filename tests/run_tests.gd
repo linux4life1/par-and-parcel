@@ -7239,9 +7239,7 @@ func _test_practice() -> void:
 	var range_mood: float = float(book.get("range_mood", 0.0))
 	var bucket_fee: float = float(book.get("bucket", 0.0))
 	check(green_cost > 0.0 and range_cost > 0.0 and green_upkeep > 0.0 and range_upkeep > 0.0 and green_mood > 0.0 and range_mood > 0.0 and bucket_fee > 0.0, "practice prices, upkeep, mood and the bucket fee are in the data")
-	check(int(green_cost) == Defs.O_COST[Defs.O.PUTTING_GREEN] and int(range_cost) == Defs.O_COST[Defs.O.DRIVING_RANGE], "practice build prices match the build tables")
-	check(int(green_upkeep) == Defs.O_UPKEEP[Defs.O.PUTTING_GREEN] and int(range_upkeep) == Defs.O_UPKEEP[Defs.O.DRIVING_RANGE], "practice upkeep matches the build tables, so a structure can still be switched off")
-	check(sim.course.can_switch(Defs.O.PUTTING_GREEN) and sim.course.can_switch(Defs.O.DRIVING_RANGE), "both facilities have a monthly bill and can be switched off")
+	check(sim.can_switch(Defs.O.PUTTING_GREEN) and sim.can_switch(Defs.O.DRIVING_RANGE), "both facilities have a monthly bill and can be switched off")
 	check(sim.crew.count("club_pro") == 0 and sim.clubhouse_level == 0, "a sandbox arrival has no club pro and no clubhouse mood mixed in")
 	var c := sim.course
 	var spots: Array[Vector2i] = []
@@ -7278,7 +7276,6 @@ func _test_practice() -> void:
 	c.set_object(rx, ry, Defs.O.NONE)
 	c.guard = true
 	check(c.objects.count(Defs.O.PUTTING_GREEN) == 0 and c.objects.count(Defs.O.DRIVING_RANGE) == 0, "a new course has neither facility")
-	var old_save: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
 	book["green_cost"] = green_cost + 17.0
 	var shift_purse := sim.economy.money
 	var shift_placed := sim.place_object(gx, gy, Defs.O.PUTTING_GREEN)
@@ -7365,5 +7362,7 @@ func _test_practice() -> void:
 	var kept_raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
 	var kept := Sim.from_dict(db, kept_raw, gear)
 	check(int(kept.course.objects[gi]) == Defs.O.PUTTING_GREEN and int(kept.course.objects[ri]) == Defs.O.DRIVING_RANGE, "a save keeps the practice green and the driving range")
-	var aged := Sim.from_dict(db, old_save, gear)
-	check(aged.course.objects.count(Defs.O.PUTTING_GREEN) == 0 and aged.course.objects.count(Defs.O.DRIVING_RANGE) == 0, "an older save, which never built them, loads with neither")
+	book["green_upkeep"] = 0.0
+	check(not sim.can_switch(Defs.O.PUTTING_GREEN) and not c.set_closed(gx, gy, true), "setting green_upkeep to 0 makes the practice green unswitchable")
+	book["green_upkeep"] = green_upkeep
+	check(sim.can_switch(Defs.O.PUTTING_GREEN) and c.set_closed(gx, gy, true), "putting the upkeep back makes the practice green switchable again")

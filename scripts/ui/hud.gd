@@ -1354,7 +1354,7 @@ func _show_structure(tile: Vector2i) -> void:
 		return
 	var i := tile.y * c.w + tile.x
 	var o := int(c.objects[i])
-	if not c.can_switch(o):
+	if not sim.can_switch(o):
 		inspect(null)
 		return
 	var off := c.is_closed(i)

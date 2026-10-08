@@ -703,11 +703,12 @@ static func _built(kind: String) -> Array:
 			for k in 3:
 				parts.append([_box(1.5, 0.06, 1.7), Vector3(-2.7 + k * 2.7, 0.23, 0.7), Surfaces.material("grass_ground", 0.6, Color(1.0, 2.2, 1.1))])
 				parts.append([_cyl(0.3, 0.26, 0.4, 10), Vector3(-3.4 + k * 2.7, 0.4, 1.8), paint(Color(0.2, 0.45, 0.25), 0.5)])
+			# Drawn on this object's own tile. It claims no ground.
 			var lawn := Surfaces.material("grass_ground", 0.4, Color(1.2, 2.55, 1.15))
-			parts.append([_box(12.0, 0.08, 18.0), Vector3(0, 0.04, -10.4), lawn])
-			parts.append([_cyl(1.15, 1.15, 0.03, 16), Vector3(0, 0.09, -5.2), paint(Color(0.95, 0.95, 0.92))])
-			parts.append([_cyl(1.45, 1.45, 0.03, 16), Vector3(0, 0.09, -10.2), paint(Color(0.82, 0.18, 0.14))])
-			parts.append([_cyl(1.7, 1.7, 0.03, 16), Vector3(0, 0.09, -15.6), paint(Color(0.95, 0.82, 0.15))])
+			parts.append([_box(4.4, 0.08, 1.6), Vector3(0, 0.04, -1.55), lawn])
+			parts.append([_cyl(0.28, 0.28, 0.03, 12), Vector3(-0.7, 0.09, -1.15), paint(Color(0.95, 0.95, 0.92))])
+			parts.append([_cyl(0.34, 0.34, 0.03, 12), Vector3(0.15, 0.09, -1.55), paint(Color(0.82, 0.18, 0.14))])
+			parts.append([_cyl(0.4, 0.4, 0.03, 12), Vector3(0.85, 0.09, -2.0), paint(Color(0.95, 0.82, 0.15))])
 		"o16":  # fountain
 			parts = [
 				[_cyl(2.3, 2.4, 0.5, 24), Vector3(0, 0.25, 0), stone],
@@ -1154,9 +1155,9 @@ static func _parts(kind: String) -> Array:
 			for k in 4:
 				parts.append([_box(1.3, 0.08, 1.6), Vector3(-3.0 + k * 2.0, 0.05, 0.6), Color(0.25, 0.6, 0.3)])
 				parts.append([_sphere(0.28, 6, 3), Vector3(-3.4 + k * 2.0, 0.25, 1.9), Color(0.95, 0.9, 0.3)])
-			parts.append([_box(12.0, 0.08, 16.0), Vector3(0, 0.04, -9.2), Color(0.36, 0.7, 0.32)])
-			parts.append([_cyl(1.3, 1.3, 0.04, 12), Vector3(0, 0.09, -6.0), Color(0.95, 0.95, 0.9)])
-			parts.append([_cyl(1.6, 1.6, 0.04, 12), Vector3(0, 0.09, -11.5), Color(0.82, 0.2, 0.16)])
+			parts.append([_box(4.2, 0.08, 1.5), Vector3(0, 0.04, -1.5), Color(0.36, 0.7, 0.32)])
+			parts.append([_cyl(0.32, 0.32, 0.04, 10), Vector3(-0.5, 0.09, -1.2), Color(0.95, 0.95, 0.9)])
+			parts.append([_cyl(0.4, 0.4, 0.04, 10), Vector3(0.55, 0.09, -1.85), Color(0.82, 0.2, 0.16)])
 		"o16":  # fountain
 			parts = [
 				[_cyl(2.1, 2.2, 0.55, 14), Vector3(0, 0.28, 0), stone],
