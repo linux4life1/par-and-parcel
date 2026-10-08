@@ -4165,5 +4165,11 @@ func _test_slope() -> void:
 	add_child(marks)
 	var mi := marks.get_child(0) as MultiMeshInstance3D
 	check(mi != null and mi.multimesh != null and mi.multimesh.mesh != null, "the downhill marks are a multimesh")
-	marks.queue_free()
-	hud.queue_free()
+	remove_child(marks)
+	marks.free()
+	hud.terrain = null
+	remove_child(hud)
+	hud.free()
+	# A node left out of the tree is not freed at quit, and its shader is
+	# then reported as a leak after the check line.
+	tv.free()
