@@ -10,12 +10,12 @@ const OVERLAY := 7
 static var _book: Dictionary = {}
 
 
+## The shared data loader hands this the slope file. Slope does not read it itself.
+static func use(data: Dictionary) -> void:
+	_book = data
+
+
 static func book() -> Dictionary:
-	if not _book.is_empty():
-		return _book
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/slope.json"))
-	if parsed is Dictionary:
-		_book = parsed
 	return _book
 
 
@@ -124,13 +124,15 @@ static func words(read: Dictionary, toward: Vector2) -> String:
 
 ## The aim line's ink while putting: the map's own colours, pale uphill and
 ## deeper downhill. A flat putt keeps the ordinary line.
-static func aim_tint(along: float, percent: float) -> Color:
+static func aim_tint(along: float, percent: float, ink: Color) -> Color:
 	var data := book()
+	# Only the part of the fall that runs along the aim. A side slope, and
+	# flat ground, keep the ink the aim line already uses.
 	if percent < float(data.get("arrow_min", 0.4)) or absf(along) < 0.25:
-		return Color(1.0, 0.9, 0.3, 0.75)
+		return ink
 	var stops: Array = data.get("stops", [])
 	if stops.is_empty():
-		return Color(1.0, 0.9, 0.3, 0.75)
+		return ink
 	var row: Array = stops[2] if along > 0.0 and stops.size() > 2 else stops[0]
 	return Color(float(row[0]), float(row[1]), float(row[2]), 0.82)
 

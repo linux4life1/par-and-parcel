@@ -14,6 +14,8 @@ var _dirty := true
 var _wait := 0.0
 var _built_key := 0
 var _built_mode := 0
+var _greens: Array[Vector2i] = []
+var _greens_ready := false
 var _mm := MultiMesh.new()
 var _mi := MultiMeshInstance3D.new()
 
@@ -36,19 +38,28 @@ func _ready() -> void:
 func set_sim(s: Sim) -> void:
 	if sim != null:
 		var old := sim.course
-		if old.heights_changed.is_connected(_mark):
-			old.heights_changed.disconnect(_mark)
-		if old.tiles_changed.is_connected(_mark):
-			old.tiles_changed.disconnect(_mark)
+		if old.heights_changed.is_connected(_on_heights):
+			old.heights_changed.disconnect(_on_heights)
+		if old.tiles_changed.is_connected(_on_tiles):
+			old.tiles_changed.disconnect(_on_tiles)
 	sim = s
+	# The previous course's marks must not sit on the new ground.
+	_mm.instance_count = 0
 	_dirty = true
+	_greens_ready = false
+	_built_key = -1
 	if s != null:
-		s.course.heights_changed.connect(_mark)
-		s.course.tiles_changed.connect(_mark)
+		s.course.heights_changed.connect(_on_heights)
+		s.course.tiles_changed.connect(_on_tiles)
 
 
-func _mark(_rect: Rect2i) -> void:
+func _on_heights(_rect: Rect2i) -> void:
 	_dirty = true
+
+
+func _on_tiles(_rect: Rect2i) -> void:
+	_dirty = true
+	_greens_ready = false
 
 
 func _process(delta: float) -> void:
@@ -98,7 +109,7 @@ func _key(mode: int) -> int:
 func _rebuild(mode: int) -> void:
 	var course := sim.course
 	var marks: Array[Transform3D] = []
-	var reach := float(Slope.book().get("view_range", 180.0))
+	var reach := float(Slope.book().get("view_range", 1400.0))
 	var near := float(Slope.book().get("near", 10.0))
 	var ball := Vector3.ZERO
 	var cam: Camera3D = null
@@ -106,27 +117,38 @@ func _rebuild(mode: int) -> void:
 		ball = play.g.ball.pos
 	elif rig != null:
 		cam = rig.cam
-	for ty in course.h:
-		for tx in course.w:
-			if not Defs.is_green(course.terrain[ty * course.w + tx]):
+	for cell in _green_cells(course):
+		var tx := cell.x
+		var ty := cell.y
+		var center := course.tile_center(tx, ty)
+		if mode == 2:
+			if Vector2(center.x - ball.x, center.z - ball.z).length() > near + Defs.TILE:
 				continue
-			var center := course.tile_center(tx, ty)
-			if mode == 2:
-				if Vector2(center.x - ball.x, center.z - ball.z).length() > near + Defs.TILE:
-					continue
-			elif cam != null:
-				if cam.global_position.distance_to(center) > reach:
-					continue
-				if not _in_front(center, cam):
-					continue
-			_lay(course, tx, ty, marks)
-			if marks.size() > 6000:
-				break
+		elif cam != null:
+			if cam.global_position.distance_to(center) > reach:
+				continue
+			if not _in_front(center, cam):
+				continue
+		_lay(course, tx, ty, marks)
 		if marks.size() > 6000:
 			break
 	_mm.instance_count = marks.size()
 	for i in marks.size():
 		_mm.set_instance_transform(i, marks[i])
+
+
+## Greens only. Rebuilt when the paint changes, so a view rebuild does not
+## walk the whole map looking for them.
+func _green_cells(course: Course) -> Array[Vector2i]:
+	if _greens_ready:
+		return _greens
+	_greens.clear()
+	for ty in course.h:
+		for tx in course.w:
+			if Defs.is_green(course.terrain[ty * course.w + tx]):
+				_greens.append(Vector2i(tx, ty))
+	_greens_ready = true
+	return _greens
 
 
 func _in_front(p: Vector3, cam: Camera3D) -> bool:

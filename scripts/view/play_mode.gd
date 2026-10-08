@@ -981,7 +981,7 @@ func _draw_preview() -> void:
 			var mid := (p0 + p1) * 0.5
 			var here := Slope.read(sim.course, mid.x, mid.z)
 			var fall: Vector2 = here.get("fall", Vector2.ZERO)
-			seg = Slope.aim_tint(fall.dot(aim_v), float(here.get("percent", 0.0)))
+			seg = Slope.aim_tint(fall.dot(aim_v), float(here.get("percent", 0.0)), col)
 		var chunk := PackedVector3Array([p0 - side, p0 + side, p1 + side, p0 - side, p1 + side, p1 - side])
 		verts.append_array(chunk)
 		for _k in chunk.size():

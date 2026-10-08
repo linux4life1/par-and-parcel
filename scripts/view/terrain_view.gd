@@ -84,6 +84,11 @@ func bind(c: Course) -> void:
 			_chunks[Vector2i(cx / CHUNK, cy / CHUNK)] = mi
 			_build_chunk(cx / CHUNK, cy / CHUNK)
 	_build_surround()
+	# A loaded course must not keep the previous map's shade, and a new
+	# size cannot update the old texture.
+	_slope_dirty = true
+	_fill_slope()
+	_slope_dirty = false
 
 
 func _frame_terrain(_delta: float) -> void:
@@ -225,7 +230,8 @@ func _fill_slope() -> void:
 			_slope[i] = g.length() * 100.0
 			i += 1
 	var bytes := _slope.to_byte_array()
-	if _slope_img == null:
+	var resized := _slope_img == null or _slope_img.get_width() != course.w or _slope_img.get_height() != course.h
+	if resized:
 		_slope_img = Image.create_from_data(course.w, course.h, false, Image.FORMAT_RF, bytes)
 		_slope_tex = ImageTexture.create_from_image(_slope_img)
 		material.set_shader_parameter("slope_tex", _slope_tex)
