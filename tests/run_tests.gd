@@ -6940,13 +6940,6 @@ func _test_turns() -> void:
 	hud.free()
 
 
-func _yards_add(hole: Hole) -> bool:
-	var total := 0
-	for yard in hole.turn_yards():
-		total += yard
-	return total == Defs.yards(hole.length)
-
-
 func _test_tee_and_stake() -> void:
 	print("-- tee and stake undo")
 	var sim := _sim("sandbox", 29)
@@ -6962,25 +6955,43 @@ func _test_tee_and_stake() -> void:
 	check(hole != null, "a straight hole can take a middle tee and a stake")
 	if hole == null:
 		return
+	var len0 := hole.length
+	var par0 := hole.par
 	var tee_cost: float = sim.tee_price()
 	var stake_cost: float = sim.turn_price()
 	var purse := sim.economy.money
 	var why_tee := sim.place_tee(hole, "middle", c.tile_center(40, 35))
 	check(why_tee == "" and hole.has_tee("middle") and is_equal_approx(purse - sim.economy.money, tee_cost), "the middle tee goes down (%s)" % why_tee)
-	check(_yards_add(hole), "with the middle tee down, the printed stretches add up to the hole")
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "the middle tee leaves the length and the par alone")
 	var stake_at := hole.point_along(0.62)
 	var why_stake := sim.place_turn(hole, stake_at)
 	check(why_stake == "" and hole.turns.size() == 1 and is_equal_approx(purse - sim.economy.money, tee_cost + stake_cost), "the stake goes down after the tee (%s)" % why_stake)
-	check(_yards_add(hole), "with the tee and the stake, the printed stretches add up to the hole")
+	var saved_yards := hole.turn_yards()
+	var stood: Vector3 = hole.turns[0]
+	var from_back := Vector2(hole.tee.x - stood.x, hole.tee.z - stood.z).length()
+	var from_mid := Vector2(hole.tee_middle.x - stood.x, hole.tee_middle.z - stood.z).length()
+	var back_yards := Defs.yards(from_back)
+	var mid_yards := Defs.yards(from_mid)
+	check(saved_yards.size() >= 2 and saved_yards[0] == back_yards and back_yards != mid_yards, "with the middle tee down, the first stretch is the stake's distance from the back tee (%d yd), not the middle (%d yd)" % [back_yards, mid_yards])
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "the stake leaves the length and the par alone")
 	var after_both := sim.economy.money
 	check(sim.undo.undo() and hole.turns.is_empty() and hole.has_tee("middle") and is_equal_approx(sim.economy.money, after_both + stake_cost), "undo takes the stake back and refunds it")
-	check(_yards_add(hole), "after the stake is undone, the printed stretches add up to the hole")
+	var bare := hole.turn_yards()
+	check(bare.size() == 1 and bare[0] == Defs.yards(hole.length), "after the stake is undone, the card is one stretch of the whole hole")
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "undoing the stake leaves the length and the par alone")
 	check(sim.undo.undo() and not hole.has_tee("middle") and hole.turns.is_empty() and is_equal_approx(sim.economy.money, purse), "undo takes the middle tee back and refunds it")
-	check(_yards_add(hole), "after both are undone, the printed stretches add up to the hole")
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "undoing the middle tee leaves the length and the par alone")
 	check(sim.undo.redo() and hole.has_tee("middle") and hole.turns.is_empty() and is_equal_approx(sim.economy.money, purse - tee_cost), "redo puts the middle tee back and charges it")
-	check(_yards_add(hole), "after the tee is redone, the printed stretches add up to the hole")
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "redoing the middle tee leaves the length and the par alone")
 	check(sim.undo.redo() and hole.has_tee("middle") and hole.turns.size() == 1 and is_equal_approx(sim.economy.money, purse - tee_cost - stake_cost), "redo puts the stake back and charges it")
-	check(_yards_add(hole), "after both are redone, the printed stretches add up to the hole")
+	var redone := hole.turn_yards()
+	var same_yards := redone.size() == saved_yards.size()
+	if same_yards:
+		for yard_i in redone.size():
+			if redone[yard_i] != saved_yards[yard_i]:
+				same_yards = false
+	check(same_yards, "after both are redone, the printed stretches match the stake that went down (%s against %s)" % [str(redone), str(saved_yards)])
+	check(is_equal_approx(hole.length, len0) and hole.par == par0, "redoing the stake leaves the length and the par alone")
 
 
 func _play_from(sim: Sim, hole: Hole, skill: float) -> Vector2:
