@@ -3702,6 +3702,6 @@ func _test_firm() -> void:
 	check(coach._met({"done": "fairway"}) and not coach._met({"done": "green"}), "a firm fairway counts as the fairway")
 	for i in Tutorial.COUNT_GREEN:
 		ground.course.terrain[i] = Defs.T.GREEN
-	for i in range(Tutorial.COUNT_GREEN, Tutorial.COUNT_FAIRWAY):
+	for i in range(Tutorial.COUNT_GREEN, Tutorial.COUNT_GREEN + Tutorial.COUNT_FAIRWAY):
 		ground.course.terrain[i] = Defs.T.FAIRWAY
 	check(coach._met({"done": "green"}) and coach._met({"done": "fairway"}), "the ordinary green and fairway still count")
