@@ -14,17 +14,15 @@ var factors: Array = []
 var progress: Dictionary = {}  # how a member's game grows, data/membership.json
 var warmup: Dictionary = {}    # the one-round warm-up, same file
 var resign_strikes := 2        # miserable rounds and storm-offs, same file
+var roster: Array[Dictionary] = []
+var joined_total := 0
+var quit_total := 0
+var _next_id := 1
 
 
 ## How many strikes it takes. The membership file says, and anything below 1 counts as 1.
 static func strike_limit(n: int) -> int:
 	return maxi(n, 1)
-
-
-var roster: Array[Dictionary] = []
-var joined_total := 0
-var quit_total := 0
-var _next_id := 1
 
 
 func _init(s: Sim) -> void:
