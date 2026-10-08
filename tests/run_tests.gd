@@ -2850,9 +2850,9 @@ func _test_landmarks() -> void:
 	g.pos = far
 	check(not sim.touch_landmark(g), "standing nowhere near a landmark does nothing")
 	var ti := 40 * c.w + 40
-	c.objects[ti] = Defs.O.LANDMARK
-	c.objects_touched(ti)
-	c.revision += 1
+	c.guard = false
+	c.set_terrain(40, 40, Defs.T.FAIRWAY)
+	check(c.set_object(40, 40, Defs.O.LANDMARK), "a landmark goes up through the same door as every other object")
 	g.pos = c.tile_center(40, 40)
 	var before: float = g.satisfaction
 	check(sim.touch_landmark(g), "stepping into the circle is noticed")
@@ -2862,6 +2862,15 @@ func _test_landmarks() -> void:
 	var got: Dictionary = live.get("landmark_for", {})
 	check(float(got.get("a", 0.0)) >= 8.0 and sim.stories._need_met("role_happy:a:64", live), "the same visit makes the happy ending reachable (boost %.1f)" % float(got.get("a", 0.0)))
 	check(sim.weed_scale(ti) < 0.5 and sim.weed_scale(80 * c.w + 80) == 1.0, "weeds slow down in the circle and nowhere else (%.2f)" % sim.weed_scale(ti))
+	var inside := ti + 1
+	var outside := ti + 12
+	c.set_terrain(41, 40, Defs.T.FAIRWAY)
+	c.set_terrain(52, 40, Defs.T.FAIRWAY)
+	c.weeds[inside] = 0.25
+	c.weeds[outside] = 0.25
+	sim.grounds._cursor = inside
+	sim.grounds.step(1.0)
+	check(c.weeds[inside] < c.weeds[outside], "a weed inside the circle grows less than one outside (%.3f against %.3f)" % [c.weeds[inside], c.weeds[outside]])
 
 
 func _test_bar_and_vending() -> void:
