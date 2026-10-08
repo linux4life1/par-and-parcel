@@ -686,18 +686,12 @@ static func _built(kind: String) -> Array:
 				[_box(3.4, 2.4, 0.14), Vector3(-1.3, 1.45, -2.52), white],
 				[_box(1.2, 0.9, 0.12), Vector3(2.3, 2.2, -2.52), glass()],
 			]
-		"o14":  # putting green
+		"o14":  # putting green: a green with no hole
 			var turf := Surfaces.material("grass_ground", 0.5, Color(1.25, 2.6, 1.3))
 			parts = [
 				[_cyl(4.6, 4.7, 0.1, 24), Vector3(0, 0.05, 0), Surfaces.material("grass_ground", 0.5, Color(0.9, 1.9, 0.9))],
 				[_cyl(4.2, 4.2, 0.13, 24), Vector3(0, 0.07, 0), turf],
 			]
-			for k in 3:
-				var a := k * TAU / 3.0 + 0.4
-				var at := Vector3(cos(a) * 2.3, 0, sin(a) * 2.3)
-				parts.append([_cyl(0.02, 0.02, 1.1, 5), at + Vector3(0, 0.65, 0), white])
-				parts.append([_box(0.36, 0.24, 0.02), at + Vector3(0.18, 1.06, 0), paint(Color(0.92, 0.75, 0.1))])
-				parts.append([_cyl(0.07, 0.07, 0.02, 8), at + Vector3(0, 0.14, 0), paint(Color(0.03, 0.03, 0.03))])
 		"o15":  # driving range
 			parts = [
 				[_box(8.4, 0.2, 3.4), Vector3(0, 0.1, 1.2), stone],
@@ -709,6 +703,11 @@ static func _built(kind: String) -> Array:
 			for k in 3:
 				parts.append([_box(1.5, 0.06, 1.7), Vector3(-2.7 + k * 2.7, 0.23, 0.7), Surfaces.material("grass_ground", 0.6, Color(1.0, 2.2, 1.1))])
 				parts.append([_cyl(0.3, 0.26, 0.4, 10), Vector3(-3.4 + k * 2.7, 0.4, 1.8), paint(Color(0.2, 0.45, 0.25), 0.5)])
+			var lawn := Surfaces.material("grass_ground", 0.4, Color(1.2, 2.55, 1.15))
+			parts.append([_box(12.0, 0.08, 18.0), Vector3(0, 0.04, -10.4), lawn])
+			parts.append([_cyl(1.15, 1.15, 0.03, 16), Vector3(0, 0.09, -5.2), paint(Color(0.95, 0.95, 0.92))])
+			parts.append([_cyl(1.45, 1.45, 0.03, 16), Vector3(0, 0.09, -10.2), paint(Color(0.82, 0.18, 0.14))])
+			parts.append([_cyl(1.7, 1.7, 0.03, 16), Vector3(0, 0.09, -15.6), paint(Color(0.95, 0.82, 0.15))])
 		"o16":  # fountain
 			parts = [
 				[_cyl(2.3, 2.4, 0.5, 24), Vector3(0, 0.25, 0), stone],
@@ -1143,13 +1142,8 @@ static func _parts(kind: String) -> Array:
 				[_box(1.5, 0.6, 1.0), Vector3(2.3, 0.6, -3.6), Color(0.95, 0.95, 0.95)],
 				[_box(1.4, 0.08, 1.0), Vector3(2.3, 1.6, -3.6), Color(0.2, 0.5, 0.3)],
 			]
-		"o14":  # putting green
+		"o14":  # putting green: a green with no hole
 			parts = [[_cyl(4.4, 4.4, 0.14, 16), Vector3(0, 0.07, 0), Color(0.42, 0.78, 0.38)]]
-			for k in 3:
-				var a := k * TAU / 3.0 + 0.4
-				var at := Vector3(cos(a) * 2.4, 0, sin(a) * 2.4)
-				parts.append([_cyl(0.03, 0.03, 1.0, 5), at + Vector3(0, 0.6, 0), Color(0.95, 0.95, 0.9)])
-				parts.append([_box(0.4, 0.26, 0.03), at + Vector3(0.2, 0.95, 0), Color(0.9, 0.75, 0.1)])
 		"o15":  # driving range
 			parts = [
 				[_box(8.0, 0.3, 3.0), Vector3(0, 2.6, 1.2), Color(0.3, 0.38, 0.32)],
@@ -1160,6 +1154,9 @@ static func _parts(kind: String) -> Array:
 			for k in 4:
 				parts.append([_box(1.3, 0.08, 1.6), Vector3(-3.0 + k * 2.0, 0.05, 0.6), Color(0.25, 0.6, 0.3)])
 				parts.append([_sphere(0.28, 6, 3), Vector3(-3.4 + k * 2.0, 0.25, 1.9), Color(0.95, 0.9, 0.3)])
+			parts.append([_box(12.0, 0.08, 16.0), Vector3(0, 0.04, -9.2), Color(0.36, 0.7, 0.32)])
+			parts.append([_cyl(1.3, 1.3, 0.04, 12), Vector3(0, 0.09, -6.0), Color(0.95, 0.95, 0.9)])
+			parts.append([_cyl(1.6, 1.6, 0.04, 12), Vector3(0, 0.09, -11.5), Color(0.82, 0.2, 0.16)])
 		"o16":  # fountain
 			parts = [
 				[_cyl(2.1, 2.2, 0.55, 14), Vector3(0, 0.28, 0), stone],

@@ -145,9 +145,9 @@ func hint() -> String:
 				body += " Slope under the brush: %s. %s" % [Slope.percent_text(float(read.get("percent", 0.0))), Slope.fair_line()]
 		"object":
 			if object_type == Defs.O.BRIDGE:
-				body = "Click the water or a stream to bridge it. %s a span." % Defs.money(Defs.O_COST[object_type])
+				body = "Click the water or a stream to bridge it. %s a span." % Defs.money(sim.object_price(object_type))
 			else:
-				body = "Click to place: %s. %s each." % [sim.object_name(object_type).to_lower(), Defs.money(Defs.O_COST[object_type])]
+				body = "Click to place: %s. %s each." % [sim.object_name(object_type).to_lower(), Defs.money(sim.object_price(object_type))]
 		"bulldoze":
 			body = "Drag to clear trees, scenery and buildings."
 		"hole":

@@ -1369,7 +1369,7 @@ func _show_structure(tile: Vector2i) -> void:
 			return
 		_update_inspector(true), tip))
 	inspector_body.add_child(UIKit.label("Closed" if off else "Open", 13, UIKit.BAD if off else UIKit.GOOD))
-	var bill := 0.0 if off and not still else float(Defs.O_UPKEEP[o])
+	var bill := 0.0 if off and not still else sim.object_upkeep(o)
 	inspector_body.add_child(UIKit.row("Upkeep", "%s a month" % Defs.money(bill)))
 	if still:
 		inspector_body.add_child(UIKit.label("The saving starts next month.", 13, UIKit.MUTED))

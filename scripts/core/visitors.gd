@@ -275,13 +275,14 @@ func _register(g: Golfer) -> void:
 	var warm := sim.members.warmup
 	var skill_cap := float(warm["skill_cap"])
 	var power_cap := float(warm["power_cap"])
+	var practice: Dictionary = sim.db.practice
 	if int(amenities.get("putting", 0)) > 0:
 		g.putting = minf(skill_cap, g.putting + float(warm.get("putting", 0.05)))
-		g.feel(1.5, "Rolled a few on the practice green first.", "practice")
+		g.feel(float(practice.get("green_mood", 0.0)), "Rolled a few on the practice green first.", "practice")
 	if int(amenities.get("range", 0)) > 0:
 		g.power = minf(power_cap, g.power + float(warm.get("range_power", 0.03)))
-		sim.economy.earn("range", 4.0)
-		g.feel(1.5, "Hit a bucket of balls on the range first.", "practice")
+		sim.economy.earn("range", float(practice.get("bucket", 0.0)))
+		g.feel(float(practice.get("range_mood", 0.0)), "Hit a bucket of balls on the range first.", "practice")
 	if sim.clubhouse_level > 0:
 		g.feel(0.4 * sim.clubhouse_level, "", "prestige")
 	if sim.crew.count("club_pro") > 0:
