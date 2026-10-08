@@ -3795,6 +3795,38 @@ func _test_course_file() -> void:
 	check(CourseFile.parse(JSON.stringify(month)).is_empty(), "an open_month layer of the wrong size is refused")
 	month_course["open_month"] = 1
 	check(CourseFile.parse(JSON.stringify(month)).is_empty(), "an open_month layer that is not a byte string is refused")
+	var cups: Dictionary = pack.duplicate(true)
+	var cups_course: Dictionary = cups.course
+	var short_litter := PackedByteArray()
+	short_litter.resize(4)
+	cups_course["litter"] = Marshalls.raw_to_base64(short_litter)
+	check(CourseFile.parse(JSON.stringify(cups)).is_empty(), "a litter layer of the wrong size is refused")
+	cups_course["litter"] = 1
+	check(CourseFile.parse(JSON.stringify(cups)).is_empty(), "a litter layer that is not a byte string is refused")
+	var boards: Dictionary = pack.duplicate(true)
+	var boards_course: Dictionary = boards.course
+	var short_repair := PackedByteArray()
+	short_repair.resize(4)
+	boards_course["repair"] = Marshalls.raw_to_base64(short_repair)
+	check(CourseFile.parse(JSON.stringify(boards)).is_empty(), "a repair layer of the wrong size is refused")
+	boards_course["repair"] = 1
+	check(CourseFile.parse(JSON.stringify(boards)).is_empty(), "a repair layer that is not a byte string is refused")
+	var kept: Dictionary = pack.duplicate(true)
+	var kept_course: Dictionary = kept.course
+	var ntiles := int(kept_course.w) * int(kept_course.h)
+	var litter := PackedFloat32Array()
+	litter.resize(ntiles)
+	litter.fill(0.0)
+	litter[0] = 0.75
+	kept_course["litter"] = Marshalls.raw_to_base64(litter.to_byte_array())
+	var repair := PackedByteArray()
+	repair.resize(ntiles)
+	repair.fill(0)
+	repair[1] = 1
+	kept_course["repair"] = Marshalls.raw_to_base64(repair)
+	check(not CourseFile.parse(JSON.stringify(kept)).is_empty(), "a litter layer of one float per tile and a repair layer of one byte per tile are accepted")
+	var brought := CourseFile.host(db, kept, gear, 4)
+	check(is_equal_approx(brought.course.litter[0], 0.75) and brought.course.repair[1] == 1, "a valid litter and repair pair is imported")
 	var dirty: Dictionary = pack.duplicate(true)
 	var dirty_holes: Array = dirty.course.holes
 	var dirty_h: Dictionary = dirty_holes[0]
