@@ -85,7 +85,11 @@ func _to_tee(dt: float, sim: Sim) -> void:
 		if there:
 			stop.timer = float(stop.timer) - dt
 			if float(stop.timer) <= 0.0:
-				sim.visitors.serve(self, str(stop.kind))
+				var spot: Vector3 = stop.pos
+				if stop.get("spot") is Vector3:
+					spot = stop.spot
+				if sim.visitors.facility_near(str(stop.kind), spot, 1.0):
+					sim.visitors.serve(self, str(stop.kind))
 				stop = {}
 		return
 	# Join the line for the tee and walk to our place in it. The party at

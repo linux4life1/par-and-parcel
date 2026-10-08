@@ -390,6 +390,7 @@ func _end_month(d: int) -> void:
 	economy.earn("real_estate", homes * 45.0)
 	economy.spend("wages", crew.monthly_wages())
 	economy.spend("upkeep", monthly_upkeep())
+	course.settle_month()
 	if economy.money < 0.0:
 		economy.spend("interest", -economy.money * 0.02)
 	var prev := Defs.date_parts(d - 1)
@@ -403,9 +404,17 @@ func _end_month(d: int) -> void:
 func monthly_upkeep() -> float:
 	var t := course.holes.size() * 15.0
 	var share := light_on_share()
-	for o in course.objects:
-		var cost := float(Defs.O_UPKEEP[int(o)])
-		if _light_kind(int(o)):
+	var objs := course.objects
+	for i in objs.size():
+		var o := int(objs[i])
+		if o == 0:
+			continue
+		# Open now, or open earlier this month: closing just before the bill
+		# does not make the month free.
+		if course.is_closed(i) and course.open_month[i] == 0:
+			continue
+		var cost := float(Defs.O_UPKEEP[o])
+		if _light_kind(o):
 			cost *= share
 		t += cost
 	return t
@@ -800,7 +809,8 @@ func scenery_score(hole: Hole) -> float:
 				if not course.in_bounds(tx, ty):
 					continue
 				var i := ty * course.w + tx
-				total += Defs.O_SCENERY[course.objects[i]]
+				if not course.is_closed(i):
+					total += Defs.O_SCENERY[course.objects[i]]
 				if course.terrain[i] == Defs.T.WATER:
 					total += 0.25
 	var score := clampf(total / (samples * 9.0), 0.0, 1.0)
@@ -820,7 +830,7 @@ func _ensure_marks() -> void:
 	var objs := course.objects
 	for i in objs.size():
 		var o := int(objs[i])
-		if not by_obj.has(o):
+		if not by_obj.has(o) or course.is_closed(i):
 			continue
 		var kind: Dictionary = by_obj[o]
 		var p := course.tile_center(i % course.w, int(i / course.w))
@@ -919,9 +929,19 @@ func build_block(o: int) -> String:
 	var need: int = Defs.O_MIN_HOLES[o]
 	if course.holes.size() < need and str(scenario.def.get("id", "")) != "sandbox":
 		return "Needs %d holes" % need
-	if o == Defs.O.LANDMARK and int(visitors.amenity_counts().get("landmark", 0)) >= 2 and int(gifts.get(o, 0)) == 0:
+	if o == Defs.O.LANDMARK and _landmarks_standing() >= 2 and int(gifts.get(o, 0)) == 0:
 		return "Two landmarks is the limit"
 	return ""
+
+
+## Landmarks standing on the course, open or closed. Closing one does not
+## free the slot.
+func _landmarks_standing() -> int:
+	var n := 0
+	for i in course.objects.size():
+		if int(course.objects[i]) == Defs.O.LANDMARK:
+			n += 1
+	return n
 
 
 func place_object(tx: int, ty: int, o: int) -> int:
@@ -954,7 +974,8 @@ func lot_value(tx: int, ty: int) -> float:
 				continue
 			var i := y * course.w + x
 			var o := course.objects[i]
-			v += Defs.O_SCENERY[o] * 55.0
+			if not course.is_closed(i):
+				v += Defs.O_SCENERY[o] * 55.0
 			if o == Defs.O.HOUSE or o == Defs.O.HOME_SITE:
 				v -= 60.0
 			if course.terrain[i] == Defs.T.WATER and not is_lava():
@@ -1014,7 +1035,7 @@ func _lot_fun_held() -> bool:
 ## the same way lot_value skips it.
 func _lot_cell(i: int) -> float:
 	var o := int(course.objects[i])
-	var a := Defs.O_SCENERY[o] * 55.0
+	var a := 0.0 if course.is_closed(i) else Defs.O_SCENERY[o] * 55.0
 	if o == Defs.O.HOUSE or o == Defs.O.HOME_SITE:
 		a -= 60.0
 	if course.terrain[i] == Defs.T.WATER and not _lot_lava:
