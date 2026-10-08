@@ -63,6 +63,7 @@ func _ready() -> void:
 	_test_progress()
 	_test_accreditation()
 	_test_station()
+	_test_comments()
 	_test_lights_gap_awards()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
@@ -3596,19 +3597,57 @@ func _test_accreditation() -> void:
 	check(_design_sum(stuffed) > 100.0 and is_equal_approx(stuffed.design, 100.0), "past the top, the lines still add up and the score stops at 100")
 
 
+func _test_comments() -> void:
+	print("-- comments and history")
+	var sim := _sim("three_holes", 3)
+	check(sim.course.comment_report().is_empty(), "a fresh course has nothing to report")
+	sim.course.holes[0].comments = {"scenery": 4.0, "wait": -1.0}
+	sim.course.holes[1].comments = {"scenery": 2.5, "water": -6.0}
+	sim.course.holes[2].comments = {"wait": -2.0}
+	var report := sim.course.comment_report()
+	check(report.size() == 3, "the report lists each thing golfers mention (%d)" % report.size())
+	check(str(report[0].tag) == "scenery" and is_equal_approx(float(report[0].total), 6.5), "praise on two holes is added together, and the strongest feeling is listed first")
+	check(str(report[1].tag) == "water" and is_equal_approx(float(report[1].total), -6.0), "a complaint on one hole is listed by how hard it hit")
+	check(str(report[2].tag) == "wait" and is_equal_approx(float(report[2].total), -3.0), "the same complaint on two holes is added together")
+	sim.rating = 64.0
+	sim.visitors.recent.clear()
+	for i in 8:
+		sim.visitors.recent.append(80.0)
+	var sat := sim.visitors.average_satisfaction()
+	sim._end_month(32)
+	var row: Dictionary = sim.economy.history[-1]
+	check(is_equal_approx(float(row.rating), 64.0) and is_equal_approx(float(row.satisfaction), sat), "a closed month remembers the rating and how happy golfers were")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var hist: Array = saved.history
+	var old: Dictionary = hist[0]
+	old.erase("rating")
+	old.erase("satisfaction")
+	var loaded := Sim.from_dict(db, saved, gear)
+	check(not loaded.economy.history[0].has("rating") and not loaded.economy.history[0].has("satisfaction"), "an older month, with no standing recorded, still loads")
+	loaded.rating = 40.0
+	loaded._end_month(64)
+	var again: Dictionary = loaded.economy.history[-1]
+	check(is_equal_approx(float(again.rating), 40.0) and again.has("satisfaction"), "the next month records the standing again")
+	var words: Dictionary = load("res://scripts/ui/panels.gd").get_script_constant_map().get("COMMENT_WORDS", {})
+	var named := true
+	for tag in ["dark", "night", "drink", "snack", "rain", "storm", "celebrity", "thirst", "hungry", "restroom"]:
+		if not words.has(tag):
+			named = false
+	check(named, "every feeling golfers carry off a hole has words in the report")
+	sim.visitors.recent.clear()
+	sim._end_month(96)
+	var quiet: Dictionary = sim.economy.history[-1]
+	check(not quiet.has("satisfaction"), "a month with no golfers draws no satisfaction point")
+
 func _test_lights_gap_awards() -> void:
 	print("-- lights on a schedule, the starter's gap, and themed awards")
 	var sim := _sim("three_holes", 41)
 	sim.economy.money = 400000.0
 	var hole := sim.course.holes[0]
 	var before := sim.monthly_upkeep()
-	var dusk := float(sim.db.lights.get("dusk", 0.0))
-	var dawn := float(sim.db.lights.get("dawn", 0.0))
-	var hours := dawn - dusk
-	if hours <= 0.0:
-		hours += 24.0
-	var share := hours / 24.0
-	check(is_equal_approx(sim.light_on_share(), share) and share > 0.0 and share < 1.0, "light upkeep follows the dusk-to-dawn hours in the data (%.0f%% of the day)" % (share * 100.0))
+	var share := (24.0 - (Defs.SUNSET - Defs.SUNRISE)) / 24.0
+	check(is_equal_approx(sim.light_on_share(), share), "light upkeep follows sunset to sunrise (%.0f%% of the day)" % (share * 100.0))
+	check(not sim.db.lights.has("dusk") and not sim.db.lights.has("dawn"), "the light data does not keep a second copy of sunset and sunrise")
 	var n := _light_hole(sim, hole)
 	check(n > 0 and hole.lit_enough(sim.course), "floodlights along the hole light it")
 	var lit_cost := sim.monthly_upkeep()
@@ -3635,7 +3674,12 @@ func _test_lights_gap_awards() -> void:
 	s2.events.timer = 99999.0
 	var h2 := s2.course.holes[0]
 	check(not h2.starter_holds(s2.time), "with no gap, the next party is not held")
-	h2.gap = 180.0
+	h2.gap = 0.0
+	s2.nudge_gap(h2, -1)
+	check(is_equal_approx(h2.gap, 0.0), "the starter gap stops at zero")
+	h2.gap = s2.starter_max()
+	s2.nudge_gap(h2, 1)
+	check(is_equal_approx(h2.gap, s2.starter_max()), "the starter gap stops at the maximum")
 	var a := s2.visitors.add_group("public", 1, 0.5)
 	var b := s2.visitors.add_group("public", 1, 0.5)
 	var guard := 0
@@ -3744,3 +3788,66 @@ func _test_lights_gap_awards() -> void:
 	h0.erase("gap")
 	var old := Sim.from_dict(db, saved, gear)
 	check(old.course.holes[0].gap == 0.0 and old.course.holes[0].themes.is_empty(), "an older save, with neither stored, still loads")
+	var stacked: Dictionary = JSON.parse_string(JSON.stringify(s3.to_dict()))
+	var stacked_course: Dictionary = stacked.course
+	var stacked_holes: Array = stacked_course.holes
+	var stacked_h: Dictionary = stacked_holes[0]
+	stacked_h["themes"] = ["par3", "par3", "bogus"]
+	var once := Sim.from_dict(db, stacked, gear)
+	var once_h := once.course.holes[0]
+	check(once_h.themes.size() == 1 and str(once_h.themes[0]) == "par3" and is_equal_approx(once.theme_fee(once_h), 0.06), "a repeated award in a save loads once, and the fee is 6%")
+	for i in s3.course.objects.size():
+		if s3.course.objects[i] == Defs.O.FLOODLIGHT:
+			s3.remove_object(i % s3.course.w, i / s3.course.w)
+	check(not night.lit_enough(s3.course), "the night hole goes dark when the lights come down")
+	s3._check_awards()
+	check(not night.themes.has("night"), "the night award is lost at the next daily check")
+	p3.fun = 80.0
+	p3.plays = 40
+	p3.par = 4
+	p3.themes.clear()
+	p3.themes.append("par3")
+	s3._check_awards()
+	check(not p3.themes.has("par3"), "a hole that is no longer a par 3 loses the award")
+	p3.par = 3
+	p3.open = false
+	p3.themes.clear()
+	p3.themes.append("par3")
+	s3._check_awards()
+	check(not p3.themes.has("par3"), "a closed hole loses the award")
+	p3.open = true
+	p3.fun = 75.0
+	p3.themes.clear()
+	p3.themes.append("par3")
+	lesser.par = 3
+	lesser.fun = 90.0
+	lesser.plays = 40
+	lesser.kind = 1
+	lesser.open = true
+	lesser.lab_ready = true
+	lesser.themes.clear()
+	s3._judge_themes()
+	check(lesser.themes.has("par3") and not p3.themes.has("par3"), "a better hole takes the award at the next yearly judging")
+	var dry_sim := _sim("three_holes", 44)
+	var dry := dry_sim.course.holes[0]
+	var ground := dry_sim.course
+	for i in ground.terrain.size():
+		if ground.terrain[i] == Defs.T.WATER:
+			ground.terrain[i] = Defs.T.ROUGH
+	check(not dry.touches_water(ground), "with the water painted out, the hole is dry")
+	var origin := Vector2(dry.tee.x, dry.tee.z)
+	var dir := dry.direction_at(0.0)
+	var behind := -1
+	var back_m := 13.0
+	while back_m > 8.0 and behind < 0:
+		var aim := origin - dir * back_m
+		var tx := int(floor(aim.x / Defs.TILE))
+		var tz := int(floor(aim.y / Defs.TILE))
+		if ground.in_bounds(tx, tz):
+			var center := Vector2((float(tx) + 0.5) * Defs.TILE, (float(tz) + 0.5) * Defs.TILE)
+			if center.distance_to(origin) < 14.0 and (center - origin).dot(dir) < -6.0:
+				behind = tz * ground.w + tx
+		back_m -= 0.5
+	check(behind >= 0, "there is a tile just behind the tee, inside 14 m")
+	ground.terrain[behind] = Defs.T.WATER
+	check(not dry.touches_water(ground), "one water tile 13 m behind the tee does not make a water hole")

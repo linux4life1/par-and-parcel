@@ -53,8 +53,13 @@ func net() -> float:
 	return total(income) - total(expense)
 
 
-func close_month(label: String) -> void:
-	history.append({"label": label, "income": income.duplicate(), "expense": expense.duplicate(), "net": net(), "money": money})
+func close_month(label: String, rating: float = -1.0, satisfaction: float = -1.0) -> void:
+	var row := {"label": label, "income": income.duplicate(), "expense": expense.duplicate(), "net": net(), "money": money}
+	if rating >= 0.0:
+		row["rating"] = rating
+	if satisfaction >= 0.0:
+		row["satisfaction"] = satisfaction
+	history.append(row)
 	if history.size() > 24:
 		history.pop_front()
 	income = {}

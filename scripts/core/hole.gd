@@ -548,17 +548,14 @@ func starter_holds(now: float) -> bool:
 
 
 ## Water sits beside the line of play, close enough to be the hole's hazard.
+## The tee itself is not tested: a pond behind the box is not in play.
 func touches_water(course: Course) -> bool:
-	var pts := route
-	if pts.is_empty():
-		pts = PackedVector2Array([Vector2(tee.x, tee.z), Vector2(pin.x, pin.z)])
-	var step: int = maxi(1, int(pts.size() / 16))
-	var k := 0
-	while k < pts.size():
-		if course.water_near(pts[k].x, pts[k].y, 14.0):
+	var n := maxi(6, int(length / 10.0))
+	for k in range(1, n + 1):
+		var p := point_along(float(k) / float(n))
+		if course.water_near(p.x, p.z, 14.0):
 			return true
-		k += step
-	return course.water_near(pin.x, pin.z, 14.0) or course.water_near(tee.x, tee.z, 14.0)
+	return course.water_near(pin.x, pin.z, 14.0)
 
 
 func to_dict() -> Dictionary:
@@ -595,9 +592,20 @@ static func from_dict(d: Dictionary) -> Hole:
 		hole.play_times.pop_front()
 	hole.award = str(d.get("award", ""))
 	hole.gap = float(d.get("gap", 0.0))
+	var known := {}
+	var awards: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/awards.json"))
+	if awards is Dictionary:
+		for row in awards.get("themes", []):
+			if row is Dictionary:
+				known[str(row.get("id", ""))] = true
 	var th: Array = d.get("themes", [])
 	for id in th:
-		hole.themes.append(str(id))
+		var name := str(id)
+		if name == "" or hole.themes.has(name):
+			continue
+		if not known.is_empty() and not known.has(name):
+			continue
+		hole.themes.append(name)
 	hole.comments = d.get("comments", {})
 	# Par is filled in properly once the ground is loaded (Course.from_dict).
 	# Until then, a save that recorded one keeps it, and an older save keeps

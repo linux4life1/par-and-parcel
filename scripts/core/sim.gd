@@ -351,7 +351,7 @@ func _end_month(d: int) -> void:
 	var prev := Defs.date_parts(d - 1)
 	var label := "%s, Year %d" % [Defs.MONTH_NAMES[prev.month], prev.year]
 	var net := economy.net()
-	economy.close_month(label)
+	economy.close_month(label, rating, visitors.average_satisfaction() if not visitors.recent.is_empty() else -1.0)
 	toast.emit("%s closed: %s%s." % [Defs.MONTH_NAMES[prev.month], "profit of " if net >= 0.0 else "loss of ", Defs.money(absf(net))], "good" if net >= 0.0 else "bad")
 	month_ended.emit(label)
 
@@ -368,12 +368,10 @@ func monthly_upkeep() -> float:
 
 
 ## The share of a day the floodlights and lamp posts are switched on:
-## dusk until dawn, from data/lights.json. Their upkeep is that share of
-## the listed amount. A building that also glows still pays in full.
+## sunset until sunrise. Their upkeep is that share of the listed amount.
+## A building that also glows still pays in full.
 func light_on_share() -> float:
-	var dusk := float(db.lights.get("dusk", Defs.SUNSET))
-	var dawn := float(db.lights.get("dawn", Defs.SUNRISE))
-	var hours := dawn - dusk
+	var hours := Defs.SUNRISE - Defs.SUNSET
 	if hours <= 0.0:
 		hours += 24.0
 	return clampf(hours / 24.0, 0.0, 1.0)
@@ -420,8 +418,13 @@ func theme_name(id: String) -> String:
 ## The extra share of a green fee a themed award adds. One award, one share.
 func theme_fee(hole: Hole) -> float:
 	var bonus := 0.0
+	var seen := {}
 	for id in hole.themes:
-		bonus += float(_theme(id).get("fee", 0.0))
+		var key := str(id)
+		if seen.has(key):
+			continue
+		seen[key] = true
+		bonus += float(_theme(key).get("fee", 0.0))
 	return bonus
 
 
