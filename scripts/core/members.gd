@@ -355,7 +355,7 @@ func make_golfer(m: Dictionary) -> Golfer:
 	g.pants = Color(str(m.pants))
 	g.skin = Color(str(m.skin))
 	g.hat = Color(str(m.hat))
-	g.satisfaction = clampf(60.0 + int(m.tier) * 1.5 + sim.rng.randfn(0.0, 4.0) + sim.skills.bonus("welcome"), 30.0, 90.0)
+	g.satisfaction = clampf(60.0 + int(m.tier) * 1.5 + sim.rng.randfn(0.0, 4.0) + sim.skills.bonus("welcome") + sim.debt_arrival(), 30.0, 90.0)
 	g.persona = DataDB.find(sim.db.personalities, str(m.persona))
 	g.member = m
 	m.on_course = true
