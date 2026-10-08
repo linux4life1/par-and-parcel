@@ -13,6 +13,7 @@ var tiers: Array = []
 var factors: Array = []
 var progress: Dictionary = {}  # how a member's game grows, data/membership.json
 var warmup: Dictionary = {}    # the one-round warm-up, same file
+var resign_strikes := 2        # miserable rounds and storm-offs, same file
 var roster: Array[Dictionary] = []
 var joined_total := 0
 var quit_total := 0
@@ -28,6 +29,7 @@ func _init(s: Sim) -> void:
 		factors = d.get("factors", [])
 		progress = d.get("progress", {})
 		warmup = d.get("warmup", {})
+		resign_strikes = maxi(int(d.get("resign_strikes", 2)), 1)
 
 
 ## The length scale. 0 is a short hitter, 1 a long one. The numbers live in
@@ -174,28 +176,36 @@ func enroll(g: Golfer, quiet: bool = false) -> Dictionary:
 
 func _member_visit(g: Golfer) -> void:
 	var m := g.member
+	if not roster.has(m):
+		return
 	m.on_course = false
-	if g.holes_played == 0:
+	if g.holes_played == 0 and not g.storming:
 		return
 	var rng := sim.rng
 	var t := int(m.tier)
-	m.visits = int(m.visits) + 1
-	m.visits_at_tier = int(m.visits_at_tier) + 1
-	m.last_mood = g.satisfaction
-	m.spent = float(m.spent) + g.paid
-	m.next_visit = sim.day() + maxi(3, rng.randi_range(6, 14) - t - (3 if m.home else 0))
-	# resigning
-	if g.satisfaction < 35.0:
+	if g.holes_played > 0:
+		m.visits = int(m.visits) + 1
+		m.visits_at_tier = int(m.visits_at_tier) + 1
+		m.last_mood = g.satisfaction
+		m.spent = float(m.spent) + g.paid
+		m.next_visit = sim.day() + maxi(3, rng.randi_range(6, 14) - t - (3 if m.home else 0))
+	# One strike for a miserable round or a storm-off, not one for each.
+	# A storm-off does not clear strikes, even when the round was otherwise happy.
+	if g.storming or g.satisfaction < 35.0:
 		m.strikes = int(m.strikes) + 1
-		if int(m.strikes) >= 2:
+		if int(m.strikes) >= resign_strikes:
 			roster.erase(m)
 			quit_total += 1
-			sim.toast.emit("%s, a %s member, has resigned from the club: %s" % [m.name, tier_name(t), sim.visitors.reason_for(g)], "bad")
-			sim.feed.say("member_quit", g, {"reason": sim.visitors.reason_for(g)}, true)
+			var why := "Walked off the course." if g.storming else sim.visitors.reason_for(g)
+			sim.toast.emit("%s, a %s member, has resigned from the club: %s" % [m.name, tier_name(t), why], "bad")
+			sim.feed.say("member_quit", g, {"reason": why}, true)
 			changed.emit()
 			return
 	elif g.satisfaction >= 55.0:
 		m.strikes = 0
+	if g.holes_played == 0:
+		changed.emit()
+		return
 	# moving up
 	if t < tiers.size() - 1:
 		var want := str(m.wants[t])
@@ -361,5 +371,7 @@ func from_list(list: Array) -> void:
 	for m: Dictionary in list:
 		m.on_course = false
 		m.tier = int(m.tier)
+		if not m.has("strikes"):
+			m.strikes = 0
 		roster.append(m)
 		_next_id = maxi(_next_id, int(m.id) + 1)

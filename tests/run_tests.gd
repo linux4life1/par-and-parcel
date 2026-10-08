@@ -49,6 +49,7 @@ func _ready() -> void:
 	_test_facilities()
 	_test_bar_and_vending()
 	_test_membership()
+	_test_storm_resign()
 	_test_stories()
 	_test_hole_lab()
 	_test_club_life()
@@ -4251,3 +4252,47 @@ func _test_close_structure() -> void:
 	check(c.set_object(drink.x, drink.y, Defs.O.NONE), "the stand can be taken down")
 	check(not c.is_closed(stood), "taking it down forgets that it was closed")
 	c.guard = true
+
+
+func _test_storm_resign() -> void:
+	print("-- a storm-off counts toward resigning")
+	var sim := _sim("three_holes", 11)
+	var mem := sim.members
+	check(mem.resign_strikes == 2, "two strikes resign a member, from the membership data")
+	var both := sim.visitors.make_golfer("public", 0.4)
+	var both_m := mem.enroll(both, true)
+	both.member = both_m
+	both.storming = true
+	both.holes_played = 2
+	both.satisfaction = 20.0
+	mem.on_depart(both)
+	check(mem.roster.has(both_m) and int(both_m.strikes) == 1, "a storm-off on a miserable round is one strike, not two")
+	var walker := sim.visitors.make_golfer("public", 0.4)
+	var walked := mem.enroll(walker, true)
+	var gone := mem.make_golfer(walked)
+	gone.storming = true
+	gone.holes_played = 0
+	gone.satisfaction = 70.0
+	mem.on_depart(gone)
+	check(mem.roster.has(walked) and int(walked.strikes) == 1 and int(walked.visits) == 0, "walking off before a hole is one strike, and not a finished visit")
+	var sour := mem.make_golfer(walked)
+	sour.storming = false
+	sour.holes_played = 3
+	sour.satisfaction = 20.0
+	var notes: Array[String] = []
+	sim.toast.connect(func(text: String, _kind: String) -> void: notes.append(text))
+	var quits := mem.quit_total
+	mem.on_depart(sour)
+	check(not mem.roster.has(walked) and mem.quit_total == quits + 1, "a storm-off plus a miserable round resigns them once")
+	check(notes.size() == 1, "that resignation is one toast")
+	mem.on_depart(sour)
+	check(mem.quit_total == quits + 1 and notes.size() == 1, "leaving again does not resign them a second time")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	for row in saved.members:
+		row.erase("strikes")
+	var loaded := Sim.from_dict(db, saved, gear)
+	var kept := true
+	for row in loaded.members.roster:
+		if int(row.strikes) != 0:
+			kept = false
+	check(loaded.members.count() == mem.count() and kept, "an older save, with no strikes stored, loads with none")

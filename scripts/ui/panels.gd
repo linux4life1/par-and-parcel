@@ -1539,7 +1539,7 @@ func _short(n: int) -> String:
 func _members(body: VBoxContainer) -> Callable:
 	var sim := hud.sim
 	var mem := sim.members
-	body.add_child(UIKit.para("Golfers who love their round join the club and come back as regulars. Every tier above Basic is unlocked by a different private wish. Give a member a round that grants it and they move up and pay more in dues. Two miserable rounds in a row and they resign. Regulars get a little better every visit, and faster at the range and on the practice green, and they keep it."))
+	body.add_child(UIKit.para("Golfers who love their round join the club and come back as regulars. Every tier above Basic is unlocked by a different private wish. Give a member a round that grants it and they move up and pay more in dues. A miserable round and walking off the course count the same. %d in a row and they resign. Regulars get a little better every visit, and faster at the range and on the practice green, and they keep it." % mem.resign_strikes))
 	var summary := UIKit.hbox(4)
 	body.add_child(summary)
 	var tier_labels: Array[Label] = []
