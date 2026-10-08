@@ -329,7 +329,7 @@ func pick(cam: Camera3D, screen: Vector2) -> Variant:
 	return null
 
 
-const PALETTE_KEYS: Array[String] = ["rough", "fairway", "green", "tee", "bunker", "water", "deep", "path", "rock", "ash", "water2"]
+const PALETTE_KEYS: Array[String] = ["rough", "fairway", "green", "tee", "bunker", "water", "deep", "path", "rock", "ash", "firm", "fast", "water2"]
 var _apron_color := Color(0.13, 0.22, 0.11)
 var _skirt_color := Color(0.25, 0.2, 0.14)
 
@@ -350,14 +350,14 @@ func set_biome(biome: Dictionary) -> void:
 	material.set_shader_parameter("ground_tex", g[0])
 	material.set_shader_parameter("ground_nor", g[1])
 	material.set_shader_parameter("ground_mean", g[2])
-	var layers: Array = biome.get("layers", [0, 1, 1, 1, 2, 2, 5, 4, 3, 6])
+	var layers: Array = biome.get("layers", [0, 1, 1, 1, 2, 2, 5, 4, 3, 6, 1, 1])
 	var layer_of := PackedFloat32Array()
 	for v: Variant in layers:
 		layer_of.append(float(v))
 	material.set_shader_parameter("layer_of", layer_of)
-	#                                              rough fair  green tee   sand  water deep  path  rock  ash
-	material.set_shader_parameter("layer_size", PackedFloat32Array([4.2, 3.0, 2.0, 2.4, 3.4, 4.0, 5.2, 2.2, 8.0, 6.0]))
-	material.set_shader_parameter("layer_bump", PackedFloat32Array([0.9, 0.45, 0.2, 0.3, 0.6, 0.0, 1.1, 0.7, 1.3, 1.0]))
+	#                                              rough fair  green tee   sand  water deep  path  rock  ash   firm  fast
+	material.set_shader_parameter("layer_size", PackedFloat32Array([4.2, 3.0, 2.0, 2.4, 3.4, 4.0, 5.2, 2.2, 8.0, 6.0, 2.6, 1.6]))
+	material.set_shader_parameter("layer_bump", PackedFloat32Array([0.9, 0.45, 0.2, 0.3, 0.6, 0.0, 1.1, 0.7, 1.3, 1.0, 0.35, 0.15]))
 	_apron_color = Color(str(pal.get("apron", "213821")))
 	_skirt_color = Color(str(pal.get("skirt", "40332a")))
 

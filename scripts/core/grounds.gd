@@ -47,7 +47,7 @@ func refresh_layout() -> void:
 		for tx in w:
 			var i := ty * w + tx
 			var t := course.terrain[i]
-			if t == Defs.T.FAIRWAY or t == Defs.T.GREEN or t == Defs.T.TEE:
+			if Defs.is_short(t):
 				play_tiles.append(i)
 			# hollows hold water: compare with a ring two tiles out
 			var c := course.corner(tx, ty)
@@ -174,7 +174,7 @@ func step(dt: float) -> void:
 		course.weeds[i] = wd
 		course.pests[i] = pv
 		if t != Defs.T.ROUGH:
-			var wt := 3.0 if t == Defs.T.GREEN else 1.0
+			var wt := 3.0 if Defs.is_green(t) else 1.0
 			_acc_c += hv * (1.0 - 0.5 * wd) * (1.0 - 0.5 * pv) * wt
 			_acc_w += wt
 			_acc_n += 1.0

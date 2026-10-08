@@ -861,7 +861,7 @@ func paint(tx: int, ty: int, radius: int, t: int) -> int:
 	var n := course.paint(tx, ty, radius, t)
 	if n > 0:
 		economy.spend("construction", n * unit + course.clear_cost)
-		if t == Defs.T.GREEN or t == Defs.T.TEE:
+		if Defs.is_green(t) or t == Defs.T.TEE:
 			# Fresh greens and tees are graded as they are laid, so they are
 			# playable straight away. Sculpt them afterwards to add break.
 			var c := course.tile_center(tx, ty)
@@ -890,7 +890,7 @@ func place_object(tx: int, ty: int, o: int) -> int:
 	if not course.can_build(tx, ty):
 		return 0
 	var t := course.terrain[ty * course.w + tx]
-	if t == Defs.T.GREEN or t == Defs.T.TEE or t == Defs.T.BUNKER:
+	if Defs.is_green(t) or t == Defs.T.TEE or t == Defs.T.BUNKER:
 		return 0
 	if course.set_object(tx, ty, o):
 		economy.spend("construction", cost)

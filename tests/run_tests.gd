@@ -64,6 +64,7 @@ func _ready() -> void:
 	_test_accreditation()
 	_test_station()
 	_test_comments()
+	_test_firm()
 	_test_lights_gap_awards()
 	_test_length_scale()
 	print("%d checks, %d failed" % [checks, failures])
@@ -3639,6 +3640,77 @@ func _test_comments() -> void:
 	sim._end_month(96)
 	var quiet: Dictionary = sim.economy.history[-1]
 	check(not quiet.has("satisfaction"), "a month with no golfers draws no satisfaction point")
+
+func _test_firm() -> void:
+	print("-- firm fairway and a fast green")
+	var n := Defs.T_NAMES.size()
+	check(Defs.T.FIRM == n - 2 and Defs.T.FAST_GREEN == n - 1, "the firm fairway and the fast green sit at the end of the terrain list")
+	var wide := true
+	var cols: Array[int] = [
+		Defs.T_COST.size(), Defs.T_CLEAR.size(), Defs.T_DECEL.size(), Defs.T_BOUNCE.size(),
+		Defs.T_KEEP.size(), Defs.T_GRIP.size(), Defs.T_KEYS.size(), Defs.T_LIE_POWER.size(),
+		Defs.T_LIE_SPREAD.size(), Defs.T_ROUTE.size(), Defs.T_GRASS.size(), Defs.T_WEAR.size(),
+		Defs.T_DRY.size(), Defs.T_WEED.size(), Defs.T_CARE.size(), Defs.T_WALK.size(),
+		Hole.PLAY_COST.size(),
+	]
+	for c in cols:
+		if c != n:
+			wide = false
+	check(wide, "every terrain table has a column for the firm fairway and the fast green")
+	check(Defs.T_DECEL[Defs.T.FIRM] < Defs.T_DECEL[Defs.T.FAIRWAY] and Defs.T_DECEL[Defs.T.FAST_GREEN] < Defs.T_DECEL[Defs.T.GREEN], "a firm fairway and a fast green stop the ball later than the ordinary ones")
+	check(Defs.is_fairway(Defs.T.FIRM) and not Defs.is_fairway(Defs.T.FAST_GREEN) and Defs.is_green(Defs.T.FAST_GREEN) and not Defs.is_green(Defs.T.FIRM) and Defs.is_short(Defs.T.FIRM) and Defs.is_short(Defs.T.FAST_GREEN), "a firm fairway counts as fairway, and a fast green counts as a green")
+	var table: Dictionary = db.lies.get("lies", {})
+	check(table.has("firm") and table.has("fast_green"), "both new paints have a lie")
+	var fair_lane := _lane(Defs.T.FAIRWAY)
+	fair_lane.wet.fill(0.05)
+	var firm_lane := _lane(Defs.T.FIRM)
+	firm_lane.wet.fill(0.05)
+	var fair_b := _shoot(fair_lane, 40.0, 8.0, 0.1)
+	var firm_b := _shoot(firm_lane, 40.0, 8.0, 0.1)
+	print("   running shot fairway %.1f m, firm %.1f m" % [fair_b.pos.x - 10.0, firm_b.pos.x - 10.0])
+	check(firm_b.pos.x > fair_b.pos.x + 4.0, "the same shot finishes further on a firm fairway")
+	var green_lane := _lane(Defs.T.GREEN)
+	green_lane.wet.fill(0.05)
+	var fast_lane := _lane(Defs.T.FAST_GREEN)
+	fast_lane.wet.fill(0.05)
+	var green_b := _shoot(green_lane, 5.0, 0.0, 0.0)
+	var fast_b := _shoot(fast_lane, 5.0, 0.0, 0.0)
+	print("   putt green %.1f m, fast green %.1f m" % [green_b.pos.x - 10.0, fast_b.pos.x - 10.0])
+	check(fast_b.pos.x > green_b.pos.x + 1.0, "the same putt runs further on a fast green")
+	var quick := _lane(Defs.T.FAST_GREEN)
+	quick.green_decel = 0.72
+	check(is_equal_approx(quick.roll_decel(Defs.T.FAST_GREEN), Defs.T_DECEL[Defs.T.FAST_GREEN] * 0.72), "a tournament week speeds a fast green the same way it speeds any green")
+	check(is_equal_approx(quick.roll_decel(Defs.T.FIRM), Defs.T_DECEL[Defs.T.FIRM]), "a tournament week leaves a firm fairway alone")
+	var painted := true
+	for biome: Dictionary in db.biomes:
+		var layers: Array = biome.get("layers", [])
+		var pal: Dictionary = biome.get("palette", {})
+		if layers.size() != n or not pal.has("firm") or not pal.has("fast"):
+			painted = false
+	check(painted, "every biome colours the firm fairway and the fast green, and names a ground picture for each")
+	var coach := Tutorial.new()
+	var ground := _sim("three_holes", 11)
+	for i in ground.course.terrain.size():
+		ground.course.terrain[i] = Defs.T.ROUGH
+	coach.sim = ground
+	check(not coach._met({"done": "green"}) and not coach._met({"done": "fairway"}), "bare ground does not finish the green or the fairway")
+	for i in Tutorial.COUNT_GREEN:
+		ground.course.terrain[i] = Defs.T.FAST_GREEN
+	check(coach._met({"done": "green"}) and not coach._met({"done": "fairway"}), "a fast green counts as the green")
+	for i in ground.course.terrain.size():
+		ground.course.terrain[i] = Defs.T.ROUGH
+	for i in Tutorial.COUNT_FAIRWAY:
+		ground.course.terrain[i] = Defs.T.FIRM
+	check(coach._met({"done": "fairway"}) and not coach._met({"done": "green"}), "a firm fairway counts as the fairway")
+	for i in Tutorial.COUNT_GREEN:
+		ground.course.terrain[i] = Defs.T.GREEN
+	for i in range(Tutorial.COUNT_GREEN, Tutorial.COUNT_GREEN + Tutorial.COUNT_FAIRWAY):
+		ground.course.terrain[i] = Defs.T.FAIRWAY
+	check(coach._met({"done": "green"}) and coach._met({"done": "fairway"}), "the ordinary green and fairway still count")
+	for part: Node in [coach._card, coach._title, coach._text, coach._where, coach._glow]:
+		part.free()
+	coach.free()
+
 
 func _test_lights_gap_awards() -> void:
 	print("-- lights on a schedule, the starter's gap, and themed awards")

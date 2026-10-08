@@ -320,7 +320,7 @@ static func _disc(c: Course, at: Vector2i, radius: int, t: int, force: bool = fa
 			var cur := c.terrain[i]
 			if cur == Defs.T.WATER or c.objects[i] == Defs.O.CLUBHOUSE:
 				continue
-			if not force and (cur == Defs.T.GREEN or cur == Defs.T.TEE or cur == Defs.T.BUNKER or cur == Defs.T.PATH):
+			if not force and (Defs.is_green(cur) or cur == Defs.T.TEE or cur == Defs.T.BUNKER or cur == Defs.T.PATH):
 				continue
 			c.terrain[i] = t
 			c.objects[i] = 0

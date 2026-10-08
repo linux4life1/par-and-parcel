@@ -247,7 +247,7 @@ func _setup_shot() -> void:
 	pin_dist = to.length()
 	aim = to.angle()
 	lie_read = Lie.read(sim, g, aim)
-	if lie == Defs.T.GREEN:
+	if Defs.is_green(lie):
 		club_i = sim.gear.putter_i
 	else:
 		club_i = int(sim.gear.pick(g, pin_dist, lie, sim.course)[0])
@@ -325,7 +325,8 @@ func advice() -> String:
 
 
 func _putt_full_speed() -> float:
-	return sqrt(2.0 * sim.course.roll_decel(Defs.T.GREEN) * 1.32 * MAX_PUTT)
+	var ground: int = lie if Defs.is_green(lie) else Defs.T.GREEN
+	return sqrt(2.0 * sim.course.roll_decel(ground) * 1.32 * MAX_PUTT)
 
 
 func _frame_camera() -> void:
@@ -345,7 +346,7 @@ func change_club(step: int) -> void:
 	# The putter is always available on the green and from just off it.
 	var first := 0 if lie == Defs.T.TEE else 1
 	var last := sim.gear.n_clubs - 2
-	if lie == Defs.T.GREEN or pin_dist < 35.0:
+	if Defs.is_green(lie) or pin_dist < 35.0:
 		last = sim.gear.putter_i
 	club_i = clampi(club_i + step, first, last)
 	putting = club_i == sim.gear.putter_i
@@ -657,7 +658,7 @@ func _strike() -> void:
 		var loft := maxf(deg_to_rad(float(c.loft)) * float(mods.get("loft", 1.0)) + float(lie_read.loft), 0.03)
 		var forgive: float = brand.get("forgive", 1.0)
 		g.mishit = false
-		var clean_lie := lie == Defs.T.FAIRWAY or lie == Defs.T.TEE
+		var clean_lie := Defs.is_fairway(lie) or lie == Defs.T.TEE
 		# a bad lie turns a poor swing into a poor strike more often, and so
 		# do an overswing and a swing that was never stopped
 		var odds := 0.35 * forgive * float(lie_read.mishit) + maxf(power - 1.0, 0.0) * 2.5 + (0.3 if _late else 0.0)
@@ -737,7 +738,7 @@ func _resolve() -> void:
 		_:
 			var t := sim.course.terrain_at(b.pos.x, b.pos.z)
 			var d := Vector2(b.pos.x - h.pin.x, b.pos.z - h.pin.z).length()
-			if t == Defs.T.GREEN:
+			if Defs.is_green(t):
 				message = "On the green, %d feet from the hole." % int(d * 3.281)
 			elif t >= 0:
 				message = "%s, %d yards to the pin." % [sim.terrain_name(t), Defs.yards(d)]
@@ -762,7 +763,7 @@ func _shot_report(b: Ball) -> String:
 	var from := Vector2(b.start.x, b.start.z)
 	var rest := Vector2(b.pos.x, b.pos.z)
 	var came_back := _furthest - from.distance_to(rest)
-	if came_back > 0.6 and sim.course.terrain_at(b.pos.x, b.pos.z) == Defs.T.GREEN:
+	if came_back > 0.6 and Defs.is_green(sim.course.terrain_at(b.pos.x, b.pos.z)):
 		out += "  It spun back %d feet." % int(round(came_back * 3.281))
 	if _shot_clean and b.hits == 0 and b.tree_tile < 0 and sim.weather.wind_mph() >= 2:
 		var line := Vector2(_calm_rest.x, _calm_rest.z) - from
