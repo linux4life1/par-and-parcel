@@ -63,6 +63,7 @@ func _ready() -> void:
 	_test_progress()
 	_test_accreditation()
 	_test_station()
+	_test_length_scale()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2522,7 +2523,7 @@ func _expert(sim: Sim) -> Golfer:
 	var g := Golfer.new()
 	g.kind = "lab"
 	g.skill = 0.82
-	g.power = lerpf(0.74, 1.06, 0.82)
+	g.power = Members.power_at(0.82, sim.members.progress)
 	g.accuracy = 0.82
 	g.imagination = 0.9
 	g.putting = 0.55
@@ -3592,3 +3593,18 @@ func _test_accreditation() -> void:
 	stuffed.clubhouse_level = 80
 	stuffed._update_rating(0.0)
 	check(_design_sum(stuffed) > 100.0 and is_equal_approx(stuffed.design, 100.0), "past the top, the lines still add up and the score stops at 100")
+
+
+func _test_length_scale() -> void:
+	print("-- one length scale")
+	var sim := _sim("three_holes", 2)
+	var progress: Dictionary = sim.members.progress
+	var lo := float(progress.get("power_floor", -1.0))
+	var hi := float(progress.get("power_cap", -1.0))
+	check(is_equal_approx(Members.power_at(0.0, progress), lo) and is_equal_approx(Members.power_at(1.0, progress), hi), "a new golfer's length comes from the progression data")
+	var shifted := progress.duplicate()
+	shifted["power_floor"] = 0.5
+	shifted["power_cap"] = 1.2
+	check(is_equal_approx(Members.power_at(0.0, shifted), 0.5) and is_equal_approx(Members.power_at(1.0, shifted), 1.2) and is_equal_approx(Members.power_share(1.2, shifted), 1.0), "a change in the progression data is the length scale")
+	var card := int(Members.power_share(Members.power_at(0.4, progress), progress) * 100.0)
+	check(card == 40, "the golfer card reads the same scale")

@@ -30,6 +30,25 @@ func _init(s: Sim) -> void:
 		warmup = d.get("warmup", {})
 
 
+## The length scale. 0 is a short hitter, 1 a long one. The numbers live in
+## progress in data/membership.json, and every place that rolls or shows
+## length reads them here.
+static func length_bounds(progress: Dictionary) -> Vector2:
+	return Vector2(float(progress.get("power_floor", 0.74)), float(progress.get("power_cap", 1.06)))
+
+
+static func power_at(t: float, progress: Dictionary) -> float:
+	var bounds := length_bounds(progress)
+	return lerpf(bounds.x, bounds.y, clampf(t, 0.0, 1.0))
+
+
+static func power_share(power: float, progress: Dictionary) -> float:
+	var bounds := length_bounds(progress)
+	if is_equal_approx(bounds.x, bounds.y):
+		return 0.0
+	return inverse_lerp(bounds.x, bounds.y, power)
+
+
 func count() -> int:
 	return roster.size()
 
@@ -212,7 +231,7 @@ func _member_visit(g: Golfer) -> void:
 func _grow(m: Dictionary) -> void:
 	var step := float(progress.get("per_visit", 0.0))
 	var skill_cap := float(progress.get("skill_cap", 0.99))
-	var power_cap := float(progress.get("power_cap", 1.06))
+	var power_cap := length_bounds(progress).y
 	_bump(m, "skill", step, skill_cap)
 	_bump(m, "accuracy", step, skill_cap)
 	_bump(m, "imagination", step, skill_cap)
