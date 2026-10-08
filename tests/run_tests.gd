@@ -6728,6 +6728,9 @@ func _test_turns() -> void:
 	for route_yard in hole.turn_yards():
 		route_sum += route_yard
 	check(hole._line_stamp() != stamp0 and stray == 0 and route_sum == Defs.yards(hole.length) and is_equal_approx(sim.economy.money, cash_route), "a new line drops a stake that has left it, without a refund, and the printed yards still add up (%d left)" % hole.turns.size())
+	print("  reroute left %d stake(s)" % hole.turns.size())
+	remove_child(hud)
+	hud.free()
 
 func _play_from(sim: Sim, hole: Hole, skill: float) -> Vector2:
 	var g := sim.visitors.make_golfer("public", skill)
