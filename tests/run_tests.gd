@@ -3714,23 +3714,23 @@ func _test_easy_and_album() -> void:
 		DirAccess.remove_absolute(Game.CAREER_PATH)
 	Game._session_live = false
 	Game.new_game("free_play", 3)
-	var stake := Game.sim.economy.money
+	var fresh := Game.sim.economy.money
 	Game.new_game("free_play", 4)
-	check(is_equal_approx(Game.sim.economy.money, stake), "two new games in a row do not stack purses")
+	check(is_equal_approx(Game.sim.economy.money, fresh), "two new games in a row do not stack purses")
 	Game.sim.economy.money += 8000.0
 	var snap: Dictionary = Game.sim.to_dict()
 	Game.new_game("free_play", 5)
-	check(is_equal_approx(Game.sim.economy.money, stake + 8000.0), "profit above the opening purse is carried once")
+	check(is_equal_approx(Game.sim.economy.money, fresh + 8000.0), "profit above the opening purse is carried once")
 	check(is_equal_approx(Game.sim.opening_money, Game.sim.economy.money), "the carried bank is part of the new club's opening")
 	Game.sim = Sim.from_dict(db, snap, gear)
 	Game._session_live = true
 	Game.new_game("free_play", 6)
-	check(is_equal_approx(Game.sim.economy.money, stake), "a reloaded club does not carry its bank again")
+	check(is_equal_approx(Game.sim.economy.money, fresh), "a reloaded club does not carry its bank again")
 	Game.sim.economy.money = -200.0
-	Game.sim.opening_money = stake
+	Game.sim.opening_money = fresh
 	Game._session_live = true
 	Game.new_game("free_play", 7)
-	check(is_equal_approx(Game.sim.economy.money, stake), "a debt stays behind")
+	check(is_equal_approx(Game.sim.economy.money, fresh), "a debt stays behind")
 	if FileAccess.file_exists(Game.CAREER_PATH):
 		DirAccess.remove_absolute(Game.CAREER_PATH)
 	Game.CAREER_PATH = path
