@@ -65,6 +65,7 @@ func _ready() -> void:
 	_test_station()
 	_test_comments()
 	_test_length_scale()
+	_test_close_structure()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -3662,3 +3663,72 @@ func _test_length_scale() -> void:
 	sim.members.progress["power_cap"] = 1.8
 	var lab_g := sim.lab._test_golfer(HoleLab.CLASSES[0])
 	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")
+
+
+func _test_close_structure() -> void:
+	print("-- closing a structure")
+	var sim := _sim("three_holes", 4)
+	var c := sim.course
+	c.guard = false
+	var drink := Vector2i(-1, -1)
+	var lamp := Vector2i(-1, -1)
+	var bench := Vector2i(-1, -1)
+	for y in range(2, c.h - 2):
+		for x in range(2, c.w - 2):
+			var i := y * c.w + x
+			if c.objects[i] != 0 or c.terrain[i] == Defs.T.WATER or c.locked[i] != 0 or c.hot[i] != 0:
+				continue
+			var at := c.tile_center(x, y)
+			if drink.x < 0:
+				drink = Vector2i(x, y)
+			elif lamp.x < 0 and c.light_at(at.x, at.z) < 0.05 and absi(x - drink.x) + absi(y - drink.y) > 30:
+				lamp = Vector2i(x, y)
+			elif bench.x < 0 and absi(x - drink.x) + absi(y - drink.y) > 4:
+				bench = Vector2i(x, y)
+			if drink.x >= 0 and lamp.x >= 0 and bench.x >= 0:
+				break
+		if drink.x >= 0 and lamp.x >= 0 and bench.x >= 0:
+			break
+	check(drink.x >= 0 and lamp.x >= 0 and bench.x >= 0, "the course has room for a stand, a light and a bench")
+	check(c.set_object(drink.x, drink.y, Defs.O.DRINK_STAND), "a drink stand goes up")
+	var stand := c.tile_center(drink.x, drink.y)
+	var bill := float(Defs.O_UPKEEP[Defs.O.DRINK_STAND])
+	var before := sim.monthly_upkeep()
+	var drinks := int(sim.visitors.amenity_counts().get("drink", 0))
+	check(sim.visitors.facility_near("drink", stand, 3.0), "an open stand is a place to buy a drink")
+	check(c.set_closed(drink.x, drink.y, true), "the stand can be switched off")
+	check(is_equal_approx(sim.monthly_upkeep(), before - bill), "closing it drops the upkeep by its bill")
+	check(not sim.visitors.facility_near("drink", stand, 3.0), "a closed stand is not a place to buy a drink")
+	check(int(sim.visitors.amenity_counts().get("drink", 0)) == drinks - 1, "and it drops out of the facility count")
+	check(c.set_closed(drink.x, drink.y, false), "it can be switched back on")
+	check(is_equal_approx(sim.monthly_upkeep(), before), "opening it puts the bill back")
+	check(sim.visitors.facility_near("drink", stand, 3.0), "and golfers can use it again")
+	var dark := c.tile_center(lamp.x, lamp.y)
+	var night := c.light_at(dark.x, dark.z)
+	check(c.set_object(lamp.x, lamp.y, Defs.O.FLOODLIGHT), "a floodlight goes up on a dark tile")
+	check(c.light_at(dark.x, dark.z) > night + 0.5, "an open floodlight lights its tile")
+	check(c.set_closed(lamp.x, lamp.y, true), "the floodlight can be switched off")
+	check(c.light_at(dark.x, dark.z) <= night + 0.02, "a closed floodlight is dark")
+	check(c.set_object(bench.x, bench.y, Defs.O.BENCH), "a bench goes up")
+	check(not c.set_closed(bench.x, bench.y, true), "a bench has no upkeep, so it cannot be switched off")
+	check(not c.set_closed(c.clubhouse.x, c.clubhouse.y, true), "the clubhouse stays open")
+	c.set_closed(drink.x, drink.y, true)
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var back := Sim.from_dict(db, saved, gear)
+	var di := drink.y * c.w + drink.x
+	var li := lamp.y * c.w + lamp.x
+	check(back.course.is_closed(di) and back.course.is_closed(li), "a save keeps a structure switched off")
+	check(is_equal_approx(back.monthly_upkeep(), sim.monthly_upkeep()), "and the loaded upkeep matches")
+	var course_d: Dictionary = saved["course"]
+	course_d.erase("closed")
+	var old := Sim.from_dict(db, saved, gear)
+	var any_shut := false
+	for bit in old.course.closed:
+		if bit != 0:
+			any_shut = true
+	check(not any_shut, "an older save, with no closed list, loads with everything open")
+	check(old.monthly_upkeep() > back.monthly_upkeep(), "so the older save still pays for those structures")
+	var stood := drink.y * c.w + drink.x
+	check(c.set_object(drink.x, drink.y, Defs.O.NONE), "the stand can be taken down")
+	check(not c.is_closed(stood), "taking it down forgets that it was closed")
+	c.guard = true

@@ -354,8 +354,11 @@ func _end_month(d: int) -> void:
 
 func monthly_upkeep() -> float:
 	var t := course.holes.size() * 15.0
-	for o in course.objects:
-		t += Defs.O_UPKEEP[o]
+	var objs := course.objects
+	for i in objs.size():
+		if course.is_closed(i):
+			continue
+		t += Defs.O_UPKEEP[objs[i]]
 	return t
 
 
@@ -618,7 +621,8 @@ func scenery_score(hole: Hole) -> float:
 				if not course.in_bounds(tx, ty):
 					continue
 				var i := ty * course.w + tx
-				total += Defs.O_SCENERY[course.objects[i]]
+				if not course.is_closed(i):
+					total += Defs.O_SCENERY[course.objects[i]]
 				if course.terrain[i] == Defs.T.WATER:
 					total += 0.25
 	var score := clampf(total / (samples * 9.0), 0.0, 1.0)
@@ -638,7 +642,7 @@ func _ensure_marks() -> void:
 	var objs := course.objects
 	for i in objs.size():
 		var o := int(objs[i])
-		if not by_obj.has(o):
+		if not by_obj.has(o) or course.is_closed(i):
 			continue
 		var kind: Dictionary = by_obj[o]
 		var p := course.tile_center(i % course.w, int(i / course.w))
@@ -772,7 +776,8 @@ func lot_value(tx: int, ty: int) -> float:
 				continue
 			var i := y * course.w + x
 			var o := course.objects[i]
-			v += Defs.O_SCENERY[o] * 55.0
+			if not course.is_closed(i):
+				v += Defs.O_SCENERY[o] * 55.0
 			if o == Defs.O.HOUSE or o == Defs.O.HOME_SITE:
 				v -= 60.0
 			if course.terrain[i] == Defs.T.WATER and not is_lava():
@@ -832,7 +837,7 @@ func _lot_fun_held() -> bool:
 ## the same way lot_value skips it.
 func _lot_cell(i: int) -> float:
 	var o := int(course.objects[i])
-	var a := Defs.O_SCENERY[o] * 55.0
+	var a := 0.0 if course.is_closed(i) else Defs.O_SCENERY[o] * 55.0
 	if o == Defs.O.HOUSE or o == Defs.O.HOME_SITE:
 		a -= 60.0
 	if course.terrain[i] == Defs.T.WATER and not _lot_lava:

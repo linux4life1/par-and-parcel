@@ -13,6 +13,7 @@ var h: int
 var heights := PackedFloat32Array()   # (w + 1) * (h + 1) corner heights
 var terrain := PackedByteArray()      # Defs.T per tile
 var objects := PackedByteArray()      # Defs.O per tile
+var closed := PackedByteArray()       # 1 where that object is switched off
 var wet := PackedFloat32Array()       # 0 dry .. 1 flooded
 var health := PackedFloat32Array()    # 0 dead .. 1 perfect turf
 var weeds := PackedFloat32Array()     # 0 .. 1
@@ -50,6 +51,8 @@ func _init(width: int = 128, height: int = 128) -> void:
 	terrain.fill(Defs.T.ROUGH)
 	objects.resize(w * h)
 	objects.fill(0)
+	closed.resize(w * h)
+	closed.fill(0)
 	wet.resize(w * h)
 	wet.fill(0.2)
 	health.resize(w * h)
@@ -115,6 +118,8 @@ func _ensure_light() -> void:
 	_light.resize(w * h)
 	_light.fill(0.0)
 	for i in objects.size():
+		if is_closed(i):
+			continue
 		var reach: float = Defs.O_LIGHT[objects[i]]
 		if reach <= 0.0:
 			continue
@@ -323,6 +328,7 @@ func set_terrain(tx: int, ty: int, t: int) -> bool:
 	if objects[i] != 0 and t != Defs.T.ROUGH and t != Defs.T.DEEP_ROUGH and t != Defs.T.ASH:
 		var gave_light: bool = Defs.O_LIGHT[objects[i]] > 0.0
 		objects[i] = 0
+		closed[i] = 0
 		_objects_dirty = true
 		objects_touched(i, gave_light)
 	if t == Defs.T.WATER:
@@ -390,7 +396,39 @@ func set_object(tx: int, ty: int, o: int) -> bool:
 		return false
 	var lights: bool = Defs.O_LIGHT[objects[i]] > 0.0 or Defs.O_LIGHT[o] > 0.0
 	objects[i] = o
+	closed[i] = 0
 	objects_touched(i, lights)
+	revision += 1
+	objects_changed.emit()
+	return true
+
+
+## A structure with a monthly bill can be switched off. The clubhouse,
+## trees and anything else that costs nothing stay as they are.
+func can_switch(o: int) -> bool:
+	return o > 0 and o < Defs.O_UPKEEP.size() and Defs.O_UPKEEP[o] > 0
+
+
+## True when the object on this tile has been switched off.
+func is_closed(i: int) -> bool:
+	return i >= 0 and i < closed.size() and i < objects.size() and objects[i] != 0 and closed[i] != 0
+
+
+## Switch a structure off or back on. A closed one is still standing, but
+## it costs nothing and nobody can use it.
+func set_closed(tx: int, ty: int, off: bool) -> bool:
+	if not in_bounds(tx, ty):
+		return false
+	var i := ty * w + tx
+	var o := int(objects[i])
+	if not can_switch(o):
+		return false
+	var bit := 1 if off else 0
+	if int(closed[i]) == bit:
+		return false
+	closed[i] = bit
+	if Defs.O_LIGHT[o] > 0.0:
+		lights_rev += 1
 	revision += 1
 	objects_changed.emit()
 	return true
@@ -617,6 +655,7 @@ func to_dict() -> Dictionary:
 		"heights": Marshalls.raw_to_base64(heights.to_byte_array()),
 		"terrain": Marshalls.raw_to_base64(terrain),
 		"objects": Marshalls.raw_to_base64(objects),
+		"closed": Marshalls.raw_to_base64(closed),
 		"wet": Marshalls.raw_to_base64(wet.to_byte_array()),
 		"health": Marshalls.raw_to_base64(health.to_byte_array()),
 		"weeds": Marshalls.raw_to_base64(weeds.to_byte_array()),
@@ -638,6 +677,12 @@ static func from_dict(d: Dictionary) -> Course:
 	c.heights = Marshalls.base64_to_raw(d.heights).to_float32_array()
 	c.terrain = Marshalls.base64_to_raw(d.terrain)
 	c.objects = Marshalls.base64_to_raw(d.objects)
+	if d.has("closed"):
+		c.closed = Marshalls.base64_to_raw(d.closed)
+	if c.closed.size() != c.w * c.h:
+		c.closed = PackedByteArray()
+		c.closed.resize(c.w * c.h)
+		c.closed.fill(0)
 	c.wet = Marshalls.base64_to_raw(d.wet).to_float32_array()
 	c.health = Marshalls.base64_to_raw(d.health).to_float32_array()
 	c.weeds = Marshalls.base64_to_raw(d.weeds).to_float32_array()

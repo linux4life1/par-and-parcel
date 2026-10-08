@@ -782,7 +782,7 @@ func _refresh_amenities() -> void:
 		"vending": 0, "bar": 0}
 	for i in course.objects.size():
 		var o := course.objects[i]
-		if o == 0 or not FACILITY.has(o):
+		if o == 0 or course.is_closed(i) or not FACILITY.has(o):
 			continue
 		var kind: String = FACILITY[o]
 		amenities[kind] = int(amenities[kind]) + 1
