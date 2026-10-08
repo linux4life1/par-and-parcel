@@ -11,6 +11,8 @@ signal changed()
 var sim: Sim
 var tiers: Array = []
 var factors: Array = []
+var progress: Dictionary = {}  # how a member's game grows, data/membership.json
+var warmup: Dictionary = {}    # the one-round warm-up, same file
 var roster: Array[Dictionary] = []
 var joined_total := 0
 var quit_total := 0
@@ -24,6 +26,8 @@ func _init(s: Sim) -> void:
 	if d is Dictionary:
 		tiers = d.get("tiers", [])
 		factors = d.get("factors", [])
+		progress = d.get("progress", {})
+		warmup = d.get("warmup", {})
 
 
 func count() -> int:
@@ -198,7 +202,31 @@ func _member_visit(g: Golfer) -> void:
 				sim.toast.emit("%s told the starter what would make them upgrade: they %s." % [m.name, str(factor(want).hint)], "info")
 	if int(m.tier) >= 3 and not m.home:
 		sim.sell_home(m)
+	_grow(m)
 	changed.emit()
+
+
+## A finished round sticks. A little of everything, and more length when
+## there is a range, more putting when there is a practice green. Taken
+## from the stored record, so a one-round warm-up is not what they keep.
+func _grow(m: Dictionary) -> void:
+	var step := float(progress.get("per_visit", 0.0))
+	var skill_cap := float(progress.get("skill_cap", 0.99))
+	var power_cap := float(progress.get("power_cap", 1.06))
+	_bump(m, "skill", step, skill_cap)
+	_bump(m, "accuracy", step, skill_cap)
+	_bump(m, "imagination", step, skill_cap)
+	_bump(m, "putting", step, skill_cap)
+	_bump(m, "power", step, power_cap)
+	var am := sim.visitors.amenity_counts()
+	if int(am.get("range", 0)) > 0:
+		_bump(m, "power", float(progress.get("range", 0.0)), power_cap)
+	if int(am.get("putting", 0)) > 0:
+		_bump(m, "putting", float(progress.get("putting", 0.0)), skill_cap)
+
+
+func _bump(m: Dictionary, key: String, add: float, cap: float) -> void:
+	m[key] = minf(cap, float(m.get(key, 0.0)) + add)
 
 
 ## How well one round delivered on one hidden wish, 0 to 1.
