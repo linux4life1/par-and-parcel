@@ -95,7 +95,6 @@ var _mark_scale := PackedFloat32Array()
 
 
 static var _fresh_n := 0
-static var _club_n := 0
 
 
 ## A seed for a new club. The clock alone repeats inside one second, so each
@@ -108,13 +107,12 @@ static func fresh_seed() -> int:
 	return n
 
 
-
-
 ## An id for a new club. It does not draw on the simulation's dice: one extra
-## draw there would change every game that follows it.
+## draw there would change every game that follows it. The same counter as
+## fresh_seed, so two calls in one tick still differ.
 static func fresh_club_id() -> String:
-	_club_n += 1
-	return "%d-%d-%d" % [int(Time.get_unix_time_from_system()), Time.get_ticks_usec(), _club_n]
+	_fresh_n += 1
+	return "%d-%d-%d" % [int(Time.get_unix_time_from_system()), Time.get_ticks_usec(), _fresh_n]
 
 
 ## A save from before clubs had ids. The same file must produce the same id

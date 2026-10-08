@@ -2973,7 +2973,7 @@ func _test_setup() -> void:
 	check(is_equal_approx(loaded.course.green_decel, 1.0) and is_equal_approx(loaded.course.rough_power, 1.0) and pins_back, "a save during the event puts the greens, the rough and every pin back")
 	var shared := CourseFile.parse(CourseFile.text_of(sim))
 	var shared_course: Dictionary = shared.course
-	var played := CourseFile.host(db, shared, {}, gear)
+	var played := CourseFile.host(db, shared, gear)
 	var shared_home := true
 	for i in played.course.holes.size():
 		if played.course.holes[i].pin.distance_to(homes[i]) >= 0.05:
@@ -3685,7 +3685,10 @@ func _test_course_file() -> void:
 	check(CourseFile.parse(JSON.stringify(sim.to_dict())).is_empty(), "a saved game is not a shared course")
 	check(CourseFile.parse("nope").is_empty(), "nonsense is not a shared course")
 	var pin: Vector3 = sim.course.holes[0].pin
-	var hosted := CourseFile.host(db, pack, CourseFile.pro_of(sim), gear)
+	var hosted := CourseFile.host(db, pack, gear)
+	var book := CareerBook.pack(sim)
+	book["money"] = 0.0
+	CareerBook.apply(hosted, book)
 	check(is_equal_approx(hosted.economy.money, 30000.0), "the new club starts with a new game's purse")
 	check(hosted.crew.members.is_empty() and hosted.members.count() == 0, "staff and members stay at home")
 	check(hosted.course.holes.size() == 4 and hosted.course.holes[0].pin.distance_to(pin) < 0.05, "every hole comes across, pin included")
@@ -3695,10 +3698,13 @@ func _test_course_file() -> void:
 	check(hosted.player.golfer.shirt.is_equal_approx(Color("c62828")) and hosted.player.golfer.pants.is_equal_approx(Color("1e3a5f")) and hosted.player.golfer.hat.is_equal_approx(Color("43a047")), "the kit comes along")
 	check(str(hosted.player.equipped.get("woods", "")) == "pinpoint", "the bag comes along")
 	check(hosted.clubhouse_level == 1 and hosted.clubhouse_level == hosted.level_for_holes(hosted.course.holes.size()), "four holes arrive with the clubhouse that allows them")
-	var fresh := CourseFile.host(db, pack, {}, gear)
+	var fresh := CourseFile.host(db, pack, gear)
 	check(fresh.player.golfer.name == "You" and fresh.career.level("power") == 0, "with no pro along, a new golfer plays")
 	sim.player.golfer.hat = Color(0, 0, 0, 0)
-	var bare := CourseFile.host(db, pack, CourseFile.pro_of(sim), gear)
+	var bare := CourseFile.host(db, pack, gear)
+	var bare_book := CareerBook.pack(sim)
+	bare_book["money"] = 0.0
+	CareerBook.apply(bare, bare_book)
 	check(bare.player.golfer.name == "Ace" and bare.player.golfer.hat.a < 0.01, "a pro with no hat arrives without one")
 	var kept: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
 	var loaded := Sim.from_dict(db, kept, gear)
@@ -3720,10 +3726,10 @@ func _test_course_file() -> void:
 	var missing_course: Dictionary = missing.course
 	missing_course.erase("health")
 	check(CourseFile.parse(JSON.stringify(missing)).is_empty(), "a course missing a layer is refused")
-	var one := CourseFile.host(db, pack, {}, gear)
-	var two := CourseFile.host(db, pack, {}, gear)
+	var one := CourseFile.host(db, pack, gear)
+	var two := CourseFile.host(db, pack, gear)
 	check(one.rng.seed != two.rng.seed, "two clubs started on a shared course do not roll the same dice")
-	var pinned := CourseFile.host(db, pack, {}, gear, 7)
+	var pinned := CourseFile.host(db, pack, gear, 7)
 	check(pinned.rng.seed == 7, "a test can still pin the dice")
 	sim.course.holes[1].award = "top100"
 	sim.course.holes[1].plays = 40
@@ -3731,7 +3737,7 @@ func _test_course_file() -> void:
 	var slim_holes: Array = crowned.course.holes
 	var slim_h: Dictionary = slim_holes[1]
 	check(slim_h.has("tee") and slim_h.has("pin") and slim_h.has("par") and slim_h.has("gap") and not slim_h.has("award") and not slim_h.has("plays") and not slim_h.has("themes") and not slim_h.has("earned") and not slim_h.has("comments"), "the shared file keeps the hole, not its history or its awards")
-	var hosted_plain := CourseFile.host(db, crowned, {}, gear, 9)
+	var hosted_plain := CourseFile.host(db, crowned, gear, 9)
 	var back_h := hosted_plain.course.holes[1]
 	check(back_h.award == "" and back_h.plays == 0, "hole 1 comes back with no award and 0 plays")
 	var no_tee: Dictionary = pack.duplicate(true)
@@ -3779,13 +3785,21 @@ func _test_course_file() -> void:
 	check(not CourseFile.parse(JSON.stringify(shut)).is_empty(), "a closed layer of the right size is kept")
 	shut_course["closed"] = 1
 	check(CourseFile.parse(JSON.stringify(shut)).is_empty(), "a closed layer that is a number is refused")
+	var month: Dictionary = pack.duplicate(true)
+	var month_course: Dictionary = month.course
+	var short_month := PackedByteArray()
+	short_month.resize(4)
+	month_course["open_month"] = Marshalls.raw_to_base64(short_month)
+	check(CourseFile.parse(JSON.stringify(month)).is_empty(), "an open_month layer of the wrong size is refused")
+	month_course["open_month"] = 1
+	check(CourseFile.parse(JSON.stringify(month)).is_empty(), "an open_month layer that is not a byte string is refused")
 	var dirty: Dictionary = pack.duplicate(true)
 	var dirty_holes: Array = dirty.course.holes
 	var dirty_h: Dictionary = dirty_holes[0]
 	dirty_h["award"] = "top100"
 	dirty_h["plays"] = 500
 	dirty_h["earned"] = 3
-	var hosted_dirty := CourseFile.host(db, dirty, {}, gear, 4)
+	var hosted_dirty := CourseFile.host(db, dirty, gear, 4)
 	var dirty_back := hosted_dirty.course.holes[0]
 	check(dirty_back.award == "" and dirty_back.plays == 0, "a file whose hole carries an award, a play count and earnings hosts with none of them")
 	var home_pins: Array[Vector3] = []
@@ -3811,7 +3825,7 @@ func _test_course_file() -> void:
 	var slick_course: Dictionary = slick.course
 	slick_course["green_decel"] = 0.0
 	slick_course["rough_power"] = 0.0
-	var hosted_slick := CourseFile.host(db, slick, {}, gear, 3)
+	var hosted_slick := CourseFile.host(db, slick, gear, 3)
 	check(is_equal_approx(hosted_slick.course.green_decel, 1.0) and is_equal_approx(hosted_slick.course.rough_power, 1.0), "a file that claims frictionless greens still plays at the usual pace")
 	var career_path := Game.CAREER_PATH
 	var save_path := Game.SAVE_PATH

@@ -51,7 +51,8 @@ static func parse(text: String) -> Dictionary:
 ## a two-number clubhouse, and every layer the same size as a new course
 ## of that width and height. Locked and hot are checked only when the file
 ## carries them, and a locked layer without its hot layer is refused,
-## because loading reads both.
+## because loading reads both. Closed and open_month are checked the same
+## way when the file carries them: a bad byte string would break the load.
 static func _course_safe(course: Dictionary) -> bool:
 	var w := int(course.get("w", 0))
 	var h := int(course.get("h", 0))
@@ -80,6 +81,8 @@ static func _course_safe(course: Dictionary) -> bool:
 	if course.has("mood") and not _bytes(course.get("mood", ""), tiles * 4):
 		return false
 	if course.has("closed") and not _bytes(course.get("closed", ""), tiles):
+		return false
+	if course.has("open_month") and not _bytes(course.get("open_month", ""), tiles):
 		return false
 	if course.has("volcanoes"):
 		var vols: Variant = course.get("volcanoes", [])
@@ -197,26 +200,9 @@ static func file_name(course_name: String) -> String:
 	return out
 
 
-## What travels with you: the career, the bag, the name and the kit.
-static func pro_of(sim: Sim) -> Dictionary:
-	var g := sim.player.golfer
-	return {
-		"name": g.name,
-		"career": sim.career.to_dict(),
-		"golfer_xp": int(sim.skills.xp.get("golfer", 0)),
-		"golfer_level": int(sim.skills.level.get("golfer", 1)),
-		"golfer_points": int(sim.skills.points.get("golfer", 0)),
-		"player": sim.player.to_dict(),
-		"shirt": g.shirt.to_html(true),
-		"pants": g.pants.to_html(true),
-		"hat": g.hat.to_html(true),
-		"skin": g.skin.to_html(true),
-	}
-
-
-## A new club on a friend's course. The purse is a new game's, and your pro
-## is the one in `pro`. An empty pro plays as a new golfer.
-static func host(data: DataDB, pack: Dictionary, pro: Dictionary, gear: Gear = null, seed_value: int = 0) -> Sim:
+## A new club on a friend's course. The purse is a new game's. The pro, the
+## bag and the career come across in the career book, not from this file.
+static func host(data: DataDB, pack: Dictionary, gear: Gear = null, seed_value: int = 0) -> Sim:
 	var scen := DataDB.find(data.scenarios, "free_play")
 	if scen.is_empty():
 		scen = data.scenarios[0]
@@ -235,26 +221,5 @@ static func host(data: DataDB, pack: Dictionary, pro: Dictionary, gear: Gear = n
 	sim.install_course(course_d)
 	sim.course_name = str(pack.get("name", sim.course_name))
 	sim.clubhouse_level = sim.level_for_holes(sim.course.holes.size())
-	_apply_pro(sim, pro)
 	sim._update_rating(0.0)
 	return sim
-
-
-static func _apply_pro(sim: Sim, pro: Dictionary) -> void:
-	if pro.is_empty():
-		return
-	sim.skills.xp["golfer"] = int(pro.get("golfer_xp", sim.skills.xp.golfer))
-	sim.skills.level["golfer"] = int(pro.get("golfer_level", sim.skills.level.golfer))
-	sim.skills.points["golfer"] = int(pro.get("golfer_points", sim.skills.points.golfer))
-	sim.career.from_dict(pro.get("career", {}))
-	sim.player.from_dict(pro.get("player", {}))
-	var g := sim.player.golfer
-	g.name = str(pro.get("name", g.name))
-	if str(pro.get("shirt", "")) != "":
-		g.shirt = Color(str(pro.shirt))
-	if str(pro.get("pants", "")) != "":
-		g.pants = Color(str(pro.pants))
-	if str(pro.get("hat", "")) != "":
-		g.hat = Color(str(pro.hat))
-	if str(pro.get("skin", "")) != "":
-		g.skin = Color(str(pro.skin))

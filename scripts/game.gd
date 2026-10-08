@@ -422,7 +422,7 @@ func play_shared(file_name: String) -> bool:
 		return false
 	if _session_live and sim != null:
 		_store_career()
-	var next := CourseFile.host(db, pack, {}, gear)
+	var next := CourseFile.host(db, pack, gear)
 	sim = next
 	_start_club(true)
 	return true
