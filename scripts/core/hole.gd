@@ -5,6 +5,9 @@ extends RefCounted
 
 var tee := Vector3.ZERO
 var pin := Vector3.ZERO
+## Where the pin was placed. Par and length are measured to here, so the
+## day's cup can move along the green without rewriting the card.
+var placed := Vector3.ZERO
 var par := 4
 var length := 0.0
 ## Centreline of the hole the way it is meant to be played, tee to pin, in
@@ -106,8 +109,16 @@ var _pop_key := 0.0
 var playable := true
 
 
+## The pin the hole was designed around. The day's cup is `pin`.
+func design_pin() -> Vector3:
+	if placed.length_squared() > 0.01:
+		return placed
+	return pin
+
+
 func straight_length() -> float:
-	return Vector2(pin.x - tee.x, pin.z - tee.z).length()
+	var end := design_pin()
+	return Vector2(end.x - tee.x, end.z - tee.z).length()
 
 
 static func par_for(metres: float) -> int:
@@ -185,14 +196,15 @@ func _polyline_length(pts: PackedVector2Array) -> float:
 ## has a finite step cost, so a pin on the map is always reached, water
 ## ring or not.
 func _route(course: Course) -> Dictionary:
+	var end := design_pin()
 	var a := Vector2(tee.x, tee.z)
-	var b := Vector2(pin.x, pin.z)
+	var b := Vector2(end.x, end.z)
 	var chord := PackedVector2Array([a, b])
 	if a.distance_to(b) < 1.0 or _segment_clear(course, a, b):
 		return {"line": chord, "reached": true}
 	var margin := 18
 	var tt := course.tile_of(tee.x, tee.z)
-	var pt := course.tile_of(pin.x, pin.z)
+	var pt := course.tile_of(end.x, end.z)
 	if not course.in_bounds(tt.x, tt.y) or not course.in_bounds(pt.x, pt.y):
 		return {"line": chord, "reached": false}
 	var fx := clampi(mini(tt.x, pt.x) - margin, 0, course.w - 1)
@@ -334,7 +346,8 @@ func direction_at(t: float) -> Vector2:
 	var pb := _point_flat(minf(t + 0.03, 1.0))
 	var d := pb - pa
 	if d.length_squared() < 0.01:
-		d = Vector2(pin.x - tee.x, pin.z - tee.z)
+		var end := design_pin()
+		d = Vector2(end.x - tee.x, end.z - tee.z)
 	if d.length_squared() < 0.01:
 		return Vector2(1.0, 0.0)
 	return d.normalized()
@@ -343,7 +356,8 @@ func direction_at(t: float) -> Vector2:
 func _point_flat(t: float) -> Vector2:
 	var pts := route
 	if pts.size() < 2:
-		return Vector2(tee.x, tee.z).lerp(Vector2(pin.x, pin.z), clampf(t, 0.0, 1.0))
+		var end := design_pin()
+		return Vector2(tee.x, tee.z).lerp(Vector2(end.x, end.z), clampf(t, 0.0, 1.0))
 	var total := 0.0
 	for i in range(1, pts.size()):
 		total += pts[i - 1].distance_to(pts[i])
@@ -371,6 +385,8 @@ func _line_stamp() -> int:
 func snap_to_ground(course: Course) -> void:
 	tee.y = course.height_at(tee.x, tee.z)
 	pin.y = course.height_at(pin.x, pin.z)
+	if placed.length_squared() > 0.01:
+		placed.y = course.height_at(placed.x, placed.z)
 
 
 func average_score() -> float:
@@ -576,6 +592,7 @@ func touches_water(course: Course) -> bool:
 func to_dict() -> Dictionary:
 	return {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
+		"placed": [placed.x, placed.y, placed.z],
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
@@ -606,6 +623,11 @@ static func from_dict(d: Dictionary) -> Hole:
 	var hole := Hole.new()
 	hole.tee = Vector3(d.tee[0], d.tee[1], d.tee[2])
 	hole.pin = Vector3(d.pin[0], d.pin[1], d.pin[2])
+	if d.has("placed"):
+		var pl: Array = d.placed
+		hole.placed = Vector3(float(pl[0]), float(pl[1]), float(pl[2]))
+	else:
+		hole.placed = hole.pin
 	hole.earned = float(d.get("earned", 0.0))
 	hole.payers = int(d.get("payers", 0))
 	hole.plays = int(d.get("plays", 0))

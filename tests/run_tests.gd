@@ -5636,6 +5636,8 @@ func _test_rating() -> void:
 	laid.revision += 1
 	var moved_card := built.playing_card()
 	check(moved_card.scratch_score() > scratch and moved_card.slope_score() > slope_n, "once the course changes, the scratch rating and the slope are worked out again")
+	_test_rating_card()
+	_test_rating_holes()
 
 
 func _rating_course(span: int, half: int, fierce: bool) -> Vector2:
@@ -5704,3 +5706,150 @@ func _rating_sim(span: int, half: int, fierce: bool) -> Sim:
 	course.revision += 1
 	sim.add_hole(course.tile_center(x, y0), course.tile_center(x, gy))
 	return sim
+
+
+func _test_rating_card() -> void:
+	var sim := _rating_sim(50, 4, false)
+	var hole: Hole = sim.course.holes[0]
+	var card := sim.playing_card()
+	var scratch := card.scratch_score()
+	var slope_n := card.slope_score()
+	var laid := hole.design_pin()
+	sim.tourney.apply_setup("stern")
+	check(hole.pin.distance_squared_to(laid) > 0.25, "the stern setup moves the cup")
+	check(hole.design_pin().distance_squared_to(laid) < 0.01, "the design pin stays where the hole was laid out")
+	var tucked := sim.playing_card()
+	check(is_equal_approx(tucked.scratch_score(), scratch) and tucked.slope_score() == slope_n, "a tournament tuck does not change the card")
+	var one := _rating_sim(50, 4, false)
+	var first: Hole = one.course.holes[0]
+	var alone := one.playing_card()
+	var alone_sum := alone.scratch_sum()
+	var alone_slope := alone.slope_score()
+	one.add_hole(first.tee, first.design_pin())
+	var both := one.playing_card()
+	check(is_equal_approx(both.scratch_sum(), alone_sum * 2.0) and both.slope_score() == alone_slope, "two copies of a hole double the scratch and keep the same slope (%.2f against %.2f, slope %d)" % [both.scratch_sum(), alone_sum * 2.0, both.slope_score()])
+	var bare := _rating_bunkers(0)
+	var capped := _rating_bunkers(6)
+	var over := _rating_bunkers(12)
+	print("   bunkers bare %.2f cap %.2f over %.2f" % [bare.y, capped.y, over.y])
+	check(capped.y > bare.y, "bunkers at the cap rate above a bunker-free hole")
+	check(is_equal_approx(over.x, capped.x) and is_equal_approx(over.y, capped.y) and int(over.z) == int(capped.z), "a hole with more bunker tiles than the cap rates the same as one at the cap")
+	var flat := _rating_climb(0.0, 0.0)
+	var uphill := _rating_climb(0.0, 20.0)
+	var downhill := _rating_climb(20.0, 0.0)
+	var added := uphill - flat
+	var taken := flat - downhill
+	print("   climb flat %.3f up %.3f down %.3f" % [flat, uphill, downhill])
+	check(added > taken and added > 0.0 and taken > 0.0, "uphill adds more than the same drop downhill takes off (%.3f against %.3f)" % [added, taken])
+
+
+func _rating_bunkers(count: int) -> Vector3:
+	var sim := _rating_sim(50, 6, false)
+	var course := sim.course
+	var hole: Hole = course.holes[0]
+	var at := hole.point_along(0.55, course)
+	var origin := course.tile_of(at.x, at.z)
+	var placed_n := 0
+	for by in range(-2, 3):
+		for bx in range(1, 4):
+			if placed_n >= count:
+				break
+			var tx := origin.x + bx
+			var ty := origin.y + by
+			if course.in_bounds(tx, ty):
+				course.terrain[ty * course.w + tx] = Defs.T.BUNKER
+				placed_n += 1
+		if placed_n >= count:
+			break
+	course.revision += 1
+	var card := sim.playing_card()
+	return Vector3(card.scratch_sum(), card.bogey_score(), float(card.slope_score()))
+
+
+func _rating_climb(tee_y: float, pin_y: float) -> float:
+	var sim := _rating_sim(50, 4, false)
+	var hole: Hole = sim.course.holes[0]
+	hole.tee.y = tee_y
+	hole.pin.y = pin_y
+	hole.placed.y = pin_y
+	sim.course.revision += 1
+	return sim.playing_card().bogey_score()
+
+
+func _test_rating_holes() -> void:
+	var plain := _rating_sim(50, 4, false).playing_card()
+	var plain_bogey := plain.bogey_score()
+	check(plain.slope_score() < 155, "a plain hole is not already on 155 (slope %d)" % plain.slope_score())
+	var narrow := _rating_sim(50, 1, false).playing_card()
+	check(narrow.bogey_score() > plain_bogey and narrow.slope_score() < 155, "a narrow fairway raises the bogey figure without hitting 155 (%.3f, slope %d)" % [narrow.bogey_score(), narrow.slope_score()])
+	var small := _rating_sim(50, 4, false)
+	var small_hole: Hole = small.course.holes[0]
+	var pin_tile := small.course.tile_of(small_hole.design_pin().x, small_hole.design_pin().z)
+	for sy in range(pin_tile.y - 5, pin_tile.y + 6):
+		for sx in range(pin_tile.x - 5, pin_tile.x + 6):
+			if not small.course.in_bounds(sx, sy):
+				continue
+			if absi(sx - pin_tile.x) <= 1 and absi(sy - pin_tile.y) <= 1:
+				continue
+			var gi := sy * small.course.w + sx
+			if int(small.course.terrain[gi]) == Defs.T.GREEN:
+				small.course.terrain[gi] = Defs.T.FAIRWAY
+	small.course.revision += 1
+	var small_card := small.playing_card()
+	check(small_card.bogey_score() > plain_bogey and small_card.slope_score() < 155, "a small green raises the bogey figure without hitting 155 (%.3f, slope %d)" % [small_card.bogey_score(), small_card.slope_score()])
+	var steep := _rating_sim(50, 4, false)
+	var steep_hole: Hole = steep.course.holes[0]
+	var steep_at := steep.course.tile_of(steep_hole.design_pin().x, steep_hole.design_pin().z)
+	var grid_w := steep.course.w + 1
+	steep.course.heights[steep_at.y * grid_w + steep_at.x + 1] = 0.4
+	steep.course.revision += 1
+	var steep_card := steep.playing_card()
+	check(steep_card.bogey_score() > plain_bogey and steep_card.slope_score() < 155, "a steep green raises the bogey figure without hitting 155 (%.3f, slope %d)" % [steep_card.bogey_score(), steep_card.slope_score()])
+	var treed := _rating_sim(50, 4, false)
+	var tree_hole: Hole = treed.course.holes[0]
+	var tree_at := tree_hole.point_along(0.55, treed.course)
+	var tree_tile := treed.course.tile_of(tree_at.x, tree_at.z)
+	var tree_i := tree_tile.y * treed.course.w + tree_tile.x + 2
+	treed.course.objects[tree_i] = Defs.O.OAK
+	treed.course.objects_touched()
+	treed.course.revision += 1
+	var tree_card := treed.playing_card()
+	check(tree_card.bogey_score() > plain_bogey and tree_card.slope_score() < 155, "a tree raises the bogey figure without hitting 155 (%.3f, slope %d)" % [tree_card.bogey_score(), tree_card.slope_score()])
+	var bounded := _rating_sim(50, 4, false)
+	var bound_hole: Hole = bounded.course.holes[0]
+	var bound_at := bound_hole.point_along(0.55, bounded.course)
+	var bound_tile := bounded.course.tile_of(bound_at.x, bound_at.z)
+	var bound_i := bound_tile.y * bounded.course.w + bound_tile.x + 2
+	bounded.course.locked[bound_i] = 1
+	bounded.course.revision += 1
+	var bound_card := bounded.playing_card()
+	check(bound_card.bogey_score() > plain_bogey and bound_card.slope_score() < 155, "out of bounds raises the bogey figure without hitting 155 (%.3f, slope %d)" % [bound_card.bogey_score(), bound_card.slope_score()])
+	check(is_equal_approx(float(db.rating.get("sample", 0)), 2.0) and is_equal_approx(float(db.rating.get("min_length", 0)), 10.0), "the sampling step and the length floor live in the rating data")
+	var floored := _rating_sim(50, 4, false)
+	floored.playing_card()
+	var short_hole: Hole = floored.course.holes[0]
+	short_hole.length = 3.0
+	floored.course.revision += 1
+	var held_floor := floored.playing_card().scratch_sum()
+	CourseRating.book["min_length"] = 0.0
+	floored.course.revision += 1
+	var no_floor := floored.playing_card().scratch_sum()
+	CourseRating.book["min_length"] = 10.0
+	check(held_floor > no_floor + 0.01, "a short hole is held up by the length floor in the data (%.3f against %.3f)" % [held_floor, no_floor])
+	var carried := _rating_carry_sum()
+	CourseRating.book["sample"] = 10.0
+	var stepped := _rating_carry_sum()
+	CourseRating.book["sample"] = 2.0
+	check(not is_equal_approx(carried, stepped), "the carry sample step is the one in the rating data (%.3f against %.3f)" % [carried, stepped])
+
+
+func _rating_carry_sum() -> float:
+	var sim := _rating_sim(50, 4, false)
+	var course := sim.course
+	var band := 45
+	for tx in range(34, 48):
+		course.terrain[band * course.w + tx] = Defs.T.WATER
+		course.terrain[(band + 1) * course.w + tx] = Defs.T.WATER
+		course.terrain[(band + 2) * course.w + tx] = Defs.T.WATER
+	course.revision += 1
+	return sim.playing_card().scratch_sum()

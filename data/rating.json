@@ -30,6 +30,8 @@
 	"side": 40,
 	"near": 18,
 	"green_reach": 24,
+	"sample": 2,
+	"min_length": 10,
 	"scale": 5.381,
 	"slope_min": 55,
 	"slope_max": 155,

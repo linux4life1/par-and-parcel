@@ -601,6 +601,7 @@ func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 	var hole := Hole.new()
 	hole.tee = on_ground(tee.x, tee.z)
 	hole.pin = on_ground(pin.x, pin.z)
+	hole.placed = hole.pin
 	hole.update_metrics(self)
 	holes.append(hole)
 	revision += 1

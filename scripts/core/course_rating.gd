@@ -13,6 +13,8 @@ static func use(d: Dictionary) -> void:
 
 var _rev := -2
 var _scratch := 0.0
+var _scratch_sum := 0.0
+var _bogey := 0.0
 var _slope := 0
 var ready := false
 
@@ -42,6 +44,16 @@ func scratch_score() -> float:
 	return _scratch
 
 
+## The scratch total before it is snapped to a tenth. Two copies of a hole
+## double this, even when the shown tenth would round the other way.
+func scratch_sum() -> float:
+	return _scratch_sum
+
+
+func bogey_score() -> float:
+	return _bogey
+
+
 func slope_score() -> int:
 	return _slope
 
@@ -51,6 +63,8 @@ func _fill(course: Course) -> void:
 	if holes.is_empty():
 		ready = false
 		_scratch = 0.0
+		_scratch_sum = 0.0
+		_bogey = 0.0
 		_slope = 0
 		return
 	var scratch := 0.0
@@ -59,6 +73,8 @@ func _fill(course: Course) -> void:
 		var pair := _hole(course, hole)
 		scratch += pair.x
 		bogey += pair.y
+	_scratch_sum = scratch
+	_bogey = bogey
 	_scratch = round(scratch * 10.0) / 10.0
 	var n := holes.size()
 	var gap := (bogey - scratch) * float(_i("standard_holes", 18)) / float(n)
@@ -68,13 +84,14 @@ func _fill(course: Course) -> void:
 
 
 func _hole(course: Course, hole: Hole) -> Vector2:
-	var climb := hole.pin.y - hole.tee.y
+	var end := hole.design_pin()
+	var climb := end.y - hole.tee.y
 	var eff := hole.length
 	if climb > 0.0:
 		eff += climb * _f("uphill", 1.0)
 	else:
 		eff += climb * _f("downhill", 0.5)
-	eff = maxf(eff, 10.0)
+	eff = maxf(eff, _f("min_length", 10.0))
 	var scratch := eff / _f("scratch_run", 83.0)
 	var bogey := eff / _f("bogey_run", 64.5)
 	var carry := _carry(course, hole)
@@ -95,10 +112,10 @@ func _hole(course: Course, hole: Hole) -> Vector2:
 	var narrow := maxf(0.0, _f("fairway_wide", 28.0) - width_sum / maxf(float(width_n), 1.0))
 	scratch += narrow * _f("narrow_scratch", 0.02)
 	bogey += narrow * _f("narrow_bogey", 0.05)
-	var bunkers: int = mini(_kind(seen, "bunker"), _i("bunker_cap", 6))
-	var ponds: int = mini(_kind(seen, "water"), _i("water_cap", 6))
-	var trees: int = mini(_kind(seen, "tree"), _i("tree_cap", 8))
-	var outs: int = mini(_kind(seen, "oob"), _i("oob_cap", 6))
+	var bunkers: int = mini(int(seen.get("bunker", 0)), _i("bunker_cap", 6))
+	var ponds: int = mini(int(seen.get("water", 0)), _i("water_cap", 6))
+	var trees: int = mini(int(seen.get("tree", 0)), _i("tree_cap", 8))
+	var outs: int = mini(int(seen.get("oob", 0)), _i("oob_cap", 6))
 	scratch += float(bunkers) * _f("bunker_scratch", 0.03)
 	bogey += float(bunkers) * _f("bunker_bogey", 0.08)
 	scratch += float(ponds) * _f("water_scratch", 0.04)
@@ -110,7 +127,7 @@ func _hole(course: Course, hole: Hole) -> Vector2:
 	var shy := maxf(0.0, _f("green_room", 450.0) - _green_area(course, hole))
 	scratch += shy * _f("green_scratch", 0.0005)
 	bogey += shy * _f("green_bogey", 0.0012)
-	var grade := course.gradient_at(hole.pin.x, hole.pin.z).length() * 100.0
+	var grade := course.gradient_at(end.x, end.z).length() * 100.0
 	var steep := maxf(0.0, grade - _f("slope_flat", 2.0))
 	scratch += steep * _f("grade_scratch", 0.03)
 	bogey += steep * _f("grade_bogey", 0.08)
@@ -121,12 +138,12 @@ func _carry(course: Course, hole: Hole) -> float:
 	var total := hole.length
 	if total < 1.0:
 		return 0.0
-	var step := 2.0
+	var step := _f("sample", 2.0)
 	var run := 0.0
 	var best := 0.0
 	var walked := 0.0
 	while walked <= total + 0.01:
-		var at := hole.point_along(clampf(walked / total, 0.0, 1.0))
+		var at := hole.point_along(clampf(walked / total, 0.0, 1.0), course)
 		var i := course.index_at(at.x, at.z)
 		var wet := false
 		if i >= 0:
@@ -150,7 +167,7 @@ func _width(course: Course, hole: Hole, t: float) -> float:
 
 
 func _span(course: Course, at: Vector3, perp: Vector2, limit: float) -> float:
-	var step := 2.0
+	var step := _f("sample", 2.0)
 	var travelled := 0.0
 	while travelled + step <= limit:
 		var next := travelled + step
@@ -169,14 +186,15 @@ func _span(course: Course, at: Vector3, perp: Vector2, limit: float) -> float:
 func _green_area(course: Course, hole: Hole) -> float:
 	var reach := _f("green_reach", 24.0)
 	var tiles := int(ceil(reach / Defs.TILE))
-	var origin := course.tile_of(hole.pin.x, hole.pin.z)
+	var pin := hole.design_pin()
+	var origin := course.tile_of(pin.x, pin.z)
 	var n := 0
 	for ty in range(origin.y - tiles, origin.y + tiles + 1):
 		for tx in range(origin.x - tiles, origin.x + tiles + 1):
 			if not course.in_bounds(tx, ty):
 				continue
 			var centre := course.tile_center(tx, ty)
-			if Vector2(centre.x - hole.pin.x, centre.z - hole.pin.z).length() > reach:
+			if Vector2(centre.x - pin.x, centre.z - pin.z).length() > reach:
 				continue
 			if Defs.is_green(int(course.terrain[ty * course.w + tx])):
 				n += 1
@@ -210,15 +228,7 @@ func _tally(course: Course, x: float, z: float, seen: Dictionary) -> void:
 			if seen.has(key):
 				continue
 			seen[key] = true
-
-
-func _kind(seen: Dictionary, kind: String) -> int:
-	var n := 0
-	var prefix := kind + ":"
-	for key in seen:
-		if str(key).begins_with(prefix):
-			n += 1
-	return n
+			seen[kind] = int(seen.get(kind, 0)) + 1
 
 
 static func _f(key: String, fallback: float) -> float:
