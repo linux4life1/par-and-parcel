@@ -1,13 +1,26 @@
 class_name CareerBook
 extends RefCounted
-## What follows the owner from one course to the next: the bank, the pro,
-## and the album of aces and wins. A debt stays behind. The new course
-## still starts with its own purse.
+## What follows the owner from one course to the next: the profit, the pro,
+## and the album of aces and wins. Only what was earned above the club's
+## opening purse travels, and a club's bank is taken once. A debt stays
+## behind. The new course still starts with its own purse.
 
 
-static func pack(sim: Sim) -> Dictionary:
+static func pack(sim: Sim, previous: Dictionary = {}) -> Dictionary:
+	var profit := maxf(sim.economy.money - sim.opening_money, 0.0)
+	var taken: Array = []
+	var prev_taken: Variant = previous.get("taken", [])
+	if prev_taken is Array:
+		taken = (prev_taken as Array).duplicate()
+	var from_id := sim.club_id
+	for id in taken:
+		if str(id) == from_id:
+			profit = 0.0
+			break
 	return {
-		"money": sim.economy.money,
+		"money": profit,
+		"from": from_id,
+		"taken": taken,
 		"career": sim.career.to_dict(),
 		"player": sim.player.to_dict(),
 		"skills": sim.skills.to_dict(),
@@ -15,12 +28,33 @@ static func pack(sim: Sim) -> Dictionary:
 	}
 
 
-static func apply(sim: Sim, d: Dictionary) -> void:
+## Puts the book onto the new club. The dictionary it returns is the book
+## with this take recorded, so the same club cannot pay its bank again.
+static func apply(sim: Sim, d: Dictionary) -> Dictionary:
+	var out := d.duplicate(true)
 	if d.is_empty():
-		return
+		return out
+	var from_id := str(d.get("from", ""))
+	var taken: Array = []
+	var listed: Variant = out.get("taken", [])
+	if listed is Array:
+		taken = listed
+	var already := false
+	if from_id != "":
+		for id in taken:
+			if str(id) == from_id:
+				already = true
+				break
 	var carried := float(d.get("money", 0.0))
-	if carried > 0.0:
+	if already:
+		out["money"] = 0.0
+	elif carried > 0.0:
 		sim.economy.money += carried
+		if from_id != "":
+			taken.append(from_id)
+		out["taken"] = taken
+		out["money"] = 0.0
+		out["from"] = ""
 	var skills: Dictionary = d.get("skills", {})
 	if not skills.is_empty():
 		sim.skills.from_dict(skills)
@@ -34,3 +68,4 @@ static func apply(sim: Sim, d: Dictionary) -> void:
 	for page in d.get("album", []):
 		if page is Dictionary:
 			sim.album.append(page.duplicate(true))
+	return out

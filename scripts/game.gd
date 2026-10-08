@@ -287,6 +287,8 @@ func new_game(scenario_id: String, seed_value: int = 0, biome_id: String = "", t
 	sim.set_difficulty(difficulty)
 	if take_career:
 		_load_career()
+	# The carried bank is part of what this club starts with, not profit to take again.
+	sim.opening_money = sim.economy.money
 	_session_live = take_career
 	if not sim.scenario_ended.is_connected(_store_career):
 		sim.scenario_ended.connect(_store_career)
@@ -395,10 +397,15 @@ func carried_money() -> float:
 func _store_career(_won: bool = false) -> void:
 	if sim == null:
 		return
+	var previous := {}
+	if FileAccess.file_exists(CAREER_PATH):
+		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
+		if parsed is Dictionary:
+			previous = parsed
 	var f := FileAccess.open(CAREER_PATH, FileAccess.WRITE)
 	if f == null:
 		return
-	f.store_string(JSON.stringify(CareerBook.pack(sim)))
+	f.store_string(JSON.stringify(CareerBook.pack(sim, previous)))
 	f.close()
 
 
@@ -407,5 +414,10 @@ func _load_career() -> void:
 		return
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
 	if parsed is Dictionary:
-		CareerBook.apply(sim, parsed)
+		var kept := CareerBook.apply(sim, parsed)
+		var f := FileAccess.open(CAREER_PATH, FileAccess.WRITE)
+		if f == null:
+			return
+		f.store_string(JSON.stringify(kept))
+		f.close()
 

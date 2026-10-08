@@ -29,6 +29,8 @@ var gear: Gear
 var weather := Weather.new()
 var grounds: Grounds
 var economy := Economy.new()
+var opening_money := 0.0       # the purse the club started with, after any bank carried in
+var club_id := ""              # this club, so a bank is taken from it only once
 var feed: Feed
 var skills: Skills
 var events: Events
@@ -90,6 +92,16 @@ var _marks: Array = []
 var _mark_scale := PackedFloat32Array()
 
 
+static var _club_n := 0
+
+
+## An id for a new club. It does not draw on the simulation's dice: one extra
+## draw there would change every game that follows it.
+static func fresh_club_id() -> String:
+	_club_n += 1
+	return "%d-%d" % [Time.get_ticks_usec(), _club_n]
+
+
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
 	db = data
 	rng.seed = seed_value if seed_value != 0 else int(Time.get_unix_time_from_system())
@@ -105,6 +117,8 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	scenario = Scenario.new(scen)
 	difficulty = int(db.difficulty.get("default", 2))
 	economy.money = float(scen.get("money", 30000))
+	opening_money = economy.money
+	club_id = fresh_club_id()
 	var map: Dictionary = scen.get("map", {})
 	biome = db.biome(biome_id if biome_id != "" else str(map.get("biome", "lush")))
 	_apply_climate(scen)
@@ -358,7 +372,7 @@ func _end_month(d: int) -> void:
 	var prev := Defs.date_parts(d - 1)
 	var label := "%s, Year %d" % [Defs.MONTH_NAMES[prev.month], prev.year]
 	var net := economy.net()
-	economy.close_month(label)
+	economy.close_month(label, rating, visitors.average_satisfaction() if not visitors.recent.is_empty() else -1.0)
 	toast.emit("%s closed: %s%s." % [Defs.MONTH_NAMES[prev.month], "profit of " if net >= 0.0 else "loss of ", Defs.money(absf(net))], "good" if net >= 0.0 else "bad")
 	month_ended.emit(label)
 
@@ -373,12 +387,11 @@ func monthly_upkeep() -> float:
 # ------------------------------------------------------- course standing
 
 func _update_rating(dt: float) -> void:
-	var n := 0
+	var n := course.open_count()
 	var pars := {}
 	var scenery := 0.0
 	for hole in course.holes:
 		if hole.open:
-			n += 1
 			pars[hole.par] = true
 			scenery += scenery_score(hole)
 	if n == 0:
@@ -405,13 +418,12 @@ func _update_rating(dt: float) -> void:
 ## and the next thing that line wants. The points are the score. A round's
 ## length is on the list and adds nothing. Nothing counts until a hole is open.
 func accreditation() -> Array[Dictionary]:
-	var n := 0
+	var n := course.open_count()
 	var pars := {}
 	var scenery := 0.0
 	for hole in course.holes:
 		if not hole.open:
 			continue
-		n += 1
 		pars[hole.par] = true
 		scenery += scenery_score(hole)
 	var am := visitors.amenity_counts()
@@ -1232,7 +1244,8 @@ func to_dict() -> Dictionary:
 			hs[i] = hd
 	var d := {
 		"version": 1, "scenario": scenario.def.get("id", "free_play"), "status": scenario.status,
-		"name": course_name, "time": time, "clock": clock, "career": career.to_dict(), "money": economy.money, "rating": rating, "reputation": reputation,
+		"name": course_name, "time": time, "clock": clock, "career": career.to_dict(), "money": economy.money,
+		"opening": opening_money, "club": club_id, "rating": rating, "reputation": reputation,
 		"buzz": buzz, "stats": stats, "recent": visitors.recent, "staff": staff, "skills": skills.to_dict(),
 		"player": player.to_dict(), "hosted": tourney.hosted, "history": economy.history,
 		"weather": weather.kind, "course": course_d, "biome": str(biome.get("id", "lush")),
@@ -1279,6 +1292,14 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	sim.clock = float(d.get("clock", 8.0))
 	sim._day = sim.day()
 	sim.economy.money = float(d.get("money", 0.0))
+	# An older save never stored what the club started with. Treat the loaded
+	# balance as the opening, so the whole purse is not suddenly profit.
+	if d.has("opening"):
+		sim.opening_money = float(d.get("opening", sim.economy.money))
+	else:
+		sim.opening_money = sim.economy.money
+	var club := str(d.get("club", ""))
+	sim.club_id = club if club != "" else fresh_club_id()
 	for hrow: Dictionary in d.get("history", []):
 		sim.economy.history.append(hrow)
 	sim.rating = float(d.get("rating", 45.0))

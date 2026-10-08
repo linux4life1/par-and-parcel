@@ -63,6 +63,7 @@ func _ready() -> void:
 	_test_progress()
 	_test_accreditation()
 	_test_station()
+	_test_comments()
 	_test_easy_and_album()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
@@ -2869,8 +2870,9 @@ func _test_lot_shade() -> void:
 	var slow := float(Time.get_ticks_usec() - slow0) / 1000.0
 	print("   pricing every tile with lot_value on 128 by 128: %.2f ms" % slow)
 	check(slow > ms * 10.0, "the fast rebuild is at least ten times quicker than pricing every tile (%.2f ms against %.2f)" % [ms, slow])
+	var kept := sim._lot_builds
 	var again := sim.lot_shade()
-	check(first.size() == c.w * c.h and int(first[i]) == int(again[i]), "the lot map covers the course and is kept until it changes")
+	check(first.size() == c.w * c.h and int(first[i]) == int(again[i]) and sim._lot_builds == kept, "the lot map covers the course and is kept until it changes")
 	var hi := 0
 	var lo := 255
 	for b in first:
@@ -3595,6 +3597,48 @@ func _test_accreditation() -> void:
 	check(_design_sum(stuffed) > 100.0 and is_equal_approx(stuffed.design, 100.0), "past the top, the lines still add up and the score stops at 100")
 
 
+func _test_comments() -> void:
+	print("-- comments and history")
+	var sim := _sim("three_holes", 3)
+	check(sim.course.comment_report().is_empty(), "a fresh course has nothing to report")
+	sim.course.holes[0].comments = {"scenery": 4.0, "wait": -1.0}
+	sim.course.holes[1].comments = {"scenery": 2.5, "water": -6.0}
+	sim.course.holes[2].comments = {"wait": -2.0}
+	var report := sim.course.comment_report()
+	check(report.size() == 3, "the report lists each thing golfers mention (%d)" % report.size())
+	check(str(report[0].tag) == "scenery" and is_equal_approx(float(report[0].total), 6.5), "praise on two holes is added together, and the strongest feeling is listed first")
+	check(str(report[1].tag) == "water" and is_equal_approx(float(report[1].total), -6.0), "a complaint on one hole is listed by how hard it hit")
+	check(str(report[2].tag) == "wait" and is_equal_approx(float(report[2].total), -3.0), "the same complaint on two holes is added together")
+	sim.rating = 64.0
+	sim.visitors.recent.clear()
+	for i in 8:
+		sim.visitors.recent.append(80.0)
+	var sat := sim.visitors.average_satisfaction()
+	sim._end_month(32)
+	var row: Dictionary = sim.economy.history[-1]
+	check(is_equal_approx(float(row.rating), 64.0) and is_equal_approx(float(row.satisfaction), sat), "a closed month remembers the rating and how happy golfers were")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var hist: Array = saved.history
+	var old: Dictionary = hist[0]
+	old.erase("rating")
+	old.erase("satisfaction")
+	var loaded := Sim.from_dict(db, saved, gear)
+	check(not loaded.economy.history[0].has("rating") and not loaded.economy.history[0].has("satisfaction"), "an older month, with no standing recorded, still loads")
+	loaded.rating = 40.0
+	loaded._end_month(64)
+	var again: Dictionary = loaded.economy.history[-1]
+	check(is_equal_approx(float(again.rating), 40.0) and again.has("satisfaction"), "the next month records the standing again")
+	var words: Dictionary = load("res://scripts/ui/panels.gd").get_script_constant_map().get("COMMENT_WORDS", {})
+	var named := true
+	for tag in ["dark", "night", "drink", "snack", "rain", "storm", "celebrity", "thirst", "hungry", "restroom"]:
+		if not words.has(tag):
+			named = false
+	check(named, "every feeling golfers carry off a hole has words in the report")
+	sim.visitors.recent.clear()
+	sim._end_month(96)
+	var quiet: Dictionary = sim.economy.history[-1]
+	check(not quiet.has("satisfaction"), "a month with no golfers draws no satisfaction point")
+
 func _test_easy_and_album() -> void:
 	print("-- too easy, the album, and a career that travels")
 	var sim := _sim("three_holes", 3)
@@ -3637,11 +3681,13 @@ func _test_easy_and_album() -> void:
 	var attr := str(sim.db.attributes[0].get("id", "power"))
 	sim.career.levels[attr] = 4
 	sim.economy.money = 44000.0
+	var profit := maxf(sim.economy.money - sim.opening_money, 0.0)
 	var packed := CareerBook.pack(sim)
+	check(profit > 0.0 and profit < sim.economy.money and is_equal_approx(float(packed.get("money", -1.0)), profit), "only the profit above the opening purse is packed")
 	var nxt := _sim("first_tee", 4)
 	var purse := nxt.economy.money
 	CareerBook.apply(nxt, packed)
-	check(is_equal_approx(nxt.economy.money, purse + 44000.0), "the next course starts with its own purse plus the bank you bring")
+	check(is_equal_approx(nxt.economy.money, purse + profit), "the next course starts with its own purse plus the profit you made")
 	check(nxt.career.level(attr) == 4, "the pro's attributes come along")
 	check(nxt.album.size() == 2 and str(nxt.album[-1].get("kind", "")) == "win", "the album comes along")
 	var broke := _sim("weed_patch", 5)
@@ -3653,6 +3699,40 @@ func _test_easy_and_album() -> void:
 	var kept := sim.to_dict()
 	var loaded := Sim.from_dict(db, kept, gear)
 	check(loaded.album.size() == sim.album.size() and str(loaded.album[0].get("kind", "")) == "ace", "a save keeps the album")
+	check(loaded.club_id == sim.club_id and is_equal_approx(loaded.opening_money, sim.opening_money), "a save keeps the club and what it started with")
 	kept.erase("album")
+	kept.erase("opening")
+	kept.erase("club")
 	var older := Sim.from_dict(db, kept, gear)
 	check(older.album.is_empty(), "an older save, with no album stored, still loads")
+	check(is_equal_approx(older.opening_money, older.economy.money) and older.club_id != "", "an older save, with no opening or club stored, still loads")
+	var path := Game.CAREER_PATH
+	var live := Game._session_live
+	var old_sim := Game.sim
+	Game.CAREER_PATH = "user://career_bank_test.json"
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	Game._session_live = false
+	Game.new_game("free_play", 3)
+	var stake := Game.sim.economy.money
+	Game.new_game("free_play", 4)
+	check(is_equal_approx(Game.sim.economy.money, stake), "two new games in a row do not stack purses")
+	Game.sim.economy.money += 8000.0
+	var snap: Dictionary = Game.sim.to_dict()
+	Game.new_game("free_play", 5)
+	check(is_equal_approx(Game.sim.economy.money, stake + 8000.0), "profit above the opening purse is carried once")
+	check(is_equal_approx(Game.sim.opening_money, Game.sim.economy.money), "the carried bank is part of the new club's opening")
+	Game.sim = Sim.from_dict(db, snap, gear)
+	Game._session_live = true
+	Game.new_game("free_play", 6)
+	check(is_equal_approx(Game.sim.economy.money, stake), "a reloaded club does not carry its bank again")
+	Game.sim.economy.money = -200.0
+	Game.sim.opening_money = stake
+	Game._session_live = true
+	Game.new_game("free_play", 7)
+	check(is_equal_approx(Game.sim.economy.money, stake), "a debt stays behind")
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	Game.CAREER_PATH = path
+	Game.sim = old_sim
+	Game._session_live = live
