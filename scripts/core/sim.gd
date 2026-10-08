@@ -63,6 +63,7 @@ var time := 0.0
 var open := true
 var playing_round := false   # a round is on the course; build history will not move
 var rating := 45.0          # 0..100 quality of the course as golfers see it
+var scratch_card := CourseRating.new()   # scratch score and slope; not `rating`
 var design := 0.0           # the layout's share of the rating
 var reputation := 30.0      # follows the rating slowly; drives how many turn up
 var buzz := 0.0             # short-lived publicity, good or bad
@@ -786,6 +787,13 @@ func thirst_rate() -> float:
 func clubhouse_door() -> Vector3:
 	var c := course.tile_center(course.clubhouse.x, course.clubhouse.y)
 	return course.on_ground(c.x, c.z - 9.0)
+
+
+## Scratch score and slope for the holes that exist. Recomputed when the
+## course changes. An empty course has none.
+func playing_card() -> CourseRating:
+	scratch_card.ensure(self)
+	return scratch_card
 
 
 ## Remeasure any hole whose ground has changed, so par follows the fairway

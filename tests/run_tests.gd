@@ -78,6 +78,7 @@ func _ready() -> void:
 	_test_undo()
 	_test_undo_books()
 	_test_yardage()
+	_test_rating()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -5590,3 +5591,116 @@ func _test_yardage() -> void:
 	var kept_draws := kept.draws
 	kept.ensure(c, other_hole)
 	check(kept == second and lost == first and kept.draws == kept_draws and is_equal_approx(kept.path_metres, second_len) and not is_equal_approx(first_len, second_len), "after a hole is removed, reopening the panel keeps each card with its own hole")
+
+
+func _test_rating() -> void:
+	print("-- course rating and slope")
+	var starter := _sim("three_holes", 1)
+	var starter_card := starter.playing_card()
+	print("   three holes scratch %s slope %s" % [starter_card.scratch_text(), starter_card.slope_text()])
+	check(starter_card.ready and starter_card.scratch_score() > 0.0 and starter_card.slope_score() > 55 and starter_card.slope_score() < 155, "the starter course rates inside the slope clamps, not on them")
+	var empty := _sim("sandbox", 3)
+	var kept := empty.rating
+	var none := empty.playing_card()
+	check(not none.ready and none.scratch_text() == "–" and none.slope_text() == "–", "an empty course has no scratch rating and no slope")
+	check(is_equal_approx(empty.rating, kept), "asking for the scratch rating leaves the reputation rating alone")
+	var open := _rating_course(18, 8, false)
+	var tight := _rating_course(110, 1, true)
+	print("   open %.1f slope %d, tight %.1f slope %d" % [open.x, int(open.y), tight.x, int(tight.y)])
+	check(open.x < tight.x, "a short open hole rates below a long tight one")
+	check(open.y < tight.y, "and its slope is lower")
+	check(int(open.y) == 55 and int(tight.y) == 155, "a gentle hole sits on 55 and a severe one on 155")
+	var plain := _rating_carry(false)
+	var crossed := _rating_carry(true)
+	print("   plain %.1f slope %d, carry %.1f slope %d" % [plain.x, int(plain.y), crossed.x, int(crossed.y)])
+	check(crossed.x > plain.x and int(crossed.y) > int(plain.y), "a forced carry raises the scratch rating and the slope")
+	var built := _rating_sim(50, 4, false)
+	var card := built.playing_card()
+	var scratch := card.scratch_score()
+	var slope_n := card.slope_score()
+	var again := built.playing_card()
+	check(is_equal_approx(again.scratch_score(), scratch) and again.slope_score() == slope_n, "the rating stays put until the course changes")
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(built.to_dict()))
+	check(not raw.has("scratch_rating") and not raw.has("slope_rating"), "a save does not store the scratch rating or the slope")
+	var loaded := Sim.from_dict(db, raw, gear)
+	var back := loaded.playing_card()
+	check(back.ready and is_equal_approx(back.scratch_score(), scratch) and back.slope_score() == slope_n, "a loaded game, and an older save with no rating stored, rates the same course the same way")
+	var laid := built.course
+	var band_y := 45
+	for wx in range(34, 48):
+		laid.terrain[band_y * laid.w + wx] = Defs.T.WATER
+		laid.terrain[(band_y + 1) * laid.w + wx] = Defs.T.WATER
+		laid.terrain[(band_y + 2) * laid.w + wx] = Defs.T.WATER
+	var held_card := built.playing_card()
+	check(is_equal_approx(held_card.scratch_score(), scratch) and held_card.slope_score() == slope_n, "a ground change waits for the course revision")
+	laid.revision += 1
+	var moved_card := built.playing_card()
+	check(moved_card.scratch_score() > scratch and moved_card.slope_score() > slope_n, "once the course changes, the scratch rating and the slope are worked out again")
+
+
+func _rating_course(span: int, half: int, fierce: bool) -> Vector2:
+	var sim := _rating_sim(span, half, fierce)
+	var card := sim.playing_card()
+	return Vector2(card.scratch_score(), float(card.slope_score()))
+
+
+func _rating_carry(with_water: bool) -> Vector2:
+	var sim := _rating_sim(50, 4, false)
+	if with_water:
+		var course := sim.course
+		var band := 20 + 25
+		for tx in range(34, 48):
+			course.terrain[band * course.w + tx] = Defs.T.WATER
+			course.terrain[(band + 1) * course.w + tx] = Defs.T.WATER
+			course.terrain[(band + 2) * course.w + tx] = Defs.T.WATER
+		course.revision += 1
+	var card := sim.playing_card()
+	return Vector2(card.scratch_score(), float(card.slope_score()))
+
+
+func _rating_sim(span: int, half: int, fierce: bool) -> Sim:
+	var sim := _sim("sandbox", 5)
+	var course := sim.course
+	for corner_i in course.heights.size():
+		course.heights[corner_i] = 0.0
+	course.locked.fill(0)
+	var x := 40
+	var y0 := 20
+	var y1 := y0 + span
+	for ty in range(y0 - 2, y1 + 8):
+		for tx in range(x - half - 1, x + half + 2):
+			if course.in_bounds(tx, ty):
+				var ti := ty * course.w + tx
+				course.terrain[ti] = Defs.T.FAIRWAY
+				course.objects[ti] = 0
+				course.locked[ti] = 0
+	var gy := y1 + 4
+	for ty2 in range(gy - 3, gy + 4):
+		for tx2 in range(x - 3, x + 4):
+			if course.in_bounds(tx2, ty2):
+				var gi := ty2 * course.w + tx2
+				course.terrain[gi] = Defs.T.GREEN
+				course.objects[gi] = 0
+				course.locked[gi] = 0
+	if fierce:
+		var mid := y0 + int(span / 2.0)
+		for ty3 in range(mid - 3, mid + 4):
+			if course.in_bounds(x - half, ty3):
+				course.terrain[ty3 * course.w + (x - half)] = Defs.T.BUNKER
+			if course.in_bounds(x + half, ty3):
+				course.terrain[ty3 * course.w + (x + half)] = Defs.T.WATER
+			if course.in_bounds(x + half + 1, ty3):
+				course.objects[ty3 * course.w + (x + half + 1)] = Defs.O.OAK
+				course.locked[ty3 * course.w + (x + half + 1)] = 1
+		for ty4 in range(gy - 3, gy + 4):
+			for tx4 in range(x - 3, x + 4):
+				if course.in_bounds(tx4, ty4):
+					course.terrain[ty4 * course.w + tx4] = Defs.T.ROUGH
+		course.terrain[gy * course.w + x] = Defs.T.GREEN
+		var cw := course.w + 1
+		course.heights[gy * cw + x + 1] = 3.0
+		course.heights[(gy + 1) * cw + x] = 3.0
+		course.objects_touched()
+	course.revision += 1
+	sim.add_hole(course.tile_center(x, y0), course.tile_center(x, gy))
+	return sim
