@@ -76,8 +76,8 @@ var _day := 0
 var _scenery := {}
 var _lines_rev := -1
 var _lot_rev := -2
-var _lot_rating := -1.0
 var _lot_fun := -1.0
+var _lot_builds := 0
 var _lot_shade := PackedByteArray()
 var _mark_rev := -2
 var _marks: Array = []
@@ -619,18 +619,19 @@ func lot_value(tx: int, ty: int) -> float:
 
 
 ## 0 is the cheapest ground on the course right now, 255 the dearest.
-## Kept until the course, the rating or the holes' fun changes, so the
-## overlay can show it without pricing every tile every frame.
+## The shade is relative, so the course rating does not change it. Kept
+## until the course changes, or the holes' fun has moved by a point, so a
+## frame of the Lots view does not price every tile.
 func lot_shade() -> PackedByteArray:
 	var fun := 0.0
 	for hole in course.holes:
 		fun += hole.fun
 	var n := course.w * course.h
-	if _lot_rev == course.revision and is_equal_approx(_lot_rating, rating) and is_equal_approx(_lot_fun, fun) and _lot_shade.size() == n:
+	if _lot_rev == course.revision and absf(fun - _lot_fun) < 1.0 and _lot_shade.size() == n:
 		return _lot_shade
 	_lot_rev = course.revision
-	_lot_rating = rating
 	_lot_fun = fun
+	_lot_builds += 1
 	var vals := PackedFloat32Array()
 	vals.resize(n)
 	var lo := 1.0e12

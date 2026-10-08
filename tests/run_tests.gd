@@ -2870,6 +2870,30 @@ func _test_lot_shade() -> void:
 	check(painted > 0 and sim.lot_value(tx, ty) > worth, "water next door raises what the lot is worth (%.0f to %.0f)" % [worth, sim.lot_value(tx, ty)])
 	var second := sim.lot_shade()
 	check(int(second[i]) > was, "and the map gets brighter there (%d to %d)" % [was, int(second[i])])
+	var hole0 := c.holes[0]
+	var watch: Array[int] = []
+	var watch_was: Array[int] = []
+	for y in c.h:
+		for x in c.w:
+			var p := Vector2((x + 0.5) * Defs.TILE, (y + 0.5) * Defs.TILE)
+			var d := Ball._seg_dist(Vector2(hole0.tee.x, hole0.tee.z), Vector2(hole0.pin.x, hole0.pin.z), p)
+			if d < 70.0:
+				var at := y * c.w + x
+				watch.append(at)
+				watch_was.append(int(second[at]))
+	check(not watch.is_empty(), "hole 1 has ground within 70 m of the line of play")
+	var built := sim._lot_builds
+	sim.rating += 25.0
+	sim.lot_shade()
+	check(sim._lot_builds == built, "changing only the rating does not rebuild the lot map")
+	hole0.fun += 20.0
+	var third := sim.lot_shade()
+	var moved := false
+	for k in watch.size():
+		if int(third[watch[k]]) != watch_was[k]:
+			moved = true
+			break
+	check(sim._lot_builds == built + 1 and moved, "a hole the golfers enjoy more changes the shade within 70 m of its line")
 
 
 func _test_landmarks() -> void:
