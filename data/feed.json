@@ -313,5 +313,14 @@
     "Played hole {hole} at {course} by the light of my phone. Couldn't see the ball, the flag or my own feet.",
     "{course} goes pitch black after sunset. A few lights would be nice.",
     "Lost the light on number {hole}. Played it anyway. Do not recommend."
+  ],
+  "par3": [
+    "Hole {hole} at {course} is the best par 3 I have played all year. Short, and it still asks the question."
+  ],
+  "water": [
+    "The best water hole of the year is number {hole} at {course}. I counted the ripples on the way over."
+  ],
+  "night": [
+    "Best night hole of the year: number {hole} at {course}. You can see every shot, and it is still golf."
   ]
 }

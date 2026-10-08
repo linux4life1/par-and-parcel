@@ -89,7 +89,7 @@ func _frame_terrain(_delta: float) -> void:
 			n += 1
 			if n >= 6:
 				break
-	# Mood and lot value borrow the weeds channel. Refill at once when switched.
+	# Mood, lot value and light borrow the weeds channel. Refill at once when switched.
 	var shown := int(material.get_shader_parameter("overlay"))
 	if shown != _shown_overlay:
 		_shown_overlay = shown
@@ -178,6 +178,9 @@ func _fill_row(ty: int) -> void:
 			_bytes[j + 3] = int((m * 0.5 + 0.5) * 255.0)
 		elif shade.size() > 0:
 			_bytes[j + 3] = shade[i]
+		elif _shown_overlay == 6:
+			var at := course.tile_center(tx, ty)
+			_bytes[j + 3] = int(clampf(course.light_at(at.x, at.z), 0.0, 1.0) * 255.0)
 		else:
 			_bytes[j + 3] = int(course.weeds[i] * 255.0)
 		j += 4
