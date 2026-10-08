@@ -1064,6 +1064,7 @@ func show_scenarios(first_launch: bool = false) -> void:
 	cards.custom_minimum_size = Vector2(0, minf(root.size.y - 250.0, card_rows * 276.0))
 	modal_card.add_child(cards)
 	cards.add_child(grid)
+	var brought := Game.carried_money()
 	for scen: Dictionary in shown:
 		var card := UIKit.card(Color(1, 1, 1, 0.06))
 		card.custom_minimum_size = Vector2(310, 236)
@@ -1109,7 +1110,10 @@ func show_scenarios(first_launch: bool = false) -> void:
 		v.add_child(filler)
 		var foot := UIKit.hbox()
 		v.add_child(foot)
-		foot.add_child(UIKit.label("Start with %s" % Defs.money(float(scen.money)), 13, UIKit.MUTED))
+		if brought > 0.5:
+			foot.add_child(UIKit.label("Start with %s, plus %s from your last club" % [Defs.money(float(scen.money)), Defs.money(brought)], 13, UIKit.MUTED))
+		else:
+			foot.add_child(UIKit.label("Start with %s" % Defs.money(float(scen.money)), 13, UIKit.MUTED))
 		foot.add_child(UIKit.spacer())
 		var id := str(scen.id)
 		foot.add_child(UIKit.button("Play", func() -> void:
