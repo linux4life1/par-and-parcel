@@ -361,17 +361,8 @@ func monthly_upkeep() -> float:
 
 # ------------------------------------------------------- course standing
 
-## How many holes the public may play. The rating and the checklist both use it.
-func _open_hole_count() -> int:
-	var n := 0
-	for hole in course.holes:
-		if hole.open:
-			n += 1
-	return n
-
-
 func _update_rating(dt: float) -> void:
-	var n := _open_hole_count()
+	var n := course.open_count()
 	var pars := {}
 	var scenery := 0.0
 	for hole in course.holes:
@@ -402,7 +393,7 @@ func _update_rating(dt: float) -> void:
 ## and the next thing that line wants. The points are the score. A round's
 ## length is on the list and adds nothing. Nothing counts until a hole is open.
 func accreditation() -> Array[Dictionary]:
-	var n := _open_hole_count()
+	var n := course.open_count()
 	var pars := {}
 	var scenery := 0.0
 	for hole in course.holes:
