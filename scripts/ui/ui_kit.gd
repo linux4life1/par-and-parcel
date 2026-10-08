@@ -216,6 +216,48 @@ class WindDial:
 		draw_colored_polygon(PackedVector2Array([tip, tip - d * 8.0 + n * 5.0, tip - d * 8.0 - n * 5.0]), col)
 
 
+class HistoryChart:
+	extends Control
+	## Rating and satisfaction over the closed months. A value below zero is a
+	## month that never recorded it, and the line breaks there.
+	var ratings := PackedFloat32Array()
+	var satisfaction := PackedFloat32Array()
+
+	func _init() -> void:
+		custom_minimum_size = Vector2(220, 72)
+		size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	func set_series(rate: PackedFloat32Array, happy: PackedFloat32Array) -> void:
+		ratings = rate
+		satisfaction = happy
+		queue_redraw()
+
+	func _draw() -> void:
+		draw_rect(Rect2(Vector2.ZERO, size), Color(0, 0, 0, 0.28))
+		var n := maxi(ratings.size(), satisfaction.size())
+		if n < 2:
+			return
+		_line(ratings, UIKit.GOLD)
+		_line(satisfaction, UIKit.BLUE)
+
+	func _line(points: PackedFloat32Array, color: Color) -> void:
+		var n := points.size()
+		var prev := Vector2(-1, -1)
+		for i in n:
+			var v := points[i]
+			if v < 0.0:
+				prev = Vector2(-1, -1)
+				continue
+			var x := 6.0 + (size.x - 12.0) * float(i) / float(maxi(n - 1, 1))
+			var y := size.y - 8.0 - clampf(v, 0.0, 100.0) / 100.0 * (size.y - 16.0)
+			var p := Vector2(x, y)
+			if prev.x >= 0.0:
+				draw_line(prev, p, color, 2.0, true)
+			draw_circle(p, 2.2, color)
+			prev = p
+
+
 class Meter:
 	extends Control
 	## The three-click swing meter: one bar. The line near the left end is
