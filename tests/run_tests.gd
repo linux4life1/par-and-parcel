@@ -3607,5 +3607,5 @@ func _test_length_scale() -> void:
 	shifted["power_floor"] = 0.5
 	shifted["power_cap"] = 1.2
 	check(is_equal_approx(Members.power_at(0.0, shifted), 0.5) and is_equal_approx(Members.power_at(1.0, shifted), 1.2) and is_equal_approx(Members.power_share(1.2, shifted), 1.0), "a change in the progression data is the length scale")
-	var card := int(Members.power_share(Members.power_at(0.4, progress), progress) * 100.0)
+	var card := roundi(Members.power_share(Members.power_at(0.4, progress), progress) * 100.0)
 	check(card == 40, "the golfer card reads the same scale")
