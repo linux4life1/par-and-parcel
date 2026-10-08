@@ -2866,8 +2866,9 @@ func _test_lot_shade() -> void:
 	var slow := float(Time.get_ticks_usec() - slow0) / 1000.0
 	print("   pricing every tile with lot_value on 128 by 128: %.2f ms" % slow)
 	check(slow > ms * 10.0, "the fast rebuild is at least ten times quicker than pricing every tile (%.2f ms against %.2f)" % [ms, slow])
+	var kept := sim._lot_builds
 	var again := sim.lot_shade()
-	check(first.size() == c.w * c.h and int(first[i]) == int(again[i]), "the lot map covers the course and is kept until it changes")
+	check(first.size() == c.w * c.h and int(first[i]) == int(again[i]) and sim._lot_builds == kept, "the lot map covers the course and is kept until it changes")
 	var hi := 0
 	var lo := 255
 	for b in first:
