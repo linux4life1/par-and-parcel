@@ -4132,6 +4132,19 @@ func _test_debt_welcome() -> void:
 	check(sim.debt_arrival() == 0.0, "a clear balance does not sour an arrival")
 	sim.economy.money = 250.0
 	check(sim.debt_arrival() == 0.0, "nor does money in the bank")
+	sim.economy.money = 1000.0
+	sim.skills.set_extra({"welcome": 40.0})
+	var kept := false
+	var kept_mood := 0.0
+	for s in 40:
+		sim.rng.seed = s
+		var arrival := sim.visitors.make_golfer("public", 0.4)
+		if arrival.satisfaction > 90.0:
+			kept = true
+			kept_mood = arrival.satisfaction
+			break
+	sim.skills.set_extra({})
+	check(kept, "an arrival at a club with money keeps a mood above 90 (%.1f)" % kept_mood)
 	sim.economy.money = -80.0
 	var pen := float(sim.db.debt.get("arrival", -4.0))
 	check(pen < 0.0 and is_equal_approx(sim.debt_arrival(), pen), "debt takes the arrival penalty from the data")
@@ -4141,17 +4154,17 @@ func _test_debt_welcome() -> void:
 	sim.economy.money = -40.0
 	sim.rng.seed = 42
 	var broke := sim.visitors.make_golfer("public", 0.4)
-	check(is_equal_approx(broke.satisfaction, clampf(solvent.satisfaction + pen, 20.0, 90.0)) and broke.satisfaction < solvent.satisfaction, "a public arrival in debt starts lower by the penalty")
+	check(is_equal_approx(broke.satisfaction, clampf(solvent.satisfaction + pen, 5.0, 95.0)) and broke.satisfaction < solvent.satisfaction, "a public arrival in debt starts lower by the penalty")
 	sim.rng.seed = 7
 	var pro := sim.visitors.make_golfer("pro", 0.9)
-	check(is_equal_approx(pro.satisfaction, clampf(66.0 + pen, 20.0, 90.0)), "a pro still starts from 66, then feels the debt")
+	check(is_equal_approx(pro.satisfaction, clampf(66.0 + pen, 5.0, 95.0)), "a pro still starts from 66, then feels the debt")
 	sim.economy.money = 10.0
 	sim.rng.seed = 11
 	var celeb_ok := sim.visitors.make_golfer("celebrity", 0.7)
 	sim.economy.money = -10.0
 	sim.rng.seed = 11
 	var celeb := sim.visitors.make_golfer("celebrity", 0.7)
-	check(is_equal_approx(celeb.satisfaction, clampf(celeb_ok.satisfaction + pen, 20.0, 90.0)), "a celebrity feels it too")
+	check(is_equal_approx(celeb.satisfaction, clampf(celeb_ok.satisfaction + pen, 5.0, 95.0)), "a celebrity feels it too")
 	sim.rng.seed = 3
 	var player_debt := sim.visitors.make_golfer("player", 0.5)
 	sim.economy.money = 80.0
@@ -4166,7 +4179,7 @@ func _test_debt_welcome() -> void:
 	var lab_ok := sim.visitors.make_golfer("lab", 0.5)
 	check(is_equal_approx(lab_debt.satisfaction, lab_ok.satisfaction), "nor is a lab golfer")
 	var member := {
-		"name": "Ada Green", "handle": "AdaG", "persona": "easygoing", "tier": 1,
+		"name": "Member", "handle": "Member", "persona": "easygoing", "tier": 1,
 		"skill": 0.4, "power": 0.9, "accuracy": 0.4, "putting": 0.4, "imagination": 0.4,
 		"patience": 0.5, "pace": 0.5, "wealth": 0.5,
 		"shirt": "ffffff", "pants": "224466", "skin": "e0b090", "hat": "ffffff",
