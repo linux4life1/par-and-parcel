@@ -176,8 +176,8 @@ func _fill_row(ty: int) -> void:
 		if _shown_overlay == 4:
 			var m := clampf(course.mood[i] / 12.0, -1.0, 1.0)
 			_bytes[j + 3] = int((m * 0.5 + 0.5) * 255.0)
-		elif _shown_overlay == 5 and sim != null:
-			_bytes[j + 3] = shade[i] if i < shade.size() else 0
+		elif shade.size() > 0:
+			_bytes[j + 3] = shade[i]
 		else:
 			_bytes[j + 3] = int(course.weeds[i] * 255.0)
 		j += 4
