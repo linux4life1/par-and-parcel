@@ -1,4 +1,5 @@
 {
+  "resign_strikes": 2,
   "tiers": [
     {"id": "basic", "name": "Basic", "dues": 5, "discount": 0.0, "color": "9aa5a0", "visits": 0, "rating": 0, "holes": 0},
     {"id": "advanced", "name": "Advanced", "dues": 10, "discount": 0.05, "color": "7fb6d9", "visits": 1, "rating": 0, "holes": 0},
