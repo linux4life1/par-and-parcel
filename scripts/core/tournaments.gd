@@ -407,6 +407,9 @@ func _finish() -> void:
 		if place == 0:
 			sim.stats.player_wins = int(sim.stats.player_wins) + 1
 			sim.feed.say("owner_wins", null, {}, true, "Golf Enquirer", "GolfEnquirer")
+			var mine := int(finishers[0].get("to_par", 0))
+			var mine_text := "even par" if mine == 0 else ("%+d" % mine)
+			sim.remember("win", "Won the %s at %s, %s." % [str(def.name), mine_text, sim.date_text()])
 		sim.career.note("tourney_top3")
 	player_in = false
 	player_done = true
