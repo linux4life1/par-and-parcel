@@ -58,6 +58,7 @@ func _ready() -> void:
 	_test_draft_hole()
 	_test_pace()
 	_test_lot_shade()
+	_test_landmarks()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2869,6 +2870,43 @@ func _test_lot_shade() -> void:
 	check(painted > 0 and sim.lot_value(tx, ty) > worth, "water next door raises what the lot is worth (%.0f to %.0f)" % [worth, sim.lot_value(tx, ty)])
 	var second := sim.lot_shade()
 	check(int(second[i]) > was, "and the map gets brighter there (%d to %d)" % [was, int(second[i])])
+
+
+func _test_landmarks() -> void:
+	print("-- landmark powers")
+	var kinds: Array = db.landmarks.get("kinds", [])
+	check(kinds.size() >= 1 and int(kinds[0].get("object", -1)) == Defs.O.LANDMARK, "landmark powers are data, on the landmark object")
+	var sim := _sim("sandbox", 6)
+	# _sim switches the long stories off so they do not deal themselves into
+	# other tests. This one is about them.
+	sim.stories.enabled = true
+	var c := sim.course
+	var g := sim.visitors.make_golfer("public", 0.5)
+	g.persona = {}
+	g.mood_good = 1.0
+	g.mood_bad = 1.0
+	g.satisfaction = 60.0
+	g.member = {"id": 7}
+	g.pos = c.tile_center(40, 40)
+	var r := {"cast": {"a": 7}, "moods": {"a": 60.0}, "names": {"a": "Ada"}}
+	sim.stories.running.append(r)
+	check(not sim.stories._need_met("role_happy:a:64", r), "sixty does not clear a happy ending at sixty-four")
+	var far := c.tile_center(80, 80)
+	g.pos = far
+	check(not sim.touch_landmark(g), "standing nowhere near a landmark does nothing")
+	var ti := 40 * c.w + 40
+	c.objects[ti] = Defs.O.LANDMARK
+	c.objects_touched(ti)
+	c.revision += 1
+	g.pos = c.tile_center(40, 40)
+	var before: float = g.satisfaction
+	check(sim.touch_landmark(g), "stepping into the circle is noticed")
+	check(g.satisfaction > before and g.rd.has("landmark"), "it lifts the mood, once")
+	check(not sim.touch_landmark(g), "and not again the same round")
+	var live: Dictionary = sim.stories.running[0]
+	var got: Dictionary = live.get("landmark_for", {})
+	check(float(got.get("a", 0.0)) >= 8.0 and sim.stories._need_met("role_happy:a:64", live), "the same visit makes the happy ending reachable (boost %.1f)" % float(got.get("a", 0.0)))
+	check(sim.weed_scale(ti) < 0.5 and sim.weed_scale(80 * c.w + 80) == 1.0, "weeds slow down in the circle and nowhere else (%.2f)" % sim.weed_scale(ti))
 
 
 func _test_bar_and_vending() -> void:

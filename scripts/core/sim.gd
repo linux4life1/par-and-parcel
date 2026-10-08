@@ -79,6 +79,8 @@ var _lot_rev := -2
 var _lot_rating := -1.0
 var _lot_fun := -1.0
 var _lot_shade := PackedByteArray()
+var _mark_rev := -2
+var _marks: Array = []
 
 
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
@@ -465,6 +467,79 @@ func scenery_score(hole: Hole) -> float:
 	var score := clampf(total / (samples * 9.0), 0.0, 1.0)
 	_scenery[hole] = [course.revision, score]
 	return score
+
+
+func _ensure_marks() -> void:
+	if _mark_rev == course.revision:
+		return
+	_mark_rev = course.revision
+	_marks.clear()
+	var by_obj := {}
+	for kind in db.landmarks.get("kinds", []):
+		if kind is Dictionary:
+			by_obj[int(kind.get("object", -1))] = kind
+	var objs := course.objects
+	for i in objs.size():
+		var o := int(objs[i])
+		if not by_obj.has(o):
+			continue
+		var kind: Dictionary = by_obj[o]
+		var p := course.tile_center(i % course.w, int(i / course.w))
+		_marks.append({
+			"x": p.x, "z": p.z,
+			"radius": float(kind.get("radius", 40.0)),
+			"mood": float(kind.get("mood", 0.0)),
+			"weeds": float(kind.get("weeds", 1.0)),
+			"story": float(kind.get("story", 0.0)),
+		})
+
+
+## The landmark covering this spot, or an empty dictionary.
+func mark_at(x: float, z: float) -> Dictionary:
+	_ensure_marks()
+	var best: Dictionary = {}
+	var best_d := 1.0e12
+	for m: Dictionary in _marks:
+		var dx: float = x - float(m.x)
+		var dz: float = z - float(m.z)
+		var rad: float = float(m.radius)
+		var d2 := dx * dx + dz * dz
+		if d2 <= rad * rad and d2 < best_d:
+			best_d = d2
+			best = m
+	return best
+
+
+## How much a landmark slows the weeds on this tile. 1 where nothing stands.
+func weed_scale(i: int) -> float:
+	_ensure_marks()
+	if _marks.is_empty() or i < 0:
+		return 1.0
+	var p := course.tile_center(i % course.w, int(i / course.w))
+	var scale := 1.0
+	for m: Dictionary in _marks:
+		var dx: float = p.x - float(m.x)
+		var dz: float = p.z - float(m.z)
+		var rad: float = float(m.radius)
+		if dx * dx + dz * dz <= rad * rad:
+			scale = minf(scale, float(m.weeds))
+	return scale
+
+
+## Once a round, a golfer inside a landmark's circle feels it, and a story
+## character takes a step toward a happy ending.
+func touch_landmark(g: Golfer) -> bool:
+	if g.rd.has("landmark"):
+		return false
+	var m := mark_at(g.pos.x, g.pos.z)
+	if m.is_empty():
+		return false
+	g.rd["landmark"] = true
+	var mood := float(m.get("mood", 0.0))
+	if not is_zero_approx(mood):
+		g.feel(mood, "That landmark is worth the walk.", "scenery")
+	stories.note_landmark(g, float(m.get("story", 0.0)))
+	return true
 
 
 # ------------------------------------------------- building, with a budget

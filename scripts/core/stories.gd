@@ -132,6 +132,31 @@ func _on_leave(g: Golfer) -> void:
 		_try(r, "round", {"role": role, "golfer": g, "count": int(counts[role]), "satisfaction": g.satisfaction}))
 
 
+## A landmark near a story character makes a happy ending easier to reach.
+## Kept apart from satisfaction, which is rewritten at the end of a round.
+func note_landmark(g: Golfer, amount: float) -> void:
+	if amount <= 0.0 or not enabled or g.member.is_empty():
+		return
+	var mid := int(g.member.get("id", -1))
+	# Walk the live stories. A typed read of running[i] copies the dictionary,
+	# so a new key written on that copy never lands back in the array.
+	for r in running:
+		var cast: Dictionary = r.cast
+		var role := ""
+		for key: String in cast:
+			if int(cast[key]) == mid:
+				role = key
+				break
+		if role == "":
+			continue
+		if not r.has("landmark_for"):
+			r.landmark_for = {}
+		if float((r.landmark_for as Dictionary).get(role, 0.0)) >= amount:
+			return
+		(r.landmark_for as Dictionary)[role] = amount
+		return
+
+
 ## Characters a story wants together book the same tee time next visit.
 func _keep_together(r: Dictionary) -> void:
 	var pair: Array = def_of(r).get("together", [])
@@ -559,7 +584,9 @@ func _need_met(need: String, r: Dictionary) -> bool:
 		"won_match":
 			return int(sim.stats.get("matches_won", 0)) > _match_wins
 		"role_happy":
-			return float((r.moods as Dictionary).get(parts[1], 0.0)) >= float(parts[2])
+			var got: Dictionary = r.get("landmark_for", {})
+			var extra := float(got.get(parts[1], 0.0))
+			return float((r.moods as Dictionary).get(parts[1], 0.0)) + extra >= float(parts[2])
 	return false
 
 

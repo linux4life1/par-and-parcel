@@ -24,6 +24,7 @@ var clubhouse: Dictionary = {}  # clubhouse levels and what each unlocks
 var tutorial: Dictionary = {}   # the guided first round
 var tips: Dictionary = {}       # for the loading screen
 var stories: Dictionary = {}    # the long golfer stories
+var landmarks: Dictionary = {}  # area effects of landmark objects
 var names: Dictionary = {}
 var feed: Dictionary = {}
 
@@ -52,6 +53,7 @@ func _init() -> void:
 	tutorial = _load("tutorial")
 	tips = _load("tips")
 	stories = _load("stories")
+	landmarks = _load("landmarks")
 	names = _load("names")
 	feed = _load("feed")
 
