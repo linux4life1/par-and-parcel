@@ -268,6 +268,8 @@ const COMMENT_WORDS := {
 	"wait": "waiting", "weeds": "weeds", "pests": "pest damage", "wet": "wet ground",
 	"greens": "the greens", "greens_bad": "poor greens", "hit": "being hit by balls", "eruption": "the volcano", "tired": "the walk",
 	"amenity": "the facilities", "rest": "the bench", "prestige": "its reputation", "story": "the company", "putt": "missed putts",
+	"dark": "unlit holes", "night": "golf under the lights", "drink": "the drinks", "snack": "the food",
+	"rain": "the rain", "storm": "the storms", "celebrity": "seeing a celebrity",
 }
 
 
@@ -604,8 +606,10 @@ func _scorecard(box: VBoxContainer) -> void:
 		cv.add_child(UIKit.label("WHAT GOLFERS SAY", 12, UIKit.ACCENT))
 		for row in said:
 			var tag := str(row.tag)
+			if not COMMENT_WORDS.has(tag):
+				continue
 			var total := float(row.total)
-			var words := str(COMMENT_WORDS.get(tag, tag))
+			var words := str(COMMENT_WORDS[tag])
 			var shown := "%+.1f" % total
 			cv.add_child(UIKit.row(words, shown, UIKit.GOOD if total >= 0.0 else UIKit.BAD))
 

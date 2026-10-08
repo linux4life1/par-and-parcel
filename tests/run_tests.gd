@@ -3626,3 +3626,13 @@ func _test_comments() -> void:
 	loaded._end_month(64)
 	var again: Dictionary = loaded.economy.history[-1]
 	check(is_equal_approx(float(again.rating), 40.0) and again.has("satisfaction"), "the next month records the standing again")
+	var words: Dictionary = load("res://scripts/ui/panels.gd").get_script_constant_map().get("COMMENT_WORDS", {})
+	var named := true
+	for tag in ["dark", "night", "drink", "snack", "rain", "storm", "celebrity"]:
+		if not words.has(tag):
+			named = false
+	check(named, "every feeling golfers carry off a hole has words in the report")
+	sim.visitors.recent.clear()
+	sim._end_month(96)
+	var quiet: Dictionary = sim.economy.history[-1]
+	check(not quiet.has("satisfaction"), "a month with no golfers draws no satisfaction point")
