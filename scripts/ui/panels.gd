@@ -270,6 +270,7 @@ const COMMENT_WORDS := {
 	"amenity": "the facilities", "rest": "the bench", "prestige": "its reputation", "story": "the company", "putt": "missed putts",
 	"dark": "unlit holes", "night": "golf under the lights", "drink": "the drinks", "snack": "the food",
 	"rain": "the rain", "storm": "the storms", "celebrity": "seeing a celebrity",
+	"thirst": "nowhere to drink", "hungry": "nothing to eat", "restroom": "no restroom",
 }
 
 

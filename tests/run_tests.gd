@@ -3629,7 +3629,7 @@ func _test_comments() -> void:
 	check(is_equal_approx(float(again.rating), 40.0) and again.has("satisfaction"), "the next month records the standing again")
 	var words: Dictionary = load("res://scripts/ui/panels.gd").get_script_constant_map().get("COMMENT_WORDS", {})
 	var named := true
-	for tag in ["dark", "night", "drink", "snack", "rain", "storm", "celebrity"]:
+	for tag in ["dark", "night", "drink", "snack", "rain", "storm", "celebrity", "thirst", "hungry", "restroom"]:
 		if not words.has(tag):
 			named = false
 	check(named, "every feeling golfers carry off a hole has words in the report")
