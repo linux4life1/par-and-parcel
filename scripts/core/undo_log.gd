@@ -2,13 +2,19 @@ class_name UndoLog
 extends RefCounted
 ## Build steps that can be taken back: a paint stroke, a raise or lower, an
 ## object placed or removed, a hole laid out. Only the tiles and corners a
-## step changed are kept. The money is put back by the same amount, and
-## putting the step back charges it again, so undo cannot be used to earn.
+## step changed are kept. Undo refunds the exact amount that step charged
+## and books it against construction, and redo charges that same amount
+## again, refusing if it cannot be paid. Wetness, health, weeds and pests
+## are put back only where they are still what the step left. A round being
+## played refuses both. Saving, or an edit that is not one of these steps,
+## drops the history.
+
 
 var sim: Sim
 var depth := 30
 var past: Array[Dictionary] = []
 var future: Array[Dictionary] = []
+var applying := false
 var _stroking := false
 var _open: Dictionary = {}
 
@@ -34,7 +40,8 @@ func can_redo() -> bool:
 	return not future.is_empty()
 
 
-## Drop every step. A loaded course has none of the history it was built with.
+## Drop every step. A loaded course, a save, and an edit this log does not
+## record all start from an empty history.
 func clear() -> void:
 	past.clear()
 	future.clear()
@@ -50,7 +57,6 @@ func begin() -> bool:
 	_stroking = true
 	_open = {
 		"money": sim.economy.money,
-		"expense": float(sim.economy.expense.get("construction", 0.0)),
 		"tiles": {},
 		"heights": {},
 		"holes": sim.course.holes.size(),
@@ -85,26 +91,18 @@ func commit() -> void:
 			any = true
 			height_rec[vi] = {"before": was, "after": now}
 	var hole_added := c.holes.size() > int(_open["holes"])
-	var money_moved := not is_equal_approx(sim.economy.money, float(_open["money"]))
-	var gifts_now := _copy_gifts(sim.gifts)
-	var gifts_moved := not _gifts_same(gifts_now, _open["gifts"])
-	var built_now := int(sim.stats.get("holes_built", 0))
-	var built_moved := built_now != int(_open["built"])
-	if not any and not hole_added and not money_moved and not gifts_moved and not built_moved:
+	var charged := float(_open["money"]) - sim.economy.money
+	var gifts := _gifts_used(_open["gifts"], _copy_gifts(sim.gifts))
+	var built := int(sim.stats.get("holes_built", 0)) - int(_open["built"])
+	if not any and not hole_added and is_zero_approx(charged) and gifts.is_empty() and built == 0:
 		_open = {}
 		return
 	var entry := {
 		"tiles": tile_rec,
 		"heights": height_rec,
-		"before_money": float(_open["money"]),
-		"after_money": sim.economy.money,
-		"before_expense": float(_open["expense"]),
-		"after_expense": float(sim.economy.expense.get("construction", 0.0)),
-		"before_gifts": _open["gifts"],
-		"after_gifts": gifts_now,
-		"before_built": int(_open["built"]),
-		"after_built": built_now,
-		"before_holes": int(_open["holes"]),
+		"charged": charged,
+		"gifts": gifts,
+		"built": built,
 	}
 	if hole_added:
 		entry["hole"] = _snap_hole(c.holes[c.holes.size() - 1])
@@ -136,53 +134,95 @@ func note_height(vi: int) -> void:
 
 
 func undo() -> bool:
-	if _stroking or past.is_empty():
+	if _blocked() or past.is_empty():
 		return false
 	var e: Dictionary = past[past.size() - 1]
 	past.remove_at(past.size() - 1)
-	_apply(e, false)
+	if not _apply(e, false):
+		past.append(e)
+		return false
 	future.append(e)
 	return true
 
 
 func redo() -> bool:
-	if _stroking or future.is_empty():
+	if _blocked() or future.is_empty():
 		return false
 	var e: Dictionary = future[future.size() - 1]
 	future.remove_at(future.size() - 1)
-	_apply(e, true)
+	if not _apply(e, true):
+		future.append(e)
+		return false
 	past.append(e)
 	return true
 
 
-func _apply(e: Dictionary, forward: bool) -> void:
+func _blocked() -> bool:
+	return _stroking or applying or sim.playing_round
+
+
+## Redo pays the same charge and uses the same gifts. It does not look the
+## price up again, and it does not run if either is short.
+func _afford(e: Dictionary) -> bool:
+	var charged := float(e.get("charged", 0.0))
+	if charged > sim.economy.money + 0.001:
+		return false
+	var used: Dictionary = e.get("gifts", {})
+	for k in used:
+		var n := int(used[k])
+		if n > 0 and int(sim.gifts.get(k, 0)) < n:
+			return false
+	return true
+
+
+func _apply(e: Dictionary, forward: bool) -> bool:
+	if forward and not _afford(e):
+		return false
+	if not forward and e.has("hole") and _find_hole(e["hole"]) < 0:
+		return false
+	applying = true
 	var c := sim.course
 	var tiles: Dictionary = e["tiles"]
 	var obj_changed := false
+	var litter_edge := false
 	var x0 := c.w
 	var y0 := c.h
 	var x1 := -1
 	var y1 := -1
-	var which := "after" if forward else "before"
+	var dest_key := "after" if forward else "before"
+	var from_key := "before" if forward else "after"
+	var show := float(sim.db.litter.get("show", 0.45))
 	for key in tiles:
 		var i := int(key)
 		var rec: Dictionary = tiles[key]
-		var side: Dictionary = rec[which]
-		var prev := int(c.objects[i])
-		var new_o := int(side["object"])
+		var dest: Dictionary = rec[dest_key]
+		var from: Dictionary = rec[from_key]
+		var prev_o := int(c.objects[i])
+		var new_o := int(dest["object"])
 		var prev_closed := int(c.closed[i])
-		c.terrain[i] = int(side["terrain"])
+		c.terrain[i] = int(dest["terrain"])
 		c.objects[i] = new_o
-		c.closed[i] = int(side["closed"])
-		c.open_month[i] = int(side["open_month"])
-		c.wet[i] = float(side["wet"])
-		c.health[i] = float(side["health"])
-		c.weeds[i] = float(side["weeds"])
-		c.pests[i] = float(side["pests"])
-		if prev != new_o or prev_closed != int(side["closed"]):
+		c.closed[i] = int(dest["closed"])
+		c.open_month[i] = int(dest["open_month"])
+		c.repair[i] = int(dest["repair"])
+		var litter := float(dest["litter"])
+		var was_litter := float(c.litter[i])
+		if not is_equal_approx(was_litter, litter):
+			c.litter[i] = litter
+			if (was_litter < show and litter >= show) or (was_litter >= show and litter < show):
+				litter_edge = true
+		if is_equal_approx(c.wet[i], float(from["wet"])):
+			c.wet[i] = float(dest["wet"])
+		if is_equal_approx(c.health[i], float(from["health"])):
+			c.health[i] = float(dest["health"])
+		if is_equal_approx(c.weeds[i], float(from["weeds"])):
+			c.weeds[i] = float(dest["weeds"])
+		if is_equal_approx(c.pests[i], float(from["pests"])):
+			c.pests[i] = float(dest["pests"])
+		if prev_o != new_o or prev_closed != int(dest["closed"]):
 			obj_changed = true
-			if prev != new_o:
-				var lit := Defs.O_LIGHT[prev] > 0.0 or Defs.O_LIGHT[new_o] > 0.0
+			if prev_o != new_o:
+				var lit := Defs.O_LIGHT[prev_o] > 0.0 or Defs.O_LIGHT[new_o] > 0.0
 				c.objects_touched(i, lit)
 		var tx := i % c.w
 		var ty := int(i / c.w)
@@ -194,6 +234,8 @@ func _apply(e: Dictionary, forward: bool) -> void:
 		c.tiles_changed.emit(Rect2i(x0 - 1, y0 - 1, x1 - x0 + 3, y1 - y0 + 3))
 	if obj_changed:
 		c.objects_changed.emit()
+	if litter_edge:
+		c.litter_rev += 1
 	var heights: Dictionary = e["heights"]
 	var hw := c.w + 1
 	var hx0 := hw
@@ -203,7 +245,7 @@ func _apply(e: Dictionary, forward: bool) -> void:
 	for key in heights:
 		var vi := int(key)
 		var rec: Dictionary = heights[key]
-		c.heights[vi] = float(rec[which])
+		c.heights[vi] = float(rec[dest_key])
 		var vx := vi % hw
 		var vy := int(vi / hw)
 		hx0 = mini(hx0, vx)
@@ -218,29 +260,32 @@ func _apply(e: Dictionary, forward: bool) -> void:
 		if forward:
 			_redo_hole(e["hole"])
 		else:
-			_drop_hole(int(e["before_holes"]))
-	var mkey := "after_money" if forward else "before_money"
-	var ekey := "after_expense" if forward else "before_expense"
-	var gkey := "after_gifts" if forward else "before_gifts"
-	var bkey := "after_built" if forward else "before_built"
-	sim.economy.money = float(e[mkey])
-	var cons := float(e[ekey])
-	if cons <= 0.0:
-		sim.economy.expense.erase("construction")
-	else:
-		sim.economy.expense["construction"] = cons
-	sim.economy.changed.emit()
-	var gifts: Dictionary = e[gkey]
-	_restore_gifts(gifts)
-	sim.stats["holes_built"] = int(e[bkey])
+			var at := _find_hole(e["hole"])
+			if at >= 0:
+				sim.remove_hole(at)
+	_books(e, forward)
 	if x1 >= 0 or hx1 >= 0 or e.has("hole"):
 		c.revision += 1
+	applying = false
+	return true
 
 
-func _drop_hole(before_holes: int) -> void:
-	var n := sim.course.holes.size()
-	if n > before_holes:
-		sim.remove_hole(n - 1)
+## The hole this step added, matched by the details that were saved, wherever
+## it now sits in the playing order.
+func _find_hole(snap: Dictionary) -> int:
+	var td: Array = snap["tee"]
+	var pd: Array = snap["pin"]
+	var want := str(snap["name"])
+	for i in sim.course.holes.size():
+		var h := sim.course.holes[i]
+		if h.name != want:
+			continue
+		if not is_equal_approx(h.tee.x, float(td[0])) or not is_equal_approx(h.tee.z, float(td[2])):
+			continue
+		if not is_equal_approx(h.pin.x, float(pd[0])) or not is_equal_approx(h.pin.z, float(pd[2])):
+			continue
+		return i
+	return -1
 
 
 func _redo_hole(snap: Dictionary) -> void:
@@ -250,6 +295,8 @@ func _redo_hole(snap: Dictionary) -> void:
 	var pin := Vector3(float(pd[0]), float(pd[1]), float(pd[2]))
 	var hole := sim.course.add_hole(tee, pin)
 	hole.name = str(snap["name"])
+	hole.par = int(snap["par"])
+	hole.length = float(snap["length"])
 	hole.open = bool(snap["open"])
 
 
@@ -264,6 +311,29 @@ func _snap_hole(h: Hole) -> Dictionary:
 	}
 
 
+## Forward charges the step again. Back pays that charge into the cash and
+## takes it off construction, whatever the books have done since.
+func _books(e: Dictionary, forward: bool) -> void:
+	var charged := float(e.get("charged", 0.0))
+	var dir := 1.0 if forward else -1.0
+	if not is_zero_approx(charged):
+		sim.economy.money -= dir * charged
+		var now := float(sim.economy.expense.get("construction", 0.0)) + dir * charged
+		if is_zero_approx(now):
+			sim.economy.expense.erase("construction")
+		else:
+			sim.economy.expense["construction"] = now
+		sim.economy.changed.emit()
+	var used: Dictionary = e.get("gifts", {})
+	for k in used:
+		var n := int(used[k])
+		var have := int(sim.gifts.get(k, 0))
+		sim.gifts[int(k)] = have - int(dir) * n
+	var built := int(e.get("built", 0))
+	if built != 0:
+		sim.stats["holes_built"] = int(sim.stats.get("holes_built", 0)) + int(dir) * built
+
+
 func _read_tile(c: Course, i: int) -> Dictionary:
 	return {
 		"terrain": int(c.terrain[i]),
@@ -274,11 +344,13 @@ func _read_tile(c: Course, i: int) -> Dictionary:
 		"health": c.health[i],
 		"weeds": c.weeds[i],
 		"pests": c.pests[i],
+		"repair": int(c.repair[i]),
+		"litter": c.litter[i],
 	}
 
 
 func _tile_same(a: Dictionary, b: Dictionary) -> bool:
-	return int(a["terrain"]) == int(b["terrain"]) and int(a["object"]) == int(b["object"]) and int(a["closed"]) == int(b["closed"]) and int(a["open_month"]) == int(b["open_month"]) and is_equal_approx(float(a["wet"]), float(b["wet"])) and is_equal_approx(float(a["health"]), float(b["health"])) and is_equal_approx(float(a["weeds"]), float(b["weeds"])) and is_equal_approx(float(a["pests"]), float(b["pests"]))
+	return int(a["terrain"]) == int(b["terrain"]) and int(a["object"]) == int(b["object"]) and int(a["closed"]) == int(b["closed"]) and int(a["open_month"]) == int(b["open_month"]) and int(a["repair"]) == int(b["repair"]) and is_equal_approx(float(a["wet"]), float(b["wet"])) and is_equal_approx(float(a["health"]), float(b["health"])) and is_equal_approx(float(a["weeds"]), float(b["weeds"])) and is_equal_approx(float(a["pests"]), float(b["pests"])) and is_equal_approx(float(a["litter"]), float(b["litter"]))
 
 
 func _copy_gifts(src: Dictionary) -> Dictionary:
@@ -288,16 +360,16 @@ func _copy_gifts(src: Dictionary) -> Dictionary:
 	return out
 
 
-func _gifts_same(a: Dictionary, b: Dictionary) -> bool:
-	if a.size() != b.size():
-		return false
-	for k in a:
-		if int(a[k]) != int(b.get(k, -999999)):
-			return false
-	return true
-
-
-func _restore_gifts(src: Dictionary) -> void:
-	sim.gifts.clear()
-	for k in src:
-		sim.gifts[int(k)] = int(src[k])
+## Gifts the step consumed. A positive count was used up.
+func _gifts_used(before: Dictionary, after: Dictionary) -> Dictionary:
+	var seen := {}
+	for k in before:
+		seen[int(k)] = true
+	for k in after:
+		seen[int(k)] = true
+	var used := {}
+	for k in seen:
+		var d := int(before.get(k, 0)) - int(after.get(k, 0))
+		if d != 0:
+			used[int(k)] = d
+	return used

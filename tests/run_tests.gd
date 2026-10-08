@@ -75,6 +75,7 @@ func _ready() -> void:
 	_test_debt_welcome()
 	_test_close_structure()
 	_test_undo()
+	_test_undo_books()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -5012,7 +5013,247 @@ func _test_undo() -> void:
 	check(saved.undo.undo() and int(sc.objects[si]) == 0 and int(saved.gifts.get(Defs.O.OAK, 0)) == 1, "undo gives the gift back and takes the tree")
 	check(saved.paint(12, 12, 0, Defs.T.FAIRWAY) == 1 and saved.undo.can_undo(), "the painted tile is a step")
 	var raw: Dictionary = JSON.parse_string(JSON.stringify(saved.to_dict()))
+	check(not saved.undo.can_undo() and not saved.undo.can_redo(), "saving clears the history")
 	var loaded := Sim.from_dict(db, raw, gear)
 	check(int(loaded.course.terrain[si]) == Defs.T.FAIRWAY and not loaded.undo.can_undo(), "loading a course keeps the ground and drops the history")
 	saved.install_course(saved.course_dict())
 	check(int(saved.course.terrain[si]) == Defs.T.FAIRWAY and not saved.undo.can_undo(), "installing a course clears the history")
+
+
+func _test_undo_books() -> void:
+	print("-- undo books")
+	var fees := _sim("sandbox", 11)
+	var fc := fees.course
+	var fi := 14 * fc.w + 14
+	fc.terrain[fi] = Defs.T.ROUGH
+	var before := fees.economy.money
+	check(fees.paint(14, 14, 0, Defs.T.FAIRWAY) == 1, "a priced stroke is a step")
+	var price := before - fees.economy.money
+	fees.economy.earn("green_fees", 175.0)
+	var mid := fees.economy.money
+	var life := fees.economy.lifetime_income
+	var taken := float(fees.economy.income.get("green_fees", 0.0))
+	check(fees.undo.undo(), "undo after green fees")
+	check(is_equal_approx(fees.economy.money, mid + price), "undo after green fees adds exactly the step's price")
+	check(is_equal_approx(fees.economy.lifetime_income, life) and is_equal_approx(float(fees.economy.income.get("green_fees", 0.0)), taken), "the refund is not income and the fees stay")
+	check(is_zero_approx(float(fees.economy.expense.get("construction", 0.0))), "the refund comes off construction")
+	var bills := _sim("sandbox", 12)
+	var bc := bills.course
+	bc.terrain[16 * bc.w + 16] = Defs.T.ROUGH
+	before = bills.economy.money
+	check(bills.paint(16, 16, 0, Defs.T.FAIRWAY) == 1, "a stroke before the bills")
+	price = before - bills.economy.money
+	bills.economy.spend("wages", 90.0)
+	bills.economy.close_month("April")
+	mid = bills.economy.money
+	var row: Dictionary = bills.economy.history[bills.economy.history.size() - 1]
+	check(bills.undo.undo(), "undo after a month's bills")
+	check(is_equal_approx(bills.economy.money, mid + price), "undo after a month's bills adds exactly the step's price")
+	check(is_equal_approx(float(bills.economy.expense.get("construction", 0.0)), -price), "the refund is booked against construction on the new month")
+	check(is_zero_approx(float(bills.economy.expense.get("wages", 0.0))) and is_zero_approx(float(bills.economy.income.get("green_fees", 0.0))), "wages are not rewritten and nothing is booked as income")
+	var closed: Dictionary = row["expense"]
+	check(is_equal_approx(float(closed.get("wages", 0.0)), 90.0), "the closed month still shows the wages")
+	var moved := _sim("sandbox", 13)
+	var mc := moved.course
+	mc.terrain[18 * mc.w + 18] = Defs.T.ROUGH
+	before = moved.economy.money
+	check(moved.paint(18, 18, 0, Defs.T.FAIRWAY) == 1, "a stroke before the price moves")
+	price = before - moved.economy.money
+	var quote := moved.land_price()
+	var dropped := 0
+	for py in range(0, mc.h, Course.PARCEL):
+		for px in range(0, mc.w, Course.PARCEL):
+			if dropped >= 4:
+				break
+			if mc.locked[py * mc.w + px] == 0:
+				mc.set_parcel(mc.parcel_of(px, py), false)
+				dropped += 1
+	check(dropped == 4 and not is_equal_approx(moved.land_price(), quote), "the price of the next parcel changed")
+	moved.economy.spend("land", 180.0)
+	moved.economy.money += 640.0
+	moved.economy.earn("real_estate", 350.0)
+	mid = moved.economy.money
+	life = moved.economy.lifetime_income
+	check(moved.undo.undo(), "undo after a sale, a loan and a land payment")
+	check(is_equal_approx(moved.economy.money, mid + price), "undo after a price change, a sale and a loan adds exactly the step's price")
+	check(is_equal_approx(moved.economy.lifetime_income, life), "the sale stays income and the loan is not touched")
+	check(is_equal_approx(float(moved.economy.expense.get("land", 0.0)), 180.0), "the land payment stays on the land line")
+	check(is_zero_approx(float(moved.economy.expense.get("construction", 0.0))), "construction loses the step's price and nothing else")
+	var loop := _sim("sandbox", 14)
+	var lc := loop.course
+	lc.terrain[20 * lc.w + 20] = Defs.T.ROUGH
+	check(loop.paint(20, 20, 0, Defs.T.FAIRWAY) == 1, "a stroke to take back and forth")
+	loop.economy.earn("green_fees", 80.0)
+	var here := loop.economy.money
+	var steady := true
+	for _i in 20:
+		if not loop.undo.undo() or not loop.undo.redo():
+			steady = false
+		if not is_equal_approx(loop.economy.money, here):
+			steady = false
+	check(steady and int(lc.terrain[20 * lc.w + 20]) == Defs.T.FAIRWAY, "undo and redo twenty times leaves the money where it started")
+	var broke := _sim("sandbox", 15)
+	var kc := broke.course
+	kc.terrain[22 * kc.w + 22] = Defs.T.ROUGH
+	before = broke.economy.money
+	check(broke.paint(22, 22, 0, Defs.T.FAIRWAY) == 1, "a stroke that can be refused on the way back")
+	price = before - broke.economy.money
+	check(broke.undo.undo() and int(kc.terrain[22 * kc.w + 22]) == Defs.T.ROUGH, "the stroke is taken back first")
+	broke.economy.money = price - 1.0
+	check(not broke.undo.redo() and broke.undo.can_redo(), "redo with too little money is refused and the step stays")
+	check(is_equal_approx(broke.economy.money, price - 1.0) and int(kc.terrain[22 * kc.w + 22]) == Defs.T.ROUGH, "a refused redo changes neither the money nor the ground")
+	broke.economy.money = price
+	check(broke.undo.redo() and int(kc.terrain[22 * kc.w + 22]) == Defs.T.FAIRWAY and is_zero_approx(broke.economy.money), "redo spends the step's price once the cash is there")
+	var gift := _sim("sandbox", 16)
+	var gc := gift.course
+	var gi := 24 * gc.w + 24
+	gc.terrain[gi] = Defs.T.ROUGH
+	gc.objects[gi] = 0
+	gift.gifts[Defs.O.OAK] = 1
+	check(gift.place_object(24, 24, Defs.O.OAK) == 1, "a gifted tree is a step")
+	check(gift.undo.undo() and int(gc.objects[gi]) == 0, "undo takes the gifted tree away")
+	gift.gifts[Defs.O.OAK] = 0
+	check(not gift.undo.redo() and int(gc.objects[gi]) == 0 and int(gift.gifts.get(Defs.O.OAK, 0)) == 0, "redo without the gift is refused")
+	gift.gifts[Defs.O.OAK] = 1
+	check(gift.undo.redo() and int(gc.objects[gi]) == Defs.O.OAK and int(gift.gifts.get(Defs.O.OAK, 0)) == 0, "redo uses the gift again")
+	var holes := _sim("sandbox", 17)
+	var hc := holes.course
+	var first := holes.add_hole(hc.tile_center(20, 70), hc.tile_center(20, 40))
+	var second := holes.add_hole(hc.tile_center(40, 70), hc.tile_center(40, 30))
+	var extra := hc.add_hole(hc.tile_center(60, 70), hc.tile_center(60, 20))
+	extra.name = "Kept-extra"
+	var cash := holes.economy.money
+	check(first != null and second != null and holes.undo.undo(), "undo takes back the later hole")
+	var saw_first := false
+	var saw_second := false
+	var saw_kept := false
+	for h in hc.holes:
+		if h.name == first.name:
+			saw_first = true
+		if h.name == second.name:
+			saw_second = true
+		if h.name == "Kept-extra":
+			saw_kept = true
+	check(saw_first and not saw_second and saw_kept and hc.holes.size() == 2, "undo removes the hole that step added, not the last hole")
+	check(is_equal_approx(holes.economy.money, cash + 250.0), "that hole's price comes back")
+	check(holes.undo.undo(), "the earlier hole can be taken back too")
+	saw_first = false
+	saw_kept = false
+	for h in hc.holes:
+		if h.name == first.name:
+			saw_first = true
+		if h.name == "Kept-extra":
+			saw_kept = true
+	check(not saw_first and saw_kept and hc.holes.size() == 1 and is_equal_approx(holes.economy.money, cash + 500.0), "the earlier hole goes and the one that was never a step stays")
+	var order := _sim("sandbox", 18)
+	var oc := order.course
+	var left := order.add_hole(oc.tile_center(24, 80), oc.tile_center(24, 50))
+	var right := order.add_hole(oc.tile_center(48, 80), oc.tile_center(48, 40))
+	cash = order.economy.money
+	check(left != null and right != null and order.move_hole(0, 1), "the playing order can change")
+	check(not order.undo.can_undo() and not order.undo.undo() and is_equal_approx(order.economy.money, cash) and oc.holes.size() == 2, "moving a hole drops the history")
+	var early := order.add_hole(oc.tile_center(70, 80), oc.tile_center(70, 36))
+	var late := order.add_hole(oc.tile_center(90, 80), oc.tile_center(90, 28))
+	cash = order.economy.money
+	var early_name := early.name
+	var late_name := late.name
+	order.remove_hole(oc.holes.find(early))
+	var still_late := false
+	var still_early := false
+	for h in oc.holes:
+		if h.name == late_name:
+			still_late = true
+		if h.name == early_name:
+			still_early = true
+	check(not still_early and still_late and not order.undo.can_undo() and not order.undo.undo() and is_equal_approx(order.economy.money, cash), "removing a hole drops the history")
+	var shape := _sim("sandbox", 19)
+	var raised := shape.course.tile_center(28, 28)
+	check(shape.sculpt("raise", raised.x, raised.z, 8.0, 0.6) and shape.undo.can_undo(), "a raise is a step")
+	var piled := shape.economy.money
+	check(shape.sculpt("smooth", raised.x, raised.z, 8.0, 0.5), "smoothing is not a step")
+	check(not shape.undo.can_undo() and not shape.undo.undo() and is_equal_approx(shape.economy.money, piled - (3.0 + 8.0 * 0.25)), "smoothing drops the history and is not refunded")
+	check(shape.sculpt("raise", raised.x, raised.z, 8.0, 0.6) and shape.undo.can_undo(), "another raise is a step")
+	piled = shape.economy.money
+	check(shape.sculpt("flatten", raised.x, raised.z, 8.0, 0.4), "flattening is not a step")
+	check(not shape.undo.can_undo() and not shape.undo.undo() and is_equal_approx(shape.economy.money, piled - (3.0 + 8.0 * 0.25)), "flattening drops the history and is not refunded")
+	var land := _sim("three_holes", 20)
+	var lnc := land.course
+	var owned := Vector2i(-1, -1)
+	var parcel := Vector2i(-1, -1)
+	for py in range(0, lnc.h, Course.PARCEL):
+		for px in range(0, lnc.w, Course.PARCEL):
+			var pi := py * lnc.w + px
+			if lnc.locked[pi] == 0 and lnc.hot[pi] == 0 and owned.x < 0:
+				owned = Vector2i(px + 2, py + 2)
+			if lnc.locked[pi] != 0 and parcel.x < 0:
+				parcel = Vector2i(px + 2, py + 2)
+	lnc.terrain[owned.y * lnc.w + owned.x] = Defs.T.ROUGH
+	check(owned.x >= 0 and parcel.x >= 0 and land.paint(owned.x, owned.y, 0, Defs.T.FAIRWAY) == 1 and land.undo.can_undo(), "there is a step on land already owned")
+	check(land.buy_land(owned.x, owned.y) == 0 and land.undo.can_undo(), "land that is not for sale leaves the history")
+	var ask := land.land_price()
+	cash = land.economy.money
+	check(land.buy_land(parcel.x, parcel.y) == 1, "a parcel can be bought")
+	check(not land.undo.can_undo() and not land.undo.undo() and is_equal_approx(land.economy.money, cash - ask), "buying land drops the history")
+	check(int(lnc.terrain[owned.y * lnc.w + owned.x]) == Defs.T.FAIRWAY, "the paint that was dropped stays done")
+	var round := _sim("sandbox", 21)
+	var rc := round.course
+	rc.terrain[26 * rc.w + 26] = Defs.T.ROUGH
+	check(round.paint(26, 26, 0, Defs.T.FAIRWAY) == 1, "a step is waiting during a round")
+	round.playing_round = true
+	cash = round.economy.money
+	check(not round.undo.undo() and round.undo.can_undo() and is_equal_approx(round.economy.money, cash) and int(rc.terrain[26 * rc.w + 26]) == Defs.T.FAIRWAY, "undo refuses while a round is being played")
+	round.playing_round = false
+	check(round.undo.undo() and int(rc.terrain[26 * rc.w + 26]) == Defs.T.ROUGH, "undo works again once the round is over")
+	round.playing_round = true
+	check(not round.undo.redo() and round.undo.can_redo() and int(rc.terrain[26 * rc.w + 26]) == Defs.T.ROUGH, "redo refuses while a round is being played")
+	round.playing_round = false
+	check(round.undo.redo() and int(rc.terrain[26 * rc.w + 26]) == Defs.T.FAIRWAY, "redo works again once the round is over")
+	var turf := _sim("sandbox", 22)
+	var tc := turf.course
+	var ti := 30 * tc.w + 30
+	tc.terrain[ti] = Defs.T.ROUGH
+	tc.wet[ti] = 0.2
+	tc.health[ti] = 0.4
+	tc.weeds[ti] = 0.8
+	tc.pests[ti] = 0.7
+	check(turf.paint(30, 30, 0, Defs.T.WATER) == 1, "a pond is a step")
+	tc.wet[ti] = 0.33
+	tc.health[ti] = 0.11
+	tc.weeds[ti] = 0.55
+	tc.pests[ti] = 0.44
+	check(turf.undo.undo(), "undo of a pond whose turf has changed")
+	check(int(tc.terrain[ti]) == Defs.T.ROUGH, "the ground paint still comes back")
+	check(is_equal_approx(tc.wet[ti], 0.33) and is_equal_approx(tc.health[ti], 0.11) and is_equal_approx(tc.weeds[ti], 0.55) and is_equal_approx(tc.pests[ti], 0.44), "wetness, health, weeds and pests that changed since the step are left alone")
+	var ui := 32 * tc.w + 32
+	tc.terrain[ui] = Defs.T.ROUGH
+	tc.wet[ui] = 0.15
+	tc.health[ui] = 0.37
+	tc.weeds[ui] = 0.81
+	tc.pests[ui] = 0.62
+	check(turf.paint(32, 32, 0, Defs.T.WATER) == 1 and turf.undo.undo(), "undo of a pond whose turf is untouched")
+	check(int(tc.terrain[ui]) == Defs.T.ROUGH and is_equal_approx(tc.wet[ui], 0.15) and is_equal_approx(tc.health[ui], 0.37) and is_equal_approx(tc.weeds[ui], 0.81) and is_equal_approx(tc.pests[ui], 0.62), "turf the step left is put back")
+	check(turf.undo.redo(), "the pond can be laid again")
+	tc.weeds[ui] = 0.5
+	check(turf.undo.undo() and turf.undo.redo(), "redo after the weeds moved")
+	check(int(tc.terrain[ui]) == Defs.T.WATER and is_equal_approx(tc.weeds[ui], 0.5), "redo does not overwrite weeds that changed since the step")
+	check(is_equal_approx(tc.wet[ui], 1.0), "wetness the undo left is set again by the redo")
+	var yard := _sim("sandbox", 23)
+	var yc := yard.course
+	var stand := 34 * yc.w + 34
+	yc.terrain[stand] = Defs.T.ROUGH
+	yc.objects[stand] = 0
+	yc.litter[stand] = 0.2
+	yc.repair[stand] = 0
+	check(yard.place_object(34, 34, Defs.O.DRINK_STAND) == 1 and int(yc.repair[stand]) == 0, "a drink stand goes up with no window waiting")
+	yc.repair[stand] = 1
+	yc.litter[stand] = 0.85
+	check(yard.remove_object(34, 34) and int(yc.objects[stand]) == 0 and int(yc.repair[stand]) == 0, "bulldozing the stand clears its window mark")
+	check(yard.undo.undo() and int(yc.objects[stand]) == Defs.O.DRINK_STAND and int(yc.repair[stand]) == 1 and is_equal_approx(yc.litter[stand], 0.85), "undoing the bulldoze does not fix the window, and the litter stays")
+	check(yard.undo.undo() and int(yc.objects[stand]) == 0 and int(yc.repair[stand]) == 0 and is_equal_approx(yc.litter[stand], 0.2), "undoing the stand leaves no repair mark and puts the litter back")
+	var house := 36 * yc.w + 36
+	yc.terrain[house] = Defs.T.ROUGH
+	yc.objects[house] = 0
+	yc.repair[house] = 0
+	check(yard.place_object(36, 36, Defs.O.HOUSE) == 1, "a house goes up")
+	yc.repair[house] = 1
+	check(yard.undo.undo() and int(yc.objects[house]) == 0 and int(yc.repair[house]) == 0, "undoing the house leaves no window waiting")

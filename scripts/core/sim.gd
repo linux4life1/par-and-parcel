@@ -61,6 +61,7 @@ var course_name := "Pine Hollow Golf Club"
 var biome: Dictionary = {}
 var time := 0.0
 var open := true
+var playing_round := false   # a round is on the course; build history will not move
 var rating := 45.0          # 0..100 quality of the course as golfers see it
 var design := 0.0           # the layout's share of the rating
 var reputation := 30.0      # follows the rating slowly; drives how many turn up
@@ -1345,6 +1346,10 @@ func sculpt(mode: String, x: float, z: float, radius_m: float, amount: float) ->
 	var cost := 3.0 + radius_m * 0.25
 	if not economy.can_afford(cost):
 		return false
+	# Smoothing and flattening are not steps. They drop the history so a
+	# later undo cannot put the ground back under a shape it did not record.
+	if (mode == "smooth" or mode == "flatten") and undo != null:
+		undo.clear()
 	var started := false
 	if mode == "raise" or mode == "lower":
 		started = undo.begin()
@@ -1375,11 +1380,15 @@ func buy_land(tx: int, ty: int) -> int:
 		return 0
 	if land_credits > 0:
 		land_credits -= 1
+		if undo != null:
+			undo.clear()
 		course.set_parcel(p, true)
 		return 1
 	var price := land_price()
 	if not economy.can_afford(price):
 		return -1
+	if undo != null:
+		undo.clear()
 	economy.spend("land", price)
 	course.set_parcel(p, true)
 	return 1
@@ -1402,6 +1411,10 @@ func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 func remove_hole(i: int) -> void:
 	if i < 0 or i >= course.holes.size():
 		return
+	# Taking a hole off the card is not a step. Undo of a layout removes the
+	# hole itself and sets applying so this does not wipe the step it is in.
+	if undo != null and not undo.applying:
+		undo.clear()
 	course.remove_hole(i)
 	visitors.on_hole_removed(i)
 
@@ -1412,6 +1425,8 @@ func move_hole(i: int, dir: int) -> bool:
 	var j := i + dir
 	if i < 0 or j < 0 or i >= course.holes.size() or j >= course.holes.size():
 		return false
+	if undo != null and not undo.applying:
+		undo.clear()
 	var tmp := course.holes[i]
 	course.holes[i] = course.holes[j]
 	course.holes[j] = tmp
@@ -1485,6 +1500,8 @@ func to_dict() -> Dictionary:
 		"album": album,
 	}
 	d["stories"] = stories.to_dict()
+	if undo != null:
+		undo.clear()
 	return d
 
 
