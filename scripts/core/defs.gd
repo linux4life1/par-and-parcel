@@ -19,7 +19,7 @@ const SUNRISE := 5.5              # hours
 const SUNSET := 20.5
 const TWILIGHT := 1.0             # hours dusk and dawn each last
 
-enum T { ROUGH, FAIRWAY, GREEN, TEE, BUNKER, WATER, DEEP_ROUGH, PATH, ROCK, ASH }
+enum T { ROUGH, FAIRWAY, GREEN, TEE, BUNKER, WATER, DEEP_ROUGH, PATH, ROCK, ASH, FIRM, FAST_GREEN }
 enum O {
 	NONE, OAK, PINE, BUSH, FLOWERS, BENCH, DRINK_STAND, RESTROOM, CLUBHOUSE,
 	SNACK_BAR, BALL_WASHER, BOULDER, BRIDGE, CART_BARN, PUTTING_GREEN, DRIVING_RANGE,
@@ -29,36 +29,37 @@ enum O {
 
 # WATER is the liquid hazard of the biome: water in most places, lava on the
 # volcano. ROCK and ASH are left behind by eruptions and cannot be painted.
-const T_NAMES: Array[String] = ["Rough", "Fairway", "Green", "Tee box", "Bunker", "Water", "Deep rough", "Cart path", "Rock", "Scorched ground"]
-const T_COST: Array[int] = [1, 3, 15, 10, 5, 8, 1, 4, 0, 0]
+# FIRM and FAST_GREEN are paints: a firmer fairway, and a quicker green.
+const T_NAMES: Array[String] = ["Rough", "Fairway", "Green", "Tee box", "Bunker", "Water", "Deep rough", "Cart path", "Rock", "Scorched ground", "Firm fairway", "Fast green"]
+const T_COST: Array[int] = [1, 3, 15, 10, 5, 8, 1, 4, 0, 0, 4, 22]
 ## Extra cost per tile to build over what is already there.
-const T_CLEAR: Array[int] = [0, 0, 0, 0, 0, 4, 0, 0, 12, 2]
-## Rolling deceleration in m/s^2.
-const T_DECEL: Array[float] = [5.0, 2.0, 0.6, 1.8, 12.0, 0.0, 9.0, 1.0, 1.4, 8.0]
+const T_CLEAR: Array[int] = [0, 0, 0, 0, 0, 4, 0, 0, 12, 2, 0, 0]
+## Rolling deceleration in m/s^2. Firm ground and a fast green stop the ball later.
+const T_DECEL: Array[float] = [5.0, 2.0, 0.6, 1.8, 12.0, 0.0, 9.0, 1.0, 1.4, 8.0, 1.35, 0.38]
 ## Share of vertical speed kept on a bounce.
-const T_BOUNCE: Array[float] = [0.25, 0.42, 0.36, 0.40, 0.05, 0.0, 0.14, 0.65, 0.68, 0.08]
+const T_BOUNCE: Array[float] = [0.25, 0.42, 0.36, 0.40, 0.05, 0.0, 0.14, 0.65, 0.68, 0.08, 0.48, 0.32]
 ## Share of forward speed kept on a bounce.
-const T_KEEP: Array[float] = [0.50, 0.72, 0.62, 0.70, 0.15, 0.0, 0.35, 0.85, 0.8, 0.25]
+const T_KEEP: Array[float] = [0.50, 0.72, 0.62, 0.70, 0.15, 0.0, 0.35, 0.85, 0.8, 0.25, 0.80, 0.72]
 ## How well a spinning ball grips the surface: a green bites, a path does not.
-const T_GRIP: Array[float] = [0.4, 0.7, 1.0, 0.7, 0.1, 0.0, 0.25, 0.3, 0.25, 0.2]
+const T_GRIP: Array[float] = [0.4, 0.7, 1.0, 0.7, 0.1, 0.0, 0.25, 0.3, 0.25, 0.2, 0.55, 1.05]
 ## The terrain's key in data/lies.json.
-const T_KEYS: Array[String] = ["rough", "fairway", "green", "tee", "bunker", "water", "deep_rough", "path", "rock", "ash"]
+const T_KEYS: Array[String] = ["rough", "fairway", "green", "tee", "bunker", "water", "deep_rough", "path", "rock", "ash", "firm", "fast_green"]
 ## Shot power and spread multipliers for a ball lying on this terrain.
-const T_LIE_POWER: Array[float] = [0.88, 1.0, 1.0, 1.0, 0.72, 0.0, 0.68, 0.95, 0.62, 0.8]
-const T_LIE_SPREAD: Array[float] = [1.4, 1.0, 1.0, 0.9, 1.7, 1.0, 2.1, 1.1, 2.3, 1.5]
+const T_LIE_POWER: Array[float] = [0.88, 1.0, 1.0, 1.0, 0.72, 0.0, 0.68, 0.95, 0.62, 0.8, 1.0, 1.0]
+const T_LIE_SPREAD: Array[float] = [1.4, 1.0, 1.0, 0.9, 1.7, 1.0, 2.1, 1.1, 2.3, 1.5, 0.95, 1.0]
 ## How unattractive the terrain is as a route for the golfer AI.
-const T_ROUTE: Array[float] = [1.25, 1.0, 1.0, 1.0, 1.9, 2.6, 1.7, 1.1, 2.2, 1.5]
-const T_GRASS: Array[bool] = [true, true, true, true, false, false, true, false, false, false]
+const T_ROUTE: Array[float] = [1.25, 1.0, 1.0, 1.0, 1.9, 2.6, 1.7, 1.1, 2.2, 1.5, 1.0, 1.0]
+const T_GRASS: Array[bool] = [true, true, true, true, false, false, true, false, false, false, true, true]
 ## Turf health lost per second without care.
-const T_WEAR: Array[float] = [0.00003, 0.00012, 0.00025, 0.0002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+const T_WEAR: Array[float] = [0.00003, 0.00012, 0.00025, 0.0002, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.00008, 0.00032]
 ## Drying speed multiplier.
-const T_DRY: Array[float] = [1.0, 1.1, 1.35, 1.2, 1.8, 0.0, 0.8, 2.0, 2.0, 1.4]
+const T_DRY: Array[float] = [1.0, 1.1, 1.35, 1.2, 1.8, 0.0, 0.8, 2.0, 2.0, 1.4, 1.25, 1.45]
 ## Weed pressure multiplier.
-const T_WEED: Array[float] = [1.0, 0.8, 0.5, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+const T_WEED: Array[float] = [1.0, 0.8, 0.5, 0.6, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.45, 0.35]
 ## How much greenkeepers care about this terrain.
-const T_CARE: Array[float] = [0.35, 1.5, 3.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+const T_CARE: Array[float] = [0.35, 1.5, 3.0, 2.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.6, 3.4]
 ## Effort to walk across, for path finding. Negative means impassable.
-const T_WALK: Array[float] = [1.1, 1.0, 2.0, 1.2, 2.2, -1.0, 1.6, 0.45, 2.2, 1.4]
+const T_WALK: Array[float] = [1.1, 1.0, 2.0, 1.2, 2.2, -1.0, 1.6, 0.45, 2.2, 1.4, 0.95, 2.0]
 
 const O_NAMES: Array[String] = [
 	"None", "Oak tree", "Pine tree", "Bush", "Flower bed", "Bench", "Drink stand", "Restroom", "Clubhouse",
@@ -117,6 +118,19 @@ static func house_turns(i: int) -> int:
 
 static func is_tree(o: int) -> bool:
 	return o == O.OAK or o == O.PINE
+
+
+static func is_fairway(t: int) -> bool:
+	return t == T.FAIRWAY or t == T.FIRM
+
+
+static func is_green(t: int) -> bool:
+	return t == T.GREEN or t == T.FAST_GREEN
+
+
+## Fairway, green or tee: the short grass a ball can spin back on.
+static func is_short(t: int) -> bool:
+	return is_fairway(t) or is_green(t) or t == T.TEE
 
 
 static func money(v: float) -> String:

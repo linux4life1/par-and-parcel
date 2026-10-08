@@ -34,6 +34,8 @@
 				"rough": "476f2e",
 				"fairway": "5e9a3a",
 				"green": "76b14c",
+				"firm": "8cbc62",
+				"fast": "9ed072",
 				"tee": "6aa643",
 				"bunker": "d9c28a",
 				"water": "1a4d80",
@@ -81,7 +83,9 @@
 				5,
 				4,
 				3,
-				6
+				6,
+				1,
+				1
 			],
 			"grass": [
 				0.5,
@@ -123,6 +127,8 @@
 				"rough": "5d7339",
 				"fairway": "5f9440",
 				"green": "78ae4f",
+				"firm": "86b868",
+				"fast": "9cc878",
 				"tee": "6ba247",
 				"bunker": "c9b88a",
 				"water": "1c3f5e",
@@ -170,7 +176,9 @@
 				5,
 				4,
 				3,
-				6
+				6,
+				1,
+				1
 			],
 			"grass": [
 				0.55,
@@ -212,6 +220,8 @@
 				"rough": "c9a970",
 				"fairway": "55a243",
 				"green": "72bb52",
+				"firm": "78c266",
+				"fast": "96d478",
 				"tee": "64ae4a",
 				"bunker": "f0e2b6",
 				"water": "1b6a8f",
@@ -259,7 +269,9 @@
 				8,
 				4,
 				3,
-				6
+				6,
+				1,
+				1
 			],
 			"grass": [
 				0.0,
@@ -307,6 +319,8 @@
 				"rough": "4b4a3c",
 				"fairway": "4d9a3c",
 				"green": "68b44c",
+				"firm": "6cb85c",
+				"fast": "88cc6a",
 				"tee": "5aa844",
 				"bunker": "2e2b2b",
 				"water": "5a1205",
@@ -354,7 +368,9 @@
 				9,
 				4,
 				9,
-				6
+				6,
+				1,
+				1
 			],
 			"grass": [
 				0.0,

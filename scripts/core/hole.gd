@@ -55,7 +55,7 @@ const PAR_4 := 430.0
 const ROUTE_CAP := 1.6
 ## Step cost for choosing the line of play. Fairway, tee and green are cheap.
 ## Everything else is dearer, never infinite, so a carry still connects.
-const PLAY_COST: Array[float] = [3.0, 1.0, 1.0, 1.0, 4.0, 8.0, 5.0, 2.0, 6.0, 4.0]
+const PLAY_COST: Array[float] = [3.0, 1.0, 1.0, 1.0, 4.0, 8.0, 5.0, 2.0, 6.0, 4.0, 1.0, 1.0]
 const PLAY_TREE := 6.0
 var groups: Array[Group] = []   # every group currently playing the hole
 ## Parties waiting to tee off, in the order they arrived. The front of the
@@ -272,7 +272,7 @@ func _segment_clear(course: Course, a: Vector2, b: Vector2) -> bool:
 		if i < 0:
 			return false
 		var t: int = course.terrain[i]
-		if t != Defs.T.FAIRWAY and t != Defs.T.GREEN and t != Defs.T.TEE and t != Defs.T.PATH:
+		if not Defs.is_short(t) and t != Defs.T.PATH:
 			return false
 		if Defs.is_tree(course.objects[i]):
 			return false

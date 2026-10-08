@@ -352,7 +352,7 @@ func _click_hole(p: Vector3) -> void:
 		_marker.visible = true
 		tool_changed.emit()
 		return
-	if course.terrain_at(p.x, p.z) != Defs.T.GREEN:
+	if not Defs.is_green(course.terrain_at(p.x, p.z)):
 		sim.toast.emit("The pin has to go on a green. Paint one first.", "bad")
 		return
 	var tee: Vector3 = _tee

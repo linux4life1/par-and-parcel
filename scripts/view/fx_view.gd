@@ -51,7 +51,7 @@ func _on_sound(id: String, pos: Vector3, _power: float) -> void:
 			var hit := _struck_at(pos)
 			var at: Vector3 = hit[0]
 			var t := sim.course.terrain_at(at.x, at.z)
-			if t == Defs.T.FAIRWAY or t == Defs.T.ROUGH or t == Defs.T.DEEP_ROUGH:
+			if Defs.is_fairway(t) or t == Defs.T.ROUGH or t == Defs.T.DEEP_ROUGH:
 				_burst("divot", at, hit[1])
 				_burst("grass", at, hit[1])
 		"splash":
