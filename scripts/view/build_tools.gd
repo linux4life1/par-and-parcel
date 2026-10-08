@@ -119,6 +119,10 @@ func hint() -> String:
 			body = "Drag to paint %s. %s per tile." % [sim.terrain_name(terrain_type).to_lower(), Defs.money(Defs.T_COST[terrain_type])]
 		"sculpt":
 			body = "Hold the mouse button to %s the land. Hold Shift for fine control." % sculpt_mode
+			if (sculpt_mode == "raise" or sculpt_mode == "lower") and hover != null:
+				var at: Vector3 = hover
+				var read := Slope.read(sim.course, at.x, at.z)
+				body += " Slope under the brush: %s. %s" % [Slope.percent_text(float(read.get("percent", 0.0))), Slope.fair_line()]
 		"object":
 			if object_type == Defs.O.BRIDGE:
 				body = "Click %s to bridge it. %s a span." % [sim.terrain_name(Defs.T.WATER).to_lower(), Defs.money(Defs.O_COST[object_type])]
