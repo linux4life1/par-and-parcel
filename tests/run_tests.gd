@@ -60,6 +60,7 @@ func _ready() -> void:
 	_test_setup()
 	_test_landmarks()
 	_test_accreditation()
+	_test_station()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2927,6 +2928,91 @@ func _test_landmarks() -> void:
 	sim.grounds._cursor = inside
 	sim.grounds.step(1.0)
 	check(c.weeds[inside] < c.weeds[outside], "a weed inside the circle grows less than one outside (%.3f against %.3f)" % [c.weeds[inside], c.weeds[outside]])
+
+
+func _test_station() -> void:
+	print("-- stationing staff")
+	check(db.home_radius > 20.0, "a post's radius comes from the staff data (%.0f m)" % db.home_radius)
+	var sim := _sim("three_holes", 4)
+	var c := sim.course
+	var keeper := sim.crew.hire("greenkeeper")
+	var marshal := sim.crew.hire("marshal")
+	var tx := -1
+	var ty := -1
+	for y in range(20, c.h - 20):
+		if tx >= 0:
+			break
+		for x in range(20, c.w - 20):
+			if c.terrain[y * c.w + x] == Defs.T.ROUGH:
+				tx = x
+				ty = y
+				break
+	check(tx >= 0, "the starter course has rough to station a greenkeeper on")
+	var home := c.tile_center(tx, ty)
+	sim.crew.station(keeper, home)
+	check(keeper.has_home and keeper.home.distance_to(home) < 1.0, "stationing a greenkeeper gives them that spot")
+	var reach := ceili(sim.crew.home_radius() / Defs.TILE) + 1
+	for oy in range(-reach, reach + 1):
+		for ox in range(-reach, reach + 1):
+			var x := tx + ox
+			var y := ty + oy
+			if c.in_bounds(x, y):
+				var i := y * c.w + x
+				c.health[i] = 1.0
+				c.weeds[i] = 0.0
+				c.pests[i] = 0.0
+	var near := ty * c.w + tx
+	c.health[near] = 0.0
+	c.weeds[near] = 1.0
+	var far_i := (ty + 30) * c.w + tx
+	c.health[far_i] = 0.0
+	c.weeds[far_i] = 1.0
+	keeper.pos = home
+	keeper.state = 0
+	keeper.timer = 0.0
+	sim.crew._find_job(keeper)
+	check(keeper.target_i == near, "a stationed greenkeeper takes the worn turf at their post, not the ground outside it")
+	var near_gr := sim.visitors.add_group("public", 1, 0.4)
+	near_gr.wait = 20.0
+	near_gr.members[0].pos = home
+	var far_gr := sim.visitors.add_group("public", 1, 0.4)
+	far_gr.wait = 80.0
+	far_gr.members[0].pos = c.tile_center(tx, ty + 40)
+	sim.crew.station(marshal, home)
+	marshal.pos = c.tile_center(tx + 20, ty)
+	sim.crew._find_marshal_job(marshal)
+	check(marshal.target.distance_to(near_gr.members[0].pos) < 15.0, "a stationed marshal goes to the queue inside the circle")
+	check(marshal.target.distance_to(far_gr.members[0].pos) > 100.0, "and leaves the longer queue outside it")
+	near_gr.wait = 0.0
+	far_gr.wait = 0.0
+	sim.crew._find_marshal_job(marshal)
+	check(marshal.target.distance_to(marshal.home) < 1.0, "with nobody waiting in the circle, the marshal walks back to the post")
+	sim.crew.clear_station(marshal)
+	near_gr.wait = 20.0
+	far_gr.wait = 80.0
+	sim.crew._find_marshal_job(marshal)
+	check(marshal.target.distance_to(far_gr.members[0].pos) < 20.0, "with no post, the marshal goes to the longest wait on the course")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var saw_home := false
+	var saw_string := false
+	for entry in saved.staff:
+		if entry is String:
+			saw_string = true
+		elif entry is Dictionary:
+			var row: Dictionary = entry
+			if row.has("home"):
+				saw_home = true
+	check(saw_home and saw_string, "a post is saved with the member, and staff without one stay a role name")
+	var back := Sim.from_dict(db, saved, gear)
+	var posted := 0
+	for m in back.crew.members:
+		if m.has_home:
+			posted += 1
+			check(m.home.distance_to(home) < 1.0, "a loaded post is the same spot")
+	check(posted == 1 and back.crew.members.size() == 2, "the post survives a save, and so does the member who roams")
+	saved["staff"] = ["marshal"]
+	var legacy := Sim.from_dict(db, saved, gear)
+	check(legacy.crew.members.size() == 1 and not legacy.crew.members[0].has_home, "an old save, with only role names, still hires them and they roam")
 
 
 func _test_bar_and_vending() -> void:
