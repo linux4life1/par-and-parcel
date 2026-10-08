@@ -350,6 +350,8 @@ func _holes(body: VBoxContainer) -> Callable:
 	var card_box := UIKit.vbox(2)
 	body.add_child(card_box)
 	var rows: Array = []
+	var diagrams: Array[YardageCard] = []
+	var diagram_tex: Array[TextureRect] = []
 	var count := sim.course.holes.size()
 	var order := ""
 	for hole in sim.course.holes:
@@ -362,6 +364,18 @@ func _holes(body: VBoxContainer) -> Callable:
 		body.add_child(card)
 		var cv := UIKit.vbox(4)
 		card.add_child(cv)
+		var sheet := YardageCard.for_hole(hud.yardage_cards, hole, sim.db.yardage)
+		var sheet_img := sheet.ensure(sim.course, hole)
+		var sheet_tex := TextureRect.new()
+		sheet_tex.texture = ImageTexture.create_from_image(sheet_img)
+		sheet_tex.custom_minimum_size = Vector2(sheet_img.get_width(), sheet_img.get_height())
+		sheet_tex.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		sheet_tex.stretch_mode = TextureRect.STRETCH_KEEP
+		sheet_tex.mouse_filter = Control.MOUSE_FILTER_PASS
+		sheet_tex.tooltip_text = "Tee at the bottom. The line is the path the yardage is measured on."
+		cv.add_child(sheet_tex)
+		diagrams.append(sheet)
+		diagram_tex.append(sheet_tex)
 		var h := UIKit.hbox(6)
 		cv.add_child(h)
 		var num := UIKit.label(str(i + 1), 24, UIKit.ACCENT)
@@ -481,6 +495,11 @@ func _holes(body: VBoxContainer) -> Callable:
 			takings.text = "A full round earns about %s a golfer" % Defs.money(round_total / rated * count)
 		for i in count:
 			var hole := sim.course.holes[i]
+			var sheet: YardageCard = diagrams[i]
+			var was := sheet.draws
+			sheet.ensure(sim.course, hole)
+			if sheet.draws != was:
+				diagram_tex[i].texture = ImageTexture.create_from_image(sheet.image)
 			var row: Array = rows[i]
 			var kind: Label = row[0]
 			var bars: Array = row[1]

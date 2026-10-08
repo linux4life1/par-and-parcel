@@ -16,7 +16,7 @@ const MOOD := {
 	"hole_in_one": 1, "eagle": 1, "birdie": 1, "tip": 1, "lucky_bounce": 1, "night_golf": 1, "scenery": 1, "drink": 1, "review_good": 1, "greens_good": 1,
 	"celebrity_happy": 1, "news_good": 1, "tournament_pro_good": 1, "member_join": 1, "member_up": 1, "story_done": 1,
 	"home": 1, "top100": 1, "top18": 1, "snack": 1, "cart_drinks": 1, "vip_happy": 1, "animal": 1, "celebrity_home": 1,
-	"blowup": -1, "hit_victim": -1, "water_ball": -1, "stream_ball": -1, "lava_ball": -1, "oob_ball": -1, "weeds": -1, "pests": -1, "wet": -1, "wait": -1, "no_pay": -1, "too_dark": -1,
+	"blowup": -1, "hit_victim": -1, "stream_ball": -1, "weeds": -1, "pests": -1, "wet": -1, "wait": -1, "no_pay": -1, "too_dark": -1,
 	"thirsty": -1, "review_bad": -1, "celebrity_angry": -1, "celebrity_hit": -1, "greens_bad": -1, "news_bad": -1,
 	"storm": -1, "tournament_pro_bad": -1, "staff_hit": -1, "lava_bomb": -1, "eruption": -1, "member_quit": -1,
 	"tantrum_toss": -1, "tantrum_punch": -1, "tantrum_seen": -1, "window": -1, "restroom": -1, "hungry": -1, "vip_angry": -1,
