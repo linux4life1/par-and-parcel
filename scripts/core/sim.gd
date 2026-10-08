@@ -29,6 +29,8 @@ var gear: Gear
 var weather := Weather.new()
 var grounds: Grounds
 var economy := Economy.new()
+var opening_money := 0.0       # the purse the club started with, after any bank carried in
+var club_id := ""              # this club, so a bank is taken from it only once
 var feed: Feed
 var skills: Skills
 var events: Events
@@ -68,6 +70,7 @@ var stats := {
 	"holes_built": 0, "player_wins": 0, "matches_won": 0, "homes": 0, "celebrity_homes": 0, "tantrums": 0, "windows": 0, "ricochets": 0, "night_holes": 0,
 }
 var career: Career
+var album: Array = []          # aces and tournament wins, kept for the golfer panel and the next course
 var clock := 7.0                # hour of the day, 0 to 24
 var clock_rate := 1.0           # 0 stops the clock (tests, screenshots)
 var told_dark := false          # the player has been told why golfers leave at dusk
@@ -91,6 +94,22 @@ var _marks: Array = []
 var _mark_scale := PackedFloat32Array()
 
 
+static var _club_n := 0
+
+
+## An id for a new club. It does not draw on the simulation's dice: one extra
+## draw there would change every game that follows it.
+static func fresh_club_id() -> String:
+	_club_n += 1
+	return "%d-%d-%d" % [int(Time.get_unix_time_from_system()), Time.get_ticks_usec(), _club_n]
+
+
+## A save from before clubs had ids. The same file must produce the same id
+## on every load, or its bank could be taken again.
+static func legacy_club_id(d: Dictionary) -> String:
+	return "legacy-%s-%s" % [str(d.get("rng_seed", "")), str(d.get("name", ""))]
+
+
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
 	db = data
 	rng.seed = seed_value if seed_value != 0 else int(Time.get_unix_time_from_system())
@@ -106,6 +125,8 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	scenario = Scenario.new(scen)
 	difficulty = int(db.difficulty.get("default", 2))
 	economy.money = float(scen.get("money", 30000))
+	opening_money = economy.money
+	club_id = fresh_club_id()
 	var map: Dictionary = scen.get("map", {})
 	biome = db.biome(biome_id if biome_id != "" else str(map.get("biome", "lush")))
 	_apply_climate(scen)
@@ -242,6 +263,16 @@ func year() -> int:
 
 func date_text() -> String:
 	return Defs.date_text(day())
+
+
+## One page of the album: an ace, or a tournament the owner won.
+const ALBUM_MAX := 24
+
+
+func remember(kind: String, text: String) -> void:
+	album.append({"kind": kind, "text": text, "day": day()})
+	while album.size() > ALBUM_MAX:
+		album.pop_front()
 
 
 func _new_day(d: int) -> void:
@@ -1378,13 +1409,15 @@ func to_dict() -> Dictionary:
 			hs[i] = hd
 	var d := {
 		"version": 1, "scenario": scenario.def.get("id", "free_play"), "status": scenario.status,
-		"name": course_name, "time": time, "clock": clock, "career": career.to_dict(), "money": economy.money, "rating": rating, "reputation": reputation,
+		"name": course_name, "time": time, "clock": clock, "career": career.to_dict(), "money": economy.money,
+		"opening": opening_money, "club": club_id, "rating": rating, "reputation": reputation,
 		"buzz": buzz, "stats": stats, "recent": visitors.recent, "staff": staff, "skills": skills.to_dict(),
 		"player": player.to_dict(), "hosted": tourney.hosted, "history": economy.history,
 		"weather": weather.kind, "course": course_d, "biome": str(biome.get("id", "lush")),
 		"members": members.to_list(), "clubhouse": clubhouse_level, "homes": homes, "gifts": gifts,
 		"feats": feats.done, "rivals": rivals, "best_rank": best_rank, "land_credits": land_credits, "debt_years": debt_years,
 		"difficulty": difficulty, "rng_seed": str(rng.seed), "rng_state": str(rng.state),
+		"album": album,
 	}
 	d["stories"] = stories.to_dict()
 	return d
@@ -1424,6 +1457,14 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	sim.clock = float(d.get("clock", 8.0))
 	sim._day = sim.day()
 	sim.economy.money = float(d.get("money", 0.0))
+	# An older save never stored what the club started with. Treat the loaded
+	# balance as the opening, so the whole purse is not suddenly profit.
+	if d.has("opening"):
+		sim.opening_money = float(d.get("opening", sim.economy.money))
+	else:
+		sim.opening_money = sim.economy.money
+	var club := str(d.get("club", ""))
+	sim.club_id = club if club != "" else legacy_club_id(d)
 	for hrow: Dictionary in d.get("history", []):
 		sim.economy.history.append(hrow)
 	sim.rating = float(d.get("rating", 45.0))
@@ -1432,6 +1473,10 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	var st: Dictionary = d.get("stats", {})
 	for k: String in st:
 		sim.stats[k] = int(st[k])
+	sim.album = []
+	for page in d.get("album", []):
+		if page is Dictionary:
+			sim.album.append(page)
 	for v: float in d.get("recent", []):
 		sim.visitors.recent.append(v)
 	sim.skills.from_dict(d.get("skills", {}))

@@ -96,7 +96,7 @@ func _ready() -> void:
 
 	var scripted := Game.args.has("shot") or Game.args.has("scenario")
 	var scen: String = Game.args.get("scenario", "three_holes")
-	Game.new_game(scen, int(Game.args.get("seed", "0")), str(Game.args.get("biome", "")))
+	Game.new_game(scen, int(Game.args.get("seed", "0")), str(Game.args.get("biome", "")), false)
 	if not scripted:
 		hud.show_scenarios(true)
 	_apply_test_args()
@@ -750,7 +750,7 @@ func _run_demo(delta: float) -> void:
 			var phase := int(_demo_t / 1.6)
 			if phase != _demo_step - 1 and phase < ids.size():
 				_demo_step = phase + 1
-				Game.new_game("three_holes", 7, ids[phase])
+				Game.new_game("three_holes", 7, ids[phase], false)
 				Game.fast_forward(float(Game.args.get("fast", "90")))
 				hud.hide_modal()
 				Game.sim.events.pending = {}
