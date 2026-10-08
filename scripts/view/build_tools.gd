@@ -212,6 +212,16 @@ func _unhandled_input(event: InputEvent) -> void:
 						return
 				station_for = null
 				var who: Variant = world.pick_person(mb.position)
+				if who == null:
+					var spot: Variant = terrain.pick(rig.cam, mb.position)
+					if spot != null:
+						var at: Vector3 = spot
+						var tile := sim.course.tile_of(at.x, at.z)
+						var ci := tile.y * sim.course.w + tile.x
+						if sim.course.in_bounds(tile.x, tile.y) and sim.course.can_switch(int(sim.course.objects[ci])):
+							world.selected = null
+							selection_changed.emit(tile)
+							return
 				world.selected = who
 				selection_changed.emit(who)
 			return

@@ -1250,6 +1250,8 @@ func _update_inspector(force: bool = false) -> void:
 				line.add_theme_color_override("font_hover_color", col)
 				line.custom_minimum_size = Vector2(300, 0)
 				inspector_body.add_child(line)
+	elif _inspected is Vector2i:
+		_show_structure(_inspected)
 	else:
 		var m: Crew.Member = _inspected
 		if not sim.crew.members.has(m):
@@ -1297,6 +1299,35 @@ func _update_inspector(force: bool = false) -> void:
 		inspector_body.add_child(UIKit.row("Wage", "%s a month" % Defs.money(float(m.role.wage) * (1.6 if m.level > 1 else 1.0))))
 
 
+## A structure with a monthly bill. Closing it stops the bill and the service.
+func _show_structure(tile: Vector2i) -> void:
+	var c := sim.course
+	if not c.in_bounds(tile.x, tile.y):
+		inspect(null)
+		return
+	var i := tile.y * c.w + tile.x
+	var o := int(c.objects[i])
+	if not c.can_switch(o):
+		inspect(null)
+		return
+	var off := c.is_closed(i)
+	var still := off and c.open_month[i] != 0
+	var tip := "Switch it back on." if off else "Switch it off. Golfers cannot use it, and it throws no light, until you open it again. The saving starts next month."
+	var head := UIKit.hbox()
+	inspector_body.add_child(head)
+	head.add_child(UIKit.label(sim.object_name(o), 17))
+	head.add_child(UIKit.spacer())
+	head.add_child(UIKit.button("Open" if off else "Close", func() -> void:
+		if not sim.course.set_closed(tile.x, tile.y, not off):
+			return
+		_update_inspector(true), tip))
+	inspector_body.add_child(UIKit.label("Closed" if off else "Open", 13, UIKit.BAD if off else UIKit.GOOD))
+	var bill := 0.0 if off and not still else float(Defs.O_UPKEEP[o])
+	inspector_body.add_child(UIKit.row("Upkeep", "%s a month" % Defs.money(bill)))
+	if still:
+		inspector_body.add_child(UIKit.label("The saving starts next month.", 13, UIKit.MUTED))
+
+
 # ------------------------------------------------------------- per frame
 
 func _frame_hud(delta: float) -> void:
@@ -1342,7 +1373,7 @@ func _tile_info(p: Vector3) -> String:
 	var t: int = c.terrain[i]
 	var s := "%s  ·  height %.1f m  ·  moisture %d%%" % [sim.terrain_name(t), p.y, int(c.wet[i] * 100.0)]
 	if c.objects[i] != 0:
-		s = sim.object_name(c.objects[i]) + "  ·  " + s
+		s = sim.object_name(c.objects[i]) + ("  ·  closed" if c.is_closed(i) else "") + "  ·  " + s
 		if c.objects[i] == Defs.O.HOME_SITE:
 			s = "Lot worth %s to a buyer  ·  " % Defs.money(sim.lot_value(i % c.w, i / c.w)) + s
 	if c.locked[i] != 0:

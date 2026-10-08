@@ -187,6 +187,7 @@ func _impact(p: Vector3) -> void:
 					if Defs.is_tree(o):
 						summary.trees = int(summary.trees) + 1
 					course.objects[i] = 0
+					course.closed[i] = 0
 					course.objects_touched(i)
 					burnt = true
 				if course.terrain[i] != Defs.T.WATER and course.objects[i] == 0 and not _protected(tx, ty):
