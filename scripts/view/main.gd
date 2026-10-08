@@ -5,6 +5,7 @@ extends Node3D
 var terrain := TerrainView.new()
 var grass := GrassView.new()
 var world := WorldView.new()
+var arrows := SlopeArrows.new()
 var crowd := CrowdView.new()    # the gallery at a tournament
 var fx := FxView.new()          # sand, turf, water and ember bursts
 var rig := CameraRig.new()
@@ -45,6 +46,7 @@ func _ready() -> void:
 	add_child(terrain)
 	add_child(grass)
 	add_child(world)
+	add_child(arrows)
 	add_child(crowd)
 	add_child(fx)
 	add_child(volcano)
@@ -69,6 +71,9 @@ func _ready() -> void:
 	hud.rig = rig
 	hud.world = world
 	hud.terrain = terrain
+	arrows.rig = rig
+	arrows.play = play
+	hud.arrows = arrows
 	tools.selection_changed.connect(hud.inspect)
 	tools.hole_added.connect(func(_i: int) -> void: hud.open_dock("holes"))
 	play.started.connect(func() -> void:
@@ -272,6 +277,7 @@ func _on_sim_changed() -> void:
 	fx.bind(sim, rig)
 	volcano.bind(sim, rig, terrain)
 	tools.bind(sim)
+	arrows.set_sim(sim)
 	hud.bind(sim)
 	var fresh := sim.course.holes.is_empty() and sim.time < 1.0
 	var scripted_run := Game.args.has("shot") or Game.args.has("exit")

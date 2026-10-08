@@ -313,15 +313,32 @@ func wind_text() -> String:
 ## What the golfer should know before swinging: the wind, and what the lie
 ## will do to the shot.
 func advice() -> String:
-	if not active() or putting:
+	if not active():
 		return ""
-	var parts: Array[String] = [wind_text()]
-	var lt := Lie.text(lie_read)
-	if lt != "":
-		parts.append(lt)
-	if out_of_bounds:
-		parts.append("That line finishes out of bounds.")
+	var parts: Array[String] = []
+	if not putting:
+		parts.append(wind_text())
+		var lt := Lie.text(lie_read)
+		if lt != "":
+			parts.append(lt)
+		if out_of_bounds:
+			parts.append("That line finishes out of bounds.")
+	var slope := green_read()
+	if slope != "":
+		parts.append(slope)
 	return "  ·  ".join(PackedStringArray(parts))
+
+
+## Slope under the ball and along the line to the hole. A reading, not an aim.
+func green_read() -> String:
+	if g == null or not Defs.is_green(lie):
+		return ""
+	var b := g.ball.pos
+	var h := hole()
+	var toward := Vector2(h.pin.x - b.x, h.pin.z - b.z)
+	var here := Slope.read(sim.course, b.x, b.z)
+	var line := Slope.along(sim.course, b, h.pin)
+	return "Under the ball, %s. Along the line, %s." % [Slope.words(here, toward), Slope.words(line, toward)]
 
 
 func _putt_full_speed() -> float:
@@ -945,7 +962,10 @@ func _draw_preview() -> void:
 		return
 	var width := 0.05 if putting else maxf(0.25, rig.dist * 0.004)
 	var col := Color(1.0, 0.9, 0.3, 0.75)
+	var aim_v := Vector2(cos(aim), sin(aim))
+	var on_green := putting and Defs.is_green(lie)
 	var verts := PackedVector3Array()
+	var cols := PackedColorArray()
 	for i in _path.size() - 1:
 		if i % 2 == 1 and not putting:
 			continue
@@ -956,12 +976,21 @@ func _draw_preview() -> void:
 		if side.length_squared() < 1e-8:
 			continue
 		side = side.normalized() * width
-		verts.append_array([p0 - side, p0 + side, p1 + side, p0 - side, p1 + side, p1 - side])
+		var seg := col
+		if on_green:
+			var mid := (p0 + p1) * 0.5
+			var here := Slope.read(sim.course, mid.x, mid.z)
+			var fall: Vector2 = here.get("fall", Vector2.ZERO)
+			seg = Slope.aim_tint(fall.dot(aim_v), float(here.get("percent", 0.0)))
+		var chunk := PackedVector3Array([p0 - side, p0 + side, p1 + side, p0 - side, p1 + side, p1 - side])
+		verts.append_array(chunk)
+		for _k in chunk.size():
+			cols.append(seg)
 	if not verts.is_empty():
 		_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLES, _mat)
-		_mesh.surface_set_color(col)
-		for v in verts:
-			_mesh.surface_add_vertex(v)
+		for i in verts.size():
+			_mesh.surface_set_color(cols[i])
+			_mesh.surface_add_vertex(verts[i])
 		_mesh.surface_end()
 	_ring.visible = not putting
 	_ring.position = _landing + Vector3(0, 0.3, 0)

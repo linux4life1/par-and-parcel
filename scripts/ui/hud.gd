@@ -68,6 +68,20 @@ var meter := UIKit.Meter.new()
 var modal: Control
 var modal_card: VBoxContainer
 var _goal_flag := ""
+var arrows: SlopeArrows
+var slope_key: Label
+
+const OVERLAY_NAMES: Array[String] = ["Normal", "Moisture", "Turf", "Height", "Mood", "Lots", "Lights", "Slope"]
+const OVERLAY_TIPS: Array[String] = [
+	"The course as golfers see it",
+	"How wet the ground is. Wet ground kills bounce and roll.",
+	"Turf health and weeds",
+	"Elevation",
+	"Where golfers have been pleased or annoyed. It fades over a couple of days.",
+	"Where a home site is worth the most. Brighter ground is dearer.",
+	"Where the floodlights and lamps reach. Brighter ground is lit after dark.",
+	"How steep the ground is, and which way it falls. Greens use a finer scale, so a slope of 1 to 4% still shows.",
+]
 
 
 func _ready() -> void:
@@ -427,17 +441,21 @@ func _build_bottom() -> void:
 	op.add_theme_stylebox_override("panel", UIKit.box(UIKit.BG, 8, 8, 5, Color(1, 1, 1, 0.08)))
 	op.size_flags_horizontal = Control.SIZE_SHRINK_END
 	bottom_right.add_child(op)
+	var stack := UIKit.vbox(2)
+	op.add_child(stack)
 	var oh := UIKit.hbox(4)
-	op.add_child(oh)
+	stack.add_child(oh)
 	oh.add_child(UIKit.label("View", 12, UIKit.MUTED))
-	var names := ["Normal", "Moisture", "Turf", "Height", "Mood", "Lots", "Lights"]
-	var tips := ["The course as golfers see it", "How wet the ground is. Wet ground kills bounce and roll.", "Turf health and weeds", "Elevation", "Where golfers have been pleased or annoyed. It fades over a couple of days.", "Where a home site is worth the most. Brighter ground is dearer.", "Where the floodlights and lamps reach. Brighter ground is lit after dark."]
-	for i in names.size():
-		var b := UIKit.button(names[i], set_overlay.bind(i), tips[i])
+	for i in OVERLAY_NAMES.size():
+		var b := UIKit.button(OVERLAY_NAMES[i], set_overlay.bind(i), OVERLAY_TIPS[i])
 		b.toggle_mode = true
 		b.add_theme_font_size_override("font_size", 13)
 		oh.add_child(b)
 		overlay_btns.append(b)
+	slope_key = UIKit.label("", 12, UIKit.MUTED)
+	slope_key.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	slope_key.visible = false
+	stack.add_child(slope_key)
 	contour_btn = UIKit.button("Contours", func() -> void: _apply_contours(), "Height lines every 25 cm. Use them to read greens.")
 	contour_btn.toggle_mode = true
 	contour_btn.add_theme_font_size_override("font_size", 13)
@@ -449,6 +467,14 @@ func set_overlay(i: int) -> void:
 		overlay_btns[k].set_pressed_no_signal(k == i)
 	if terrain != null:
 		terrain.material.set_shader_parameter("overlay", i)
+		if i == Slope.OVERLAY:
+			terrain.refresh_slope()
+	if arrows != null:
+		arrows.overlay_on = i == Slope.OVERLAY
+	if slope_key != null:
+		slope_key.visible = i == Slope.OVERLAY
+		if i == Slope.OVERLAY:
+			slope_key.text = Slope.legend()
 
 
 func _apply_contours() -> void:

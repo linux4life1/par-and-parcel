@@ -68,6 +68,7 @@ func _ready() -> void:
 	_test_firm()
 	_test_lights_gap_awards()
 	_test_length_scale()
+	_test_slope()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -4122,3 +4123,42 @@ func _test_length_scale() -> void:
 	sim.members.progress["power_cap"] = 1.8
 	var lab_g := sim.lab._test_golfer(HoleLab.CLASSES[0])
 	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")
+
+
+func _test_slope() -> void:
+	print("-- slope")
+	var c := Course.new(8, 8)
+	var flat := Slope.read(c, 20.0, 20.0)
+	check(is_equal_approx(float(flat.percent), 0.0), "flat ground reads 0 percent")
+	var fall0: Vector2 = flat.fall
+	check(fall0 == Vector2.ZERO, "flat ground has no fall")
+	var stride := c.w + 1
+	for vy in c.h + 1:
+		for vx in c.w + 1:
+			c.heights[vy * stride + vx] = float(vx) * 0.5
+	var mid := Slope.read(c, 20.0, 20.0)
+	check(is_equal_approx(float(mid.percent), 10.0), "a half-metre rise across a tile is 10 percent")
+	var fall: Vector2 = mid.fall
+	check(fall.x < -0.99 and absf(fall.y) < 0.01, "that patch falls toward -x")
+	var said := Slope.words(mid, Vector2(-1.0, 0.0))
+	check(said == "10% downhill", "the reading names the fall (%s)" % said)
+	for vy in c.h + 1:
+		for vx in c.w + 1:
+			c.heights[vy * stride + vx] = float(vy) * 0.25
+	var down := Slope.read(c, 20.0, 20.0)
+	check(is_equal_approx(float(down.percent), 5.0), "a quarter-metre rise across a tile is 5 percent")
+	var fallz: Vector2 = down.fall
+	check(absf(fallz.x) < 0.01 and fallz.y < -0.99, "that patch falls toward -z")
+	check(Hud.OVERLAY_NAMES.size() == Slope.OVERLAY + 1 and Hud.OVERLAY_NAMES[Slope.OVERLAY] == "Slope", "slope is the overlay after lights")
+	var hud := Hud.new()
+	add_child(hud)
+	var tv := TerrainView.new()
+	hud.terrain = tv
+	hud.set_overlay(Slope.OVERLAY)
+	check(int(tv.material.get_shader_parameter("overlay")) == Slope.OVERLAY, "the slope overlay turns on")
+	check(hud.overlay_btns[Slope.OVERLAY].button_pressed and not hud.overlay_btns[0].button_pressed, "the slope button is the one pressed")
+	check(hud.slope_key.visible and hud.slope_key.text == Slope.legend(), "the slope legend shows the data scales")
+	check(float(Slope.book().get("green_full", 0.0)) < float(Slope.book().get("course_full", 0.0)), "greens use a finer scale than the rest of the course")
+	hud.set_overlay(0)
+	check(int(tv.material.get_shader_parameter("overlay")) == 0 and not hud.overlay_btns[Slope.OVERLAY].button_pressed, "the slope overlay turns off")
+	hud.queue_free()

@@ -22,6 +22,10 @@ var _bare := PackedByteArray()        # 1 where something stands, so no grass gr
 var _height_img: Image
 var _height_tex: ImageTexture
 var _heights_stale := false
+var _slope_dirty := true
+var _slope := PackedFloat32Array()
+var _slope_img: Image
+var _slope_tex: ImageTexture
 var _shown_overlay := 0
 var palette := PackedVector3Array()   # linear colours, in PALETTE_KEYS order
 ## Things big enough to cover the tiles around them.
@@ -33,6 +37,10 @@ const PLANTS: Array[int] = [Defs.O.OAK, Defs.O.PINE, Defs.O.BUSH, Defs.O.BOULDER
 func _init() -> void:
 	material.shader = load("res://shaders/terrain.gdshader")
 	material.set_shader_parameter("noise_tex", Surfaces.noise())
+	_apply_slope_colours()
+	var blank := PackedFloat32Array([0.0])
+	var blank_img := Image.create_from_data(1, 1, false, Image.FORMAT_RF, blank.to_byte_array())
+	material.set_shader_parameter("slope_tex", ImageTexture.create_from_image(blank_img))
 	for z in CHUNK:
 		for x in CHUNK:
 			var a := z * (CHUNK + 1) + x
@@ -112,6 +120,12 @@ func _frame_terrain(_delta: float) -> void:
 		_heights_stale = false
 		_height_img.set_data(course.w + 1, course.h + 1, false, Image.FORMAT_RF, course.heights.to_byte_array())
 		_height_tex.update(_height_img)
+		_slope_dirty = true
+	# The slope shade is the grade at each tile. Upload it when the land has
+	# changed and the map is actually showing, not on frames that do not need it.
+	if _slope_dirty and int(material.get_shader_parameter("overlay")) == Slope.OVERLAY:
+		_slope_dirty = false
+		_fill_slope()
 
 
 ## The per-tile data texture: r type (+128 not owned, +64 nothing grows),
@@ -187,6 +201,51 @@ func _fill_row(ty: int) -> void:
 		i += 1
 
 
+## Upload the grade now. The slope map calls this when it is switched on.
+func refresh_slope() -> void:
+	if course == null:
+		_slope_dirty = true
+		return
+	_fill_slope()
+	_slope_dirty = false
+
+
+## One float per tile: the grade in percent, from the same reading as the arrows.
+func _fill_slope() -> void:
+	if course == null:
+		return
+	var n := course.w * course.h
+	if _slope.size() != n:
+		_slope.resize(n)
+	var i := 0
+	for ty in course.h:
+		for tx in course.w:
+			var at := course.tile_center(tx, ty)
+			var g := course.gradient_at(at.x, at.z)
+			_slope[i] = g.length() * 100.0
+			i += 1
+	var bytes := _slope.to_byte_array()
+	if _slope_img == null:
+		_slope_img = Image.create_from_data(course.w, course.h, false, Image.FORMAT_RF, bytes)
+		_slope_tex = ImageTexture.create_from_image(_slope_img)
+		material.set_shader_parameter("slope_tex", _slope_tex)
+	else:
+		_slope_img.set_data(course.w, course.h, false, Image.FORMAT_RF, bytes)
+		_slope_tex.update(_slope_img)
+
+
+func _apply_slope_colours() -> void:
+	var data := Slope.book()
+	material.set_shader_parameter("slope_green_full", float(data.get("green_full", 4.0)))
+	material.set_shader_parameter("slope_course_full", float(data.get("course_full", 20.0)))
+	var stops: Array = data.get("stops", [])
+	for i in 4:
+		var row: Array = [0.5, 0.5, 0.5]
+		if i < stops.size():
+			row = stops[i]
+		material.set_shader_parameter("slope_c%d" % i, Vector3(float(row[0]), float(row[1]), float(row[2])))
+
+
 func _on_tiles(rect: Rect2i) -> void:
 	for ty in range(maxi(rect.position.y, 0), mini(rect.end.y, course.h)):
 		_fill_row(ty)
@@ -195,6 +254,7 @@ func _on_tiles(rect: Rect2i) -> void:
 
 func _on_heights(rect: Rect2i) -> void:
 	_heights_stale = true
+	_slope_dirty = true
 	var x0 := maxi(rect.position.x - 1, 0) / CHUNK
 	var y0 := maxi(rect.position.y - 1, 0) / CHUNK
 	var x1 := mini(rect.end.x + 1, course.w - 1) / CHUNK
