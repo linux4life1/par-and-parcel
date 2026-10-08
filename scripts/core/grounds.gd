@@ -37,6 +37,13 @@ func _init(s: Sim) -> void:
 	sim = s
 
 
+## The course was swapped for another. Rebuild the tile index even when the
+## new course's revision number matches the one just thrown away.
+func reset_layout() -> void:
+	_rev = -1
+	refresh_layout()
+
+
 func refresh_layout() -> void:
 	var course := sim.course
 	if _rev == course.revision:

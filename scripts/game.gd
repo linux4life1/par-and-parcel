@@ -10,6 +10,7 @@ signal volume_changed()
 const STEP := 1.0 / 60.0
 const SAVE_FILE := "user://save.json"
 const TEST_SAVE_FILE := "user://save_test.json"   # screenshot and test runs never touch the real slot
+const SHARED_DIR := "user://shared"               # courses shared from the menu, not saved games
 var SAVE_PATH := SAVE_FILE
 const CAREER_FILE := "user://career.json"
 const TEST_CAREER_FILE := "user://career_test.json"
@@ -284,11 +285,16 @@ func new_game(scenario_id: String, seed_value: int = 0, biome_id: String = "", t
 	if scen.is_empty():
 		scen = db.scenarios[0]
 	sim = Sim.new(db, scen, seed_value, gear, biome_id)
+	_start_club(take_career)
+
+
+## A new club is under way. The career book comes across when this is a real
+## start, and then the club is stamped with its own id and opening purse.
+func _start_club(take_career: bool) -> void:
 	sim.set_difficulty(difficulty)
 	if take_career:
 		_load_career()
-	# The carried bank is part of what this club starts with, not profit to take again.
-	sim.opening_money = sim.economy.money
+	_fresh_stamp()
 	_session_live = take_career
 	if not sim.scenario_ended.is_connected(_store_career):
 		sim.scenario_ended.connect(_store_career)
@@ -296,6 +302,14 @@ func new_game(scenario_id: String, seed_value: int = 0, biome_id: String = "", t
 	speed = 1
 	paused = false
 	sim_changed.emit()
+
+
+## One stamp for a new club: its id, and the purse it starts with after the
+## career book has added anything it carried. The carried bank is part of
+## that opening, not profit to take again.
+func _fresh_stamp() -> void:
+	sim.club_id = Sim.fresh_club_id()
+	sim.opening_money = sim.economy.money
 
 
 func _process(delta: float) -> void:
@@ -365,6 +379,52 @@ func save_game() -> bool:
 	f.store_string(JSON.stringify(sim.to_dict()))
 	f.close()
 	_store_career()
+	return true
+
+
+## Write this course out as a file a friend can play. Returns the path, or ""
+## if it could not be written. The club's money is not in the file.
+func share_course() -> String:
+	if sim == null:
+		return ""
+	DirAccess.make_dir_recursive_absolute(SHARED_DIR)
+	var path := SHARED_DIR.path_join(CourseFile.file_name(sim.course_name) + ".ppcourse")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return ""
+	f.store_string(CourseFile.text_of(sim))
+	f.close()
+	return path
+
+
+func shared_courses() -> Array[String]:
+	var out: Array[String] = []
+	var dir := DirAccess.open(SHARED_DIR)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var fn := dir.get_next()
+	while fn != "":
+		if not dir.current_is_dir() and fn.ends_with(".ppcourse"):
+			out.append(fn)
+		fn = dir.get_next()
+	dir.list_dir_end()
+	out.sort()
+	return out
+
+
+## Start a new club on a shared course. The club being left is stored first,
+## and the pro, the album and the profit come across in the career book.
+func play_shared(file_name: String) -> bool:
+	var text := FileAccess.get_file_as_string(SHARED_DIR.path_join(file_name))
+	var pack := CourseFile.parse(text)
+	if pack.is_empty():
+		return false
+	if _session_live and sim != null:
+		_store_career()
+	var next := CourseFile.host(db, pack, gear)
+	sim = next
+	_start_club(true)
 	return true
 
 
