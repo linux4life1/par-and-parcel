@@ -84,6 +84,7 @@ func _ready() -> void:
 	_test_undo()
 	_test_undo_books()
 	_test_yardage()
+	_test_tee_sets()
 	_test_rating()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
@@ -6737,6 +6738,212 @@ func _test_yardage() -> void:
 	var kept_draws := kept.draws
 	kept.ensure(c, other_hole)
 	check(kept == second and lost == first and kept.draws == kept_draws and is_equal_approx(kept.path_metres, second_len) and not is_equal_approx(first_len, second_len), "after a hole is removed, reopening the panel keeps each card with its own hole")
+
+
+func _play_from(sim: Sim, hole: Hole, skill: float) -> Vector2:
+	var g := sim.visitors.make_golfer("public", skill)
+	g.skill = skill
+	var party := Group.new()
+	party.members.append(g)
+	party._begin_hole(sim, hole)
+	return Vector2(g.ball.pos.x, g.ball.pos.z)
+
+
+func _test_tee_sets() -> void:
+	print("-- tee sets")
+	var sim := _sim("sandbox", 17)
+	var c := sim.course
+	for ty in range(20, 70):
+		c.set_terrain(40, ty, Defs.T.FAIRWAY)
+	c.set_terrain(40, 20, Defs.T.TEE)
+	c.set_terrain(40, 12, Defs.T.TEE)
+	c.set_terrain(40, 35, Defs.T.TEE)
+	c.set_terrain(40, 48, Defs.T.TEE)
+	c.set_terrain(40, 55, Defs.T.TEE)
+	c.set_terrain(48, 35, Defs.T.TEE)
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
+			c.set_terrain(40 + ox, 60 + oy, Defs.T.GREEN)
+	var hole := sim.add_hole(c.tile_center(40, 20), c.tile_center(40, 60))
+	check(hole != null and hole.par == Hole.par_for(hole.length), "the back tee sets the par")
+	if hole == null:
+		return
+	var par0 := hole.par
+	var len0 := hole.length
+	var cash := sim.economy.money
+	var price := float(db.tees.get("price", -1.0))
+	var on_line := float(db.tees.get("on_line", -1.0))
+	var cut_f := float(db.tees.get("forward_below", -1.0))
+	var cut_m := float(db.tees.get("middle_below", -1.0))
+	check(price > 0.0 and on_line > 0.0 and cut_f > 0.0 and cut_f < cut_m and cut_m < 1.0, "tee price and skill cuts live in the tee file")
+	var marker := Golfer.new()
+	marker.skill = cut_f
+	var hcp_f := marker.handicap()
+	marker.skill = cut_m
+	var hcp_m := marker.handicap()
+	check(hcp_f >= 19 and hcp_f <= 21 and hcp_m >= 8 and hcp_m <= 10, "the forward cut is about a 20 handicap and the middle cut about a 9 (%d, %d)" % [hcp_f, hcp_m])
+	var behind := c.tile_center(40, 12)
+	var why_back := sim.place_tee(hole, "forward", behind)
+	check(why_back != "" and not hole.has_tee("forward") and is_equal_approx(sim.economy.money, cash), "a forward tee is refused when it isn't closer to the green (%s)" % why_back)
+	var why_off := sim.place_tee(hole, "middle", c.tile_center(48, 35))
+	check(why_off != "" and not hole.has_tee("middle"), "a tee off the line of play is refused (%s)" % why_off)
+	var why_bare := sim.place_tee(hole, "middle", c.tile_center(40, 30))
+	check(why_bare != "" and not hole.has_tee("middle"), "a tee that is not on a tee box is refused (%s)" % why_bare)
+	var saved_cash := sim.economy.money
+	sim.economy.money = price - 1.0
+	var why_broke := sim.place_tee(hole, "middle", c.tile_center(40, 35))
+	check(why_broke != "" and not hole.has_tee("middle") and is_equal_approx(sim.economy.money, price - 1.0), "a tee you can't afford is refused and charges nothing (%s)" % why_broke)
+	sim.economy.money = saved_cash
+	check(is_equal_approx(float(db.yardage.get("set_scale", -1.0)), 0.85), "the extra tee dot scale lives in the yardage file")
+	var card := YardageCard.new(db.yardage)
+	card.ensure(c, hole)
+	var drawn := card.draws
+	var tee_col := Color.html(str((db.yardage["colours"] as Dictionary).get("tee_mark", "1c1914")))
+	var why_mid := sim.place_tee(hole, "middle", c.tile_center(40, 35))
+	check(why_mid == "" and hole.has_tee("middle") and hole.length_middle < len0 - 1.0 and is_equal_approx(cash - sim.economy.money, price), "the middle tee is closer to the green and costs the tee price (%s)" % why_mid)
+	card.ensure(c, hole)
+	var mid_px := card.image.get_pixel(int(round(card.middle_px.x)), int(round(card.middle_px.y)))
+	var beside := card.image.get_pixel(int(round(card.middle_px.x)) - 2, int(round(card.middle_px.y)))
+	check(card.draws == drawn + 1 and card.middle_px.x >= 0.0 and mid_px.is_equal_approx(tee_col) and card.middle_px.y < card.tee_px.y and card.middle_px.y > card.pin_px.y, "the yardage diagram draws the middle tee between the back tee and the pin")
+	check(not beside.is_equal_approx(tee_col), "the ordinary extra-tee dot does not reach two pixels off the line")
+	var wide_book: Dictionary = db.yardage.duplicate(true)
+	wide_book["set_scale"] = 3.0
+	var wide := YardageCard.new(wide_book)
+	wide.ensure(c, hole)
+	var wide_px := wide.image.get_pixel(int(round(wide.middle_px.x)) - 2, int(round(wide.middle_px.y)))
+	check(wide_px.is_equal_approx(tee_col), "a larger set scale from the yardage file draws a bigger extra-tee dot")
+	drawn = card.draws
+	var why_fwd := sim.place_tee(hole, "forward", c.tile_center(40, 48))
+	check(why_fwd == "" and hole.has_tee("forward") and hole.length_forward < hole.length_middle - 1.0 and is_equal_approx(cash - sim.economy.money, price * 2.0), "the forward tee is closer still (%s)" % why_fwd)
+	card.ensure(c, hole)
+	var fwd_px := card.image.get_pixel(int(round(card.forward_px.x)), int(round(card.forward_px.y)))
+	check(card.draws == drawn + 1 and card.forward_px.x >= 0.0 and fwd_px.is_equal_approx(tee_col), "adding the forward tee redraws the yardage diagram")
+	check(hole.par == par0 and is_equal_approx(hole.length, len0), "par is unchanged by adding tees")
+	var named := hole.tee_line()
+	check(named.contains("Back") and named.contains("Middle") and named.contains("Forward") and named.contains(str(Defs.yards(len0))) and named.contains(str(Defs.yards(hole.length_middle))) and named.contains(str(Defs.yards(hole.length_forward))), "the hole card names each tee's length (%s)" % named)
+	var ball_b := _play_from(sim, hole, cut_f * 0.5)
+	var fwd_at := Vector2(hole.tee_forward.x, hole.tee_forward.z)
+	check(ball_b.distance_to(fwd_at) < 1.0, "a beginner plays the forward tee")
+	var ball_sk := _play_from(sim, hole, (cut_m + 1.0) * 0.5)
+	var back_at := Vector2(hole.tee.x, hole.tee.z)
+	check(ball_sk.distance_to(back_at) < 1.0, "a skilled golfer plays the back tee")
+	var at_cut := _play_from(sim, hole, cut_f)
+	var mid_at := Vector2(hole.tee_middle.x, hole.tee_middle.z)
+	check(at_cut.distance_to(mid_at) < 1.0, "a golfer on the forward cut plays the middle tee")
+	var spent := sim.economy.money
+	check(sim.undo.undo() and not hole.has_tee("forward") and hole.has_tee("middle") and is_equal_approx(sim.economy.money, spent + price), "undo of a tee placement refunds it")
+	check(sim.undo.redo() and hole.has_tee("forward") and is_equal_approx(sim.economy.money, spent), "redo of a tee placement charges it again")
+	check(sim.undo.undo() and not hole.has_tee("forward") and is_equal_approx(sim.economy.money, spent + price), "the same tee step can be taken back again")
+	var ball_m := _play_from(sim, hole, cut_f * 0.5)
+	check(ball_m.distance_to(mid_at) < 1.0, "a beginner falls back to the middle tee when there is no forward")
+	check(sim.undo.undo() and not hole.has_tee("middle") and is_equal_approx(sim.economy.money, spent + price * 2.0), "undo of the middle tee refunds that too")
+	var ball_back := _play_from(sim, hole, cut_f * 0.5)
+	check(ball_back.distance_to(back_at) < 1.0, "a beginner falls back to the back tee when no other set is there")
+	var only_fwd := sim.place_tee(hole, "forward", c.tile_center(40, 48))
+	check(only_fwd == "", "the forward tee can stand on its own (%s)" % only_fwd)
+	var why_past := sim.place_tee(hole, "middle", c.tile_center(40, 55))
+	check(why_past != "" and not hole.has_tee("middle"), "a middle tee past the forward tee is refused (%s)" % why_past)
+	var ball_avg := _play_from(sim, hole, (cut_f + cut_m) * 0.5)
+	check(ball_avg.distance_to(back_at) < 1.0 and ball_avg.distance_to(Vector2(hole.tee_forward.x, hole.tee_forward.z)) > 10.0, "an average golfer does not play a forward tee when the middle is missing")
+	var ball_new := _play_from(sim, hole, cut_f * 0.5)
+	check(ball_new.distance_to(Vector2(hole.tee_forward.x, hole.tee_forward.z)) < 1.0, "a beginner still plays the forward tee when it is the only extra set")
+	var why_mid2 := sim.place_tee(hole, "middle", c.tile_center(40, 35))
+	check(why_mid2 == "" and hole.par == par0 and is_equal_approx(hole.length, len0), "putting the middle tee back still leaves the par alone")
+	var text := JSON.stringify(sim.to_dict())
+	var packed: Dictionary = JSON.parse_string(text)
+	var saved_holes: Array = packed["course"]["holes"]
+	var saved: Dictionary = saved_holes[0]
+	check(saved.has("tees"), "a save with extra tees stores them")
+	var modern := Sim.from_dict(db, JSON.parse_string(text), gear)
+	var loaded: Hole = modern.course.holes[0]
+	check(loaded.has_tee("middle") and loaded.has_tee("forward") and loaded.tee_middle.distance_squared_to(hole.tee_middle) < 0.01 and loaded.tee_forward.distance_squared_to(hole.tee_forward) < 0.01 and loaded.par == par0 and is_equal_approx(loaded.length, len0), "save and load keep the tees, and the par stays the back tee's")
+	saved.erase("tees")
+	var legacy := Sim.from_dict(db, packed, gear)
+	var old_hole: Hole = legacy.course.holes[0]
+	check(not old_hole.has_tee("middle") and not old_hole.has_tee("forward") and old_hole.tee.distance_squared_to(hole.tee) < 0.01 and old_hole.par == par0, "an old save loads with only the back tee")
+	_test_tee_rating()
+	_test_tee_play()
+
+
+## A mixed group plays one hole that has all three tees, through to the card.
+func _test_tee_play() -> void:
+	print("-- tee play")
+	var sim := _sim("sandbox", 23)
+	sim.open = false
+	sim.events.timer = 99999.0
+	sim.economy.money = 10000.0
+	var c := sim.course
+	for ty in range(38, 52):
+		for tx in range(36, 45):
+			c.set_terrain(tx, ty, Defs.T.FAIRWAY)
+	c.set_terrain(40, 38, Defs.T.TEE)
+	c.set_terrain(40, 44, Defs.T.TEE)
+	c.set_terrain(40, 48, Defs.T.TEE)
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
+			c.set_terrain(40 + ox, 52 + oy, Defs.T.GREEN)
+	var hole := sim.add_hole(c.tile_center(40, 38), c.tile_center(40, 52))
+	check(hole != null, "the play-through hole can be laid out")
+	if hole == null:
+		return
+	hole.open = true
+	var why_m := sim.place_tee(hole, "middle", c.tile_center(40, 44))
+	var why_f := sim.place_tee(hole, "forward", c.tile_center(40, 48))
+	check(why_m == "" and why_f == "" and hole.has_tee("middle") and hole.has_tee("forward"), "the play-through hole has all three tees (%s, %s)" % [why_m, why_f])
+	var par_back := hole.par
+	var cut_f := float(db.tees.get("forward_below", 0.40))
+	var cut_m := float(db.tees.get("middle_below", 0.70))
+	var beginner := sim.visitors.make_golfer("public", cut_f * 0.5)
+	beginner.skill = cut_f * 0.5
+	var skilled := sim.visitors.make_golfer("public", (cut_m + 1.0) * 0.5)
+	skilled.skill = (cut_m + 1.0) * 0.5
+	var party := Group.new()
+	party.last_hole = 0
+	sim.visitors._join(party, beginner)
+	sim.visitors._join(party, skilled)
+	sim.visitors.groups.append(party)
+	party._begin_hole(sim, hole)
+	var fwd_box := Vector2(hole.tee_forward.x, hole.tee_forward.z)
+	var back_box := Vector2(hole.tee.x, hole.tee.z)
+	var begun_b := Vector2(beginner.ball.pos.x, beginner.ball.pos.z)
+	var begun_s := Vector2(skilled.ball.pos.x, skilled.ball.pos.z)
+	check(beginner.skill < cut_f and skilled.skill >= cut_m and begun_b.distance_to(fwd_box) < 1.0 and begun_s.distance_to(back_box) < 1.0, "the beginner tees from the forward tee and the skilled golfer from the back")
+	beginner.pos = beginner.ball.pos
+	beginner.prev = beginner.ball.pos
+	skilled.pos = skilled.ball.pos
+	skilled.prev = skilled.ball.pos
+	var guard := 0
+	while (beginner.scores.is_empty() or skilled.scores.is_empty()) and guard < 60 * 240:
+		sim.step(1.0 / 60.0)
+		guard += 1
+	var b_par := -1
+	var s_par := -1
+	if beginner.pars.size() > 0:
+		b_par = int(beginner.pars[0])
+	if skilled.pars.size() > 0:
+		s_par = int(skilled.pars[0])
+	check(not beginner.scores.is_empty() and not skilled.scores.is_empty(), "both golfers hole out (%d frames, scores %d and %d)" % [guard, beginner.scores.size(), skilled.scores.size()])
+	check(b_par == par_back and s_par == par_back and hole.plays == 2 and hole.par == par_back, "both scores count against the back-tee par (pars %d and %d, hole par %d, plays %d)" % [b_par, s_par, hole.par, hole.plays])
+
+
+func _test_tee_rating() -> void:
+	var sim := _rating_sim(50, 4, false)
+	var hole: Hole = sim.course.holes[0]
+	var course := sim.course
+	course.set_terrain(40, 40, Defs.T.TEE)
+	course.set_terrain(40, 55, Defs.T.TEE)
+	course.revision += 1
+	var before := sim.playing_card()
+	var scratch := before.scratch_score()
+	var slope_n := before.slope_score()
+	var par0 := hole.par
+	var len0 := hole.length
+	sim.economy.money = 10000.0
+	var why_mid := sim.place_tee(hole, "middle", course.tile_center(40, 40))
+	var why_fwd := sim.place_tee(hole, "forward", course.tile_center(40, 55))
+	check(why_mid == "" and why_fwd == "" and hole.has_tee("middle") and hole.has_tee("forward"), "a rated hole can take a middle and a forward tee (%s, %s)" % [why_mid, why_fwd])
+	var after := sim.playing_card()
+	check(is_equal_approx(after.scratch_score(), scratch) and after.slope_score() == slope_n and hole.par == par0 and is_equal_approx(hole.length, len0), "placing a middle and a forward tee leaves scratch and slope unchanged")
 
 
 func _test_rating() -> void:

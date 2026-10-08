@@ -22,6 +22,9 @@ var image: Image
 var draws := 0
 var tee_px := Vector2.ZERO
 var pin_px := Vector2.ZERO
+## Middle and forward tees, when the hole has them. (-1, -1) otherwise.
+var middle_px := Vector2(-1.0, -1.0)
+var forward_px := Vector2(-1.0, -1.0)
 ## Length, in metres, of the line drawn on the card.
 var path_metres := 0.0
 
@@ -89,7 +92,7 @@ func _ends(hole: Hole) -> int:
 	for p in hole.route:
 		h = _mix(h, int(round(p.x * 10.0)))
 		h = _mix(h, int(round(p.y * 10.0)))
-	return h
+	return _mix_sets(h, hole)
 
 
 func _signature(course: Course, hole: Hole) -> int:
@@ -105,6 +108,7 @@ func _signature(course: Course, hole: Hole) -> int:
 	for p in hole.route:
 		h = _mix(h, int(round(p.x * 10.0)))
 		h = _mix(h, int(round(p.y * 10.0)))
+	h = _mix_sets(h, hole)
 	var box := _region(course, hole)
 	var x0 := int(box.x0)
 	var y0 := int(box.y0)
@@ -120,6 +124,23 @@ func _signature(course: Course, hole: Hole) -> int:
 
 func _mix(h: int, v: int) -> int:
 	return (h * 16777619) ^ v
+
+
+func _mix_sets(h: int, hole: Hole) -> int:
+	h = _mix_one(h, hole.tee_middle, hole.has_tee("middle"))
+	h = _mix_one(h, hole.tee_forward, hole.has_tee("forward"))
+	return h
+
+
+func _mix_one(h: int, p: Vector3, on: bool) -> int:
+	var flag := 0
+	if on:
+		flag = 1
+	h = _mix(h, flag)
+	if on:
+		h = _mix(h, int(round(p.x * 10.0)))
+		h = _mix(h, int(round(p.z * 10.0)))
+	return h
 
 
 ## Tiles the picture covers: the line of play, plus a margin from the data.
@@ -200,6 +221,7 @@ func _draw(course: Course, hole: Hole) -> void:
 	for i in range(1, line.size()):
 		_stroke(_to_px(line[i - 1]), _to_px(line[i]), thick, line_c)
 	var tee_r := float(_book.get("tee_dot", 0.99))
+	var set_scale := float(_book.get("set_scale", 0.85))
 	var pin_r := float(_book.get("pin_dot", 0.88))
 	var flag := float(_book.get("flag", 4.84))
 	tee_px = _to_px(Vector2(hole.tee.x, hole.tee.z))
@@ -208,6 +230,17 @@ func _draw(course: Course, hole: Hole) -> void:
 	_dot(pin_px, pin_r, pin_c)
 	_stroke(pin_px, pin_px + Vector2(0.0, -flag), 1.0, pin_c)
 	_yards(line, ink, float(_book.get("label_gap", 8.0)))
+	var glyph := maxi(int(_book.get("glyph", 1)), 1)
+	middle_px = Vector2(-1.0, -1.0)
+	forward_px = Vector2(-1.0, -1.0)
+	if hole.has_tee("middle"):
+		middle_px = _to_px(Vector2(hole.tee_middle.x, hole.tee_middle.z))
+		_dot(middle_px, tee_r * set_scale, tee_c)
+		_number(int(round(middle_px.x)), int(round(middle_px.y)), Defs.yards(hole.length_middle), ink, glyph)
+	if hole.has_tee("forward"):
+		forward_px = _to_px(Vector2(hole.tee_forward.x, hole.tee_forward.z))
+		_dot(forward_px, tee_r * set_scale, tee_c)
+		_number(int(round(forward_px.x)), int(round(forward_px.y)), Defs.yards(hole.length_forward), ink, glyph)
 
 
 func _fit(line: PackedVector2Array, hole: Hole, width: int, height: int, pad: float) -> void:
@@ -226,6 +259,10 @@ func _fit(line: PackedVector2Array, hole: Hole, width: int, height: int, pad: fl
 	pts.append(Vector2(hole.tee.x, hole.tee.z))
 	pts.append(Vector2(end.x, end.z))
 	pts.append(Vector2(hole.pin.x, hole.pin.z))
+	if hole.has_tee("middle"):
+		pts.append(Vector2(hole.tee_middle.x, hole.tee_middle.z))
+	if hole.has_tee("forward"):
+		pts.append(Vector2(hole.tee_forward.x, hole.tee_forward.z))
 	for p in pts:
 		var rel := p - _anchor
 		var across := rel.dot(_right)

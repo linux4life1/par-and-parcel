@@ -38,6 +38,7 @@ var preview: Dictionary = {}    # the par and yardage label while a hole is laid
 var ground: Dictionary = {}     # waste and stream prices, and the waste lie's trouble
 var pins: Dictionary = {}       # where the day's cup sits, and how it wears the green
 var yardage: Dictionary = {}    # the printed hole diagram on the scorecard
+var tees: Dictionary = {}       # middle and forward tees, and who plays which
 var rating: Dictionary = {}    # scratch score and slope, apart from the 0–100 reputation rating
 var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
@@ -86,6 +87,7 @@ func _init() -> void:
 	preview = _load("preview")
 	pins = _load("pins")
 	yardage = _load("yardage")
+	tees = _load("tees")
 	rating = _load("rating")
 	CourseRating.use(rating)
 	names = _load("names")
