@@ -5520,8 +5520,35 @@ func _test_pins() -> void:
 	sim.time = Defs.DAY_SECONDS * 4.0
 	sim.move_pins()
 	check(hole.pin.distance_squared_to(sunday) < 0.01 and sim.pin_spot_name(hole) == "held", "a day during the tournament does not move the Sunday pin")
+	_test_pin_count()
 	_test_pin_rules()
 	_test_cup_target()
+
+
+## A cup left waiting has to survive a save, and removing that hole has to
+## forget it. The count is what lets settle_pins return without looking.
+func _test_pin_count() -> void:
+	print("-- a waiting cup is counted")
+	var sim := _sim("sandbox", 62)
+	var course := sim.course
+	check(sim.paint(40, 50, 6, Defs.T.GREEN) > 0 and sim.paint(80, 50, 6, Defs.T.GREEN) > 0, "two greens for the waiting count")
+	var kept := sim.add_hole(course.tile_center(40, 28), course.tile_center(40, 50))
+	sim.add_hole(course.tile_center(80, 28), course.tile_center(80, 50))
+	check(sim.hire("greenkeeper"), "a greenkeeper so a cup can wait")
+	sim.time = Defs.DAY_SECONDS
+	var marker := Group.new()
+	kept.groups.append(marker)
+	var stayed := kept.pin
+	sim.move_pins()
+	check(kept.pin.distance_squared_to(stayed) < 0.01 and kept.pin_due >= 0 and sim._cups_waiting == 1, "one busy hole leaves one cup waiting")
+	var loaded := Sim.from_dict(db, JSON.parse_string(JSON.stringify(sim.to_dict())), gear)
+	var loaded_hole: Hole = loaded.course.holes[0]
+	check(loaded._cups_waiting == 1 and loaded_hole.pin_due >= 0 and loaded_hole.pin.distance_squared_to(stayed) < 0.01, "a loaded game still counts the cup that was waiting")
+	loaded_hole.groups.clear()
+	loaded.settle_pins()
+	check(loaded_hole.pin.distance_squared_to(stayed) > 1.0 and loaded_hole.pin_due < 0 and loaded._cups_waiting == 0, "settle_pins sets that cup once the loaded hole is clear")
+	sim.remove_hole(0)
+	check(sim._cups_waiting == 0 and sim.course.holes.size() == 1, "removing the hole that had a cup waiting drops the count to zero")
 
 
 func _clear_of_fringe(c: Course, x: float, z: float) -> float:
@@ -5812,7 +5839,10 @@ func _test_pin_rules() -> void:
 	turning.events.timer = 99999.0
 	for hole in still.course.holes:
 		hole.pin_locked = true
-	var days := 4 * Defs.DAYS_PER_MONTH
+	# Two months, not four. The eight-seed week is separate. This pair is
+	# what shows the cup leaving the placed pin, and it still has to clear
+	# a hundred mornings.
+	var days := 2 * Defs.DAYS_PER_MONTH
 	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
 	var moved_mornings := 0
 	var prev_day := turning.day()
@@ -5921,12 +5951,13 @@ func _test_cup_target() -> void:
 	check(at_held > at_new + 1.0, "the routing field is rebuilt when the cup moves")
 
 
-## One month, eight seeds. Four months of both cups was most of the suite's
-## time. A seed may not finish worse than the locked pin by more than 3
-## weed points or 0.02 condition, so a good seed cannot cancel a bad one.
+## One week, eight seeds. A month of both cups, eight times, still left the
+## headless step over eight minutes, and this comparison was most of that.
+## A seed may not finish worse than the locked pin by more than 3 weed
+## points or 0.02 condition, so a good seed cannot cancel a bad one.
 ## The mean still has to stay inside a point.
 func _test_pin_seasons() -> void:
-	print("-- eight seasons of one month, the day's cup against a pin left where it was placed")
+	print("-- eight seasons of one week, the day's cup against a pin left where it was placed")
 	var seeds: Array[int] = [51, 7, 99, 12345, 3, 13, 21, 42]
 	var weed_sum := 0.0
 	var cond_sum := 0.0
@@ -5954,7 +5985,7 @@ func _pin_season(seed_value: int) -> Vector2:
 	turning.events.timer = 99999.0
 	for hole in still.course.holes:
 		hole.pin_locked = true
-	var days := Defs.DAYS_PER_MONTH
+	var days := 7
 	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
 	for _i in steps:
 		still.step(1.0 / 60.0)
