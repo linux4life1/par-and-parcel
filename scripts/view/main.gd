@@ -5,6 +5,7 @@ extends Node3D
 var terrain := TerrainView.new()
 var grass := GrassView.new()
 var world := WorldView.new()
+var arrows := SlopeArrows.new()
 var crowd := CrowdView.new()    # the gallery at a tournament
 var fx := FxView.new()          # sand, turf, water and ember bursts
 var rig := CameraRig.new()
@@ -45,6 +46,7 @@ func _ready() -> void:
 	add_child(terrain)
 	add_child(grass)
 	add_child(world)
+	add_child(arrows)
 	add_child(crowd)
 	add_child(fx)
 	add_child(volcano)
@@ -69,6 +71,9 @@ func _ready() -> void:
 	hud.rig = rig
 	hud.world = world
 	hud.terrain = terrain
+	arrows.rig = rig
+	arrows.play = play
+	hud.arrows = arrows
 	tools.selection_changed.connect(hud.inspect)
 	tools.hole_added.connect(func(_i: int) -> void: hud.open_dock("holes"))
 	play.started.connect(func() -> void:
@@ -272,6 +277,7 @@ func _on_sim_changed() -> void:
 	fx.bind(sim, rig)
 	volcano.bind(sim, rig, terrain)
 	tools.bind(sim)
+	arrows.set_sim(sim)
 	hud.bind(sim)
 	var fresh := sim.course.holes.is_empty() and sim.time < 1.0
 	var scripted_run := Game.args.has("shot") or Game.args.has("exit")
@@ -417,14 +423,14 @@ func _process(delta: float) -> void:
 #   --ragetest[=toss] (a golfer has a tantrum; the camera follows them off)
 #   --weeds=all|N (the course goes to weeds: a west-to-east gradient, or N random tiles)
 #   --swatch (a band of firm fairway and a band of fast green on the first hole)
-#   --tee=N (centre on hole N's tee box)
+#   --tee=N (centre on hole N's tee box) --pin=N (centre on its green)
 #   --day=N (jump to a day of the year: 0 March 1st, 168 the first of September)
 #   --stories=<id|1> (the Feed panel's Stories tab, starting that story first)
 #   --tutorial (start the guided first round) --demo=tutorial (drive it through every step)
 #   --loadingcard (hold the loading screen up) --demo=menuload (save, then load through the Menu)
 #   --soundcheck --soundlog (see sound_desk.gd)
 #   Without --shot the game opens its normal full-size window; add --exit to quit after --frames.
-#   --play=hole --overlay=0..6 --staff=N --demo=name --perf=1
+#   --play=hole --overlay=0..7 --staff=N --demo=name --perf=1
 #   --exit=1 quits after --frames without a screenshot (tests a normal launch)
 func _apply_test_args() -> void:
 	var a := Game.args
@@ -618,6 +624,11 @@ func _apply_test_args() -> void:
 		var hi := clampi(int(a.tee) - 1, 0, sim.course.holes.size() - 1)
 		if hi >= 0 and hi < sim.course.holes.size():
 			rig.center_on(sim.course.holes[hi].tee, float(a.get("zoom", "40")))
+			rig.dist = rig.target_dist
+	if a.has("pin"):
+		var hi := clampi(int(a.pin) - 1, 0, sim.course.holes.size() - 1)
+		if hi >= 0 and hi < sim.course.holes.size():
+			rig.center_on(sim.course.holes[hi].pin, float(a.get("zoom", "40")))
 			rig.dist = rig.target_dist
 	if a.has("yaw"):
 		rig.yaw = deg_to_rad(float(a.yaw))

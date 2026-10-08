@@ -14,7 +14,14 @@ uniform vec2 map_size = vec2(128.0, 128.0);
 uniform float tile_size = 5.0;
 uniform float grid_alpha = 0.0;
 uniform float contour_alpha = 0.0;
-uniform int overlay = 0;            // 0 off, 1 moisture, 2 turf health, 3 height, 4 mood, 5 lot value, 6 lights (4, 5 and 6 store that in alpha, not weeds)
+uniform int overlay = 0;            // 0 off, 1 moisture, 2 turf health, 3 height, 4 mood, 5 lot value, 6 lights, 7 slope (4, 5 and 6 store that in alpha, not weeds)
+uniform sampler2D slope_tex : filter_linear, repeat_disable;   // grade in percent, from the same reading as the arrows
+uniform float slope_green_full = 4.0;   // percent that reads as the steepest colour on a green
+uniform float slope_course_full = 20.0; // and on the rest of the course
+uniform vec3 slope_c0 = vec3(0.82, 0.80, 0.68);
+uniform vec3 slope_c1 = vec3(0.55, 0.66, 0.36);
+uniform vec3 slope_c2 = vec3(0.72, 0.52, 0.24);
+uniform vec3 slope_c3 = vec3(0.45, 0.22, 0.16);
 uniform vec3 brush = vec3(0.0, 0.0, -1.0);   // x, z, radius; negative radius hides it
 uniform vec3 brush_color : source_color = vec3(1.0, 1.0, 1.0);
 uniform vec4 land_rect = vec4(0.0);          // x0, z0, x1, z1 of a highlighted land parcel
@@ -369,6 +376,22 @@ void fragment() {
 		float lit = clamp(weeds, 0.0, 1.0);
 		vec3 lcol = mix(lin(vec3(0.05, 0.07, 0.14)), lin(vec3(1.0, 0.93, 0.62)), lit);
 		col = lcol * (0.45 + 1.4 * luma);
+	} else if (overlay == 7) {
+		// Grade in percent. Greens use a finer scale so 1 to 4% still reads.
+		vec2 suv = clamp(wp / (map_size * tile_size), vec2(0.001), vec2(0.999));
+		float pct = texture(slope_tex, suv).r;
+		float fine = smoothstep(0.35, 0.7, w_green);
+		float span = max(mix(slope_course_full, slope_green_full, fine), 0.001);
+		float t = clamp(pct / span, 0.0, 1.0);
+		vec3 scol = slope_c0;
+		if (t < 0.333) {
+			scol = mix(slope_c0, slope_c1, t / 0.333);
+		} else if (t < 0.666) {
+			scol = mix(slope_c1, slope_c2, (t - 0.333) / 0.333);
+		} else {
+			scol = mix(slope_c2, slope_c3, (t - 0.666) / 0.334);
+		}
+		col = lin(scol) * (0.55 + 1.6 * luma);
 	}
 
 	// land you do not own yet is washed out and hatched
