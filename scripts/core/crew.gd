@@ -447,7 +447,7 @@ func _finish_job(m: Member) -> void:
 		_clear_mess(course, i)
 		return
 	var tx := i % course.w
-	var ty := i / course.w
+	var ty := int(i / course.w)
 	var reach := 2      # a mower pass or a treatment covers a five by five patch
 	for y in range(ty - reach, ty + reach + 1):
 		for x in range(tx - reach, tx + reach + 1):
@@ -457,7 +457,7 @@ func _finish_job(m: Member) -> void:
 			if m.role.id == "exterminator":
 				course.pests[j] = 0.0
 			elif Defs.T_GRASS[course.terrain[j]]:
-				course.health[j] = minf(1.0, course.health[j] + 0.9)
+				sim.grounds.repair_tile(j)
 				course.weeds[j] = 0.0
 
 

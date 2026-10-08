@@ -1977,7 +1977,7 @@ func _rebuild_holes() -> void:
 		var hole := sim.course.holes[i]
 		# pin
 		var pin_at := Node3D.new()
-		pin_at.position = hole.pin
+		pin_at.position = hole.aim_at()
 		_hole_root.add_child(pin_at)
 		var pin := Node3D.new()
 		pin_at.add_child(pin)
@@ -2017,7 +2017,7 @@ func _rebuild_holes() -> void:
 		var tee := Node3D.new()
 		tee_at.add_child(tee)
 		_hole_nodes.append(tee)
-		var dir := (hole.pin - hole.tee)
+		var dir := (hole.aim_at() - hole.tee)
 		dir.y = 0.0
 		dir = dir.normalized()
 		var side := Vector3(-dir.z, 0, dir.x)

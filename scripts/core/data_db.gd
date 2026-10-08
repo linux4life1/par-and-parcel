@@ -35,6 +35,7 @@ var slope: Dictionary = {}      # how the ground is read, and how the marks are 
 var debt: Dictionary = {}       # how a balance below zero meets a new arrival
 var undo: Dictionary = {}       # how many build steps can be taken back
 var preview: Dictionary = {}    # the par and yardage label while a hole is laid out
+var pins: Dictionary = {}       # where the day's cup sits, and how it wears the green
 var yardage: Dictionary = {}    # the printed hole diagram on the scorecard
 var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
@@ -79,6 +80,7 @@ func _init() -> void:
 	debt = _load("debt")
 	undo = _load("undo")
 	preview = _load("preview")
+	pins = _load("pins")
 	yardage = _load("yardage")
 	names = _load("names")
 	feed = _load("feed")

@@ -5,6 +5,18 @@ extends RefCounted
 
 var tee := Vector3.ZERO
 var pin := Vector3.ZERO
+## Where the pin was placed. Par and length are measured to here, so the
+## day's cup can move along the green without rewriting the card.
+var placed := Vector3.ZERO
+## 0 middle, 1 front, 2 back. The names live in data/pins.json.
+var pin_spot := 0
+## The owner asked the greenkeepers to leave this cup where it is.
+var pin_locked := false
+## A tournament is holding this pin. The morning rotation leaves it alone.
+var pin_held := false
+## The morning's spot, waiting because a group is still playing the hole.
+## -1 when nothing is waiting.
+var pin_due := -1
 var par := 4
 var length := 0.0
 ## Centreline of the hole the way it is meant to be played, tee to pin, in
@@ -96,6 +108,7 @@ var _fw := 0
 var _fh := 0
 var _field_rev := -1
 var _field_time := -1000.0
+var _field_cup := Vector2(-1.0e8, -1.0e8)
 # scratch heap
 var _hk := PackedFloat32Array()
 var _hv := PackedInt32Array()
@@ -106,8 +119,24 @@ var _pop_key := 0.0
 var playable := true
 
 
+## The pin the hole was designed around. The day's cup is `pin`.
+func design_pin() -> Vector3:
+	if placed.length_squared() > 0.01:
+		return placed
+	return pin
+
+
+## Where the ball is holed and the flag stands: the day's cup. A group
+## already on the hole keeps the cup it teed off to, because that cup is
+## not moved until the group has holed out. Par and length stay on the
+## placed pin.
+func aim_at() -> Vector3:
+	return pin
+
+
 func straight_length() -> float:
-	return Vector2(pin.x - tee.x, pin.z - tee.z).length()
+	var end := design_pin()
+	return Vector2(end.x - tee.x, end.z - tee.z).length()
 
 
 static func par_for(metres: float) -> int:
@@ -185,14 +214,15 @@ func _polyline_length(pts: PackedVector2Array) -> float:
 ## has a finite step cost, so a pin on the map is always reached, water
 ## ring or not.
 func _route(course: Course) -> Dictionary:
+	var end := design_pin()
 	var a := Vector2(tee.x, tee.z)
-	var b := Vector2(pin.x, pin.z)
+	var b := Vector2(end.x, end.z)
 	var chord := PackedVector2Array([a, b])
 	if a.distance_to(b) < 1.0 or _segment_clear(course, a, b):
 		return {"line": chord, "reached": true}
 	var margin := 18
 	var tt := course.tile_of(tee.x, tee.z)
-	var pt := course.tile_of(pin.x, pin.z)
+	var pt := course.tile_of(end.x, end.z)
 	if not course.in_bounds(tt.x, tt.y) or not course.in_bounds(pt.x, pt.y):
 		return {"line": chord, "reached": false}
 	var fx := clampi(mini(tt.x, pt.x) - margin, 0, course.w - 1)
@@ -334,7 +364,8 @@ func direction_at(t: float) -> Vector2:
 	var pb := _point_flat(minf(t + 0.03, 1.0))
 	var d := pb - pa
 	if d.length_squared() < 0.01:
-		d = Vector2(pin.x - tee.x, pin.z - tee.z)
+		var end := design_pin()
+		d = Vector2(end.x - tee.x, end.z - tee.z)
 	if d.length_squared() < 0.01:
 		return Vector2(1.0, 0.0)
 	return d.normalized()
@@ -343,7 +374,8 @@ func direction_at(t: float) -> Vector2:
 func _point_flat(t: float) -> Vector2:
 	var pts := route
 	if pts.size() < 2:
-		return Vector2(tee.x, tee.z).lerp(Vector2(pin.x, pin.z), clampf(t, 0.0, 1.0))
+		var end := design_pin()
+		return Vector2(tee.x, tee.z).lerp(Vector2(end.x, end.z), clampf(t, 0.0, 1.0))
 	var total := 0.0
 	for i in range(1, pts.size()):
 		total += pts[i - 1].distance_to(pts[i])
@@ -371,6 +403,8 @@ func _line_stamp() -> int:
 func snap_to_ground(course: Course) -> void:
 	tee.y = course.height_at(tee.x, tee.z)
 	pin.y = course.height_at(pin.x, pin.z)
+	if placed.length_squared() > 0.01:
+		placed.y = course.height_at(placed.x, placed.z)
 
 
 func average_score() -> float:
@@ -401,21 +435,26 @@ func share(keys: Array[String]) -> float:
 
 ## Effective distance to the pin from a world position.
 func field_at(course: Course, x: float, z: float, now: float = 0.0) -> float:
-	if _field_rev != course.revision and (_field_rev < 0 or now - _field_time > 4.0):
+	var cup := Vector2(aim_at().x, aim_at().z)
+	var cup_moved := cup.distance_squared_to(_field_cup) > 0.01
+	if cup_moved or (_field_rev != course.revision and (_field_rev < 0 or now - _field_time > 4.0)):
 		_compute_field(course)
 		_field_time = now
 	var tx := int(floor(x / Defs.TILE)) - _fx
 	var ty := int(floor(z / Defs.TILE)) - _fy
 	if tx < 0 or ty < 0 or tx >= _fw or ty >= _fh:
-		return Vector2(pin.x - x, pin.z - z).length() * 1.35 + 20.0
+		var aim := aim_at()
+		return Vector2(aim.x - x, aim.z - z).length() * 1.35 + 20.0
 	return _field[ty * _fw + tx]
 
 
 func _compute_field(course: Course) -> void:
 	_field_rev = course.revision
 	var margin := 14
+	var aim := aim_at()
+	_field_cup = Vector2(aim.x, aim.z)
 	var tt := course.tile_of(tee.x, tee.z)
-	var pt := course.tile_of(pin.x, pin.z)
+	var pt := course.tile_of(aim.x, aim.z)
 	_fx = clampi(mini(tt.x, pt.x) - margin, 0, course.w - 1)
 	_fy = clampi(mini(tt.y, pt.y) - margin, 0, course.h - 1)
 	var x1 := clampi(maxi(tt.x, pt.x) + margin, 0, course.w - 1)
@@ -570,12 +609,15 @@ func touches_water(course: Course) -> bool:
 		var p := point_along(float(k) / float(n))
 		if course.water_near(p.x, p.z, 14.0):
 			return true
-	return course.water_near(pin.x, pin.z, 14.0)
+	var end := design_pin()
+	return course.water_near(end.x, end.z, 14.0)
 
 
 func to_dict() -> Dictionary:
 	return {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
+		"placed": [placed.x, placed.y, placed.z], "pin_spot": pin_spot, "pin_locked": pin_locked,
+		"pin_due": pin_due,
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
@@ -606,6 +648,15 @@ static func from_dict(d: Dictionary) -> Hole:
 	var hole := Hole.new()
 	hole.tee = Vector3(d.tee[0], d.tee[1], d.tee[2])
 	hole.pin = Vector3(d.pin[0], d.pin[1], d.pin[2])
+	if d.has("placed"):
+		var pl: Array = d.placed
+		hole.placed = Vector3(float(pl[0]), float(pl[1]), float(pl[2]))
+		hole.pin_spot = int(d.get("pin_spot", 0))
+	else:
+		hole.placed = hole.pin
+		hole.pin_spot = 0
+	hole.pin_locked = bool(d.get("pin_locked", false))
+	hole.pin_due = int(d.get("pin_due", -1))
 	hole.earned = float(d.get("earned", 0.0))
 	hole.payers = int(d.get("payers", 0))
 	hole.plays = int(d.get("plays", 0))

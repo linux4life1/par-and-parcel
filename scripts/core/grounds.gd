@@ -31,10 +31,20 @@ var _litter_rev := -1
 var _litter_ready := false
 var _bins: Array[Vector2] = []
 var _source_at := {}
+## Plays already counted toward today's cup wear, per hole.
+var _cup_seen := {}
+## Cup wear applied to each tile. Mowing does not clear it, so a test can
+## see where a stationary pin piled up and a moving pin spread out.
+var cup_load := {}
 
 
 func _init(s: Sim) -> void:
 	sim = s
+
+
+## A mower pass repaired this tile. The historical cup total is kept.
+func repair_tile(i: int) -> void:
+	sim.course.health[i] = minf(1.0, sim.course.health[i] + 0.9)
 
 
 ## The course was swapped for another. Rebuild the tile index even when the
@@ -155,13 +165,18 @@ func step(dt: float) -> void:
 		var hv := course.health[i]
 		var pv := course.pests[i]
 		var wd := course.weeds[i]
-		hv -= Defs.T_WEAR[t] * wear
+		var nick := Defs.T_WEAR[t] * wear
+		hv -= nick
 		if drought and wv < 0.1:
 			hv -= 0.0006 * edt
 		# weeds. A landmark nearby slows the sprout, the growth and the spread.
+		# Cup wear is in this health, so a tired cup is a place weeds can take.
 		var calm := sim.weed_scale(i)
+		var seen := hv
+		if seen > 1.0:
+			seen = 1.0
 		if wd <= 0.0:
-			if rng.randf() < weed_p * Defs.T_WEED[t] * (0.5 + wv) * (1.5 - hv * 0.5) * calm:
+			if rng.randf() < weed_p * Defs.T_WEED[t] * (0.5 + wv) * (1.5 - seen * 0.5) * calm:
 				wd = 0.06
 		else:
 			wd = minf(1.0, wd + 0.003 * sim.skills.mult("weed_growth") * edt * calm)
@@ -176,7 +191,8 @@ func step(dt: float) -> void:
 				pv = 0.08
 		else:
 			pv = minf(1.0, pv + 0.006 * edt)
-			hv -= pv * 0.004 * edt
+			var bite := pv * 0.004 * edt
+			hv -= bite
 			if pv > 0.7 and rng.randf() < 0.003 * edt:
 				var ni := _neighbour(i, w, n, rng)
 				if ni >= 0 and Defs.T_GRASS[course.terrain[ni]] and course.pests[ni] <= 0.0:
@@ -194,6 +210,68 @@ func step(dt: float) -> void:
 				_acc_weed += 1.0
 			if pv > 0.3:
 				_acc_pest += 1.0
+	wear_around_pins(dt)
+
+
+## Extra wear on the green around each cup. A cup tires its own green every
+## day, locked or rotating, and a hole that has been played today wears a
+## little more. Moving the pin spreads that wear. It is real health: weeds,
+## the keeper and the condition all read it. The rate uses the same
+## difficulty and skill multipliers as the rest of the turf. `dt` is sim
+## seconds.
+func wear_around_pins(dt: float) -> void:
+	var spec: Dictionary = sim.db.pins
+	var base := float(spec.get("wear", 0.0)) * dt * sim.skills.mult("wear") * sim.diff("wear")
+	if base <= 0.0 or sim.course.holes.is_empty():
+		return
+	var reach_m := float(spec.get("reach", 2.5))
+	var reach := int(ceil(reach_m / Defs.TILE))
+	var course := sim.course
+	var seen := {}
+	for hole in course.holes:
+		var rate := base * _cup_play_scale(hole, spec)
+		var t := course.tile_of(hole.pin.x, hole.pin.z)
+		for ty in range(t.y - reach, t.y + reach + 1):
+			for tx in range(t.x - reach, t.x + reach + 1):
+				if not course.in_bounds(tx, ty):
+					continue
+				var i := ty * course.w + tx
+				if seen.has(i) or not Defs.is_green(course.terrain[i]):
+					continue
+				var centre := course.tile_center(tx, ty)
+				if Vector2(centre.x - hole.pin.x, centre.z - hole.pin.z).length() > reach_m:
+					continue
+				seen[i] = true
+				cup_load[i] = float(cup_load.get(i, 0.0)) + rate
+				course.health[i] = maxf(0.0, course.health[i] - rate)
+
+
+## 1 on a quiet day, up to 1 + played once the hole has been played play_cap
+## times today. The first look records the scorecard so far, so a hole is not
+## charged for rounds that finished before the cup started wearing.
+func _cup_play_scale(hole: Hole, spec: Dictionary) -> float:
+	var id := hole.get_instance_id()
+	var today := sim.day()
+	var known := hole.plays
+	var gain := 0
+	var stamped := today
+	if _cup_seen.has(id):
+		var got: Variant = _cup_seen[id]
+		var rec: Dictionary = got
+		known = int(rec.get("plays", hole.plays))
+		gain = int(rec.get("gain", 0))
+		stamped = int(rec.get("day", today))
+		if stamped != today:
+			gain = maxi(0, hole.plays - known)
+			stamped = today
+		else:
+			gain += maxi(0, hole.plays - known)
+	_cup_seen[id] = {"day": stamped, "plays": hole.plays, "gain": gain}
+	var cap := float(spec.get("play_cap", 4.0))
+	if cap <= 0.0:
+		return 1.0
+	var bonus := float(spec.get("played", 0.0))
+	return 1.0 + bonus * clampf(float(gain) / cap, 0.0, 1.0)
 
 
 ## Keep the bin and source lists current. Rebuilt only when an object moves,
