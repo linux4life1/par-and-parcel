@@ -1,0 +1,10 @@
+{
+  "offset_x": 18,
+  "offset_y": -32,
+  "throttle_frames": 4,
+  "short_metres": 90,
+  "colour": [0.93, 0.96, 0.93, 1],
+  "warn_colour": [0.97, 0.45, 0.4, 1],
+  "line_colour": [0.75, 0.9, 1.0, 0.38],
+  "warn_line_colour": [0.97, 0.55, 0.35, 0.5]
+}

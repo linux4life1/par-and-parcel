@@ -29,8 +29,18 @@ var _warned := -10.0
 var _marker: MeshInstance3D
 var _preview_tile := Vector2i(-999, -999)
 var _preview_text := ""
+var preview_par := 0
+var preview_length := 0.0
+var preview_warn := false
+var _preview_searches := 0
+var _preview_frame := 0
+var _preview_due := 0
 var _ribbon: MeshInstance3D
 var _ribbon_mesh: ImmediateMesh
+var _ribbon_mat: StandardMaterial3D
+var _tag_layer: CanvasLayer
+var _tag: Label
+var _tag_ink := Color(0, 0, 0, 0)
 
 
 func _ready() -> void:
@@ -42,14 +52,26 @@ func _ready() -> void:
 	_ribbon_mesh = ImmediateMesh.new()
 	_ribbon = MeshInstance3D.new()
 	_ribbon.mesh = _ribbon_mesh
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(0.85, 0.95, 1.0)
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	_ribbon.material_override = mat
+	_ribbon_mat = StandardMaterial3D.new()
+	_ribbon_mat.albedo_color = Color(0.75, 0.9, 1.0, 0.38)
+	_ribbon_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_ribbon_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_ribbon_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_ribbon.material_override = _ribbon_mat
 	_ribbon.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_ribbon.visible = false
 	add_child(_ribbon)
+	_tag_layer = CanvasLayer.new()
+	_tag_layer.layer = 30
+	add_child(_tag_layer)
+	_tag = Label.new()
+	_tag.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_tag.add_theme_font_size_override("font_size", 15)
+	_tag.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.85))
+	_tag.add_theme_constant_override("shadow_offset_x", 1)
+	_tag.add_theme_constant_override("shadow_offset_y", 1)
+	_tag.visible = false
+	_tag_layer.add_child(_tag)
 
 
 func bind(s: Sim) -> void:
@@ -66,8 +88,13 @@ func set_mode(m: String) -> void:
 	_tee = null
 	_preview_tile = Vector2i(-999, -999)
 	_preview_text = ""
+	preview_par = 0
+	preview_length = 0.0
+	preview_warn = false
 	if _ribbon != null:
 		_ribbon.visible = false
+	if _tag != null:
+		_tag.visible = false
 	if rig != null:
 		rig.tool_active = m != ""
 	if _marker != null:
@@ -109,7 +136,6 @@ func hint() -> String:
 			if _tee == null:
 				body = "Click where the tee goes."
 			else:
-				_update_preview()
 				body = "Now click a green to place the pin. %s" % _preview_text
 		"land":
 			if sim.land_credits > 0:
@@ -137,30 +163,42 @@ func radius_m() -> float:
 
 
 func _process(delta: float) -> void:
-	if sim == null or terrain == null:
+	if sim == null:
 		return
-	terrain.set_land_rect(Rect2i())
-	if mode == "land" and enabled and hover != null:
-		terrain.hide_brush()
-		var hp: Vector3 = hover
-		var parcel := sim.course.parcel_of(int(hp.x / Defs.TILE), int(hp.z / Defs.TILE))
-		var ok := sim.course.parcel_for_sale(parcel)
-		terrain.set_land_rect(sim.course.parcel_rect(parcel), Color(0.5, 1.0, 0.6) if ok else Color(1.0, 0.45, 0.4))
-	elif station_for != null and enabled and hover != null:
-		terrain.set_brush(hover, sim.crew.home_radius(), Color(0.95, 0.75, 0.35))
-	elif mode == "" or not enabled or hover == null:
-		terrain.hide_brush()
-	else:
-		var col := Color(1.0, 1.0, 1.0)
-		if mode == "bulldoze":
-			col = Color(1.0, 0.5, 0.4)
-		elif mode == "hole":
-			col = Color(0.4, 0.75, 1.0)
-		terrain.set_brush(hover, radius_m(), col)
+	if terrain != null:
+		terrain.set_land_rect(Rect2i())
+		if mode == "land" and enabled and hover != null:
+			terrain.hide_brush()
+			var hp: Vector3 = hover
+			var parcel := sim.course.parcel_of(int(hp.x / Defs.TILE), int(hp.z / Defs.TILE))
+			var ok := sim.course.parcel_for_sale(parcel)
+			terrain.set_land_rect(sim.course.parcel_rect(parcel), Color(0.5, 1.0, 0.6) if ok else Color(1.0, 0.45, 0.4))
+		elif station_for != null and enabled and hover != null:
+			terrain.set_brush(hover, sim.crew.home_radius(), Color(0.95, 0.75, 0.35))
+		elif mode == "" or not enabled or hover == null:
+			terrain.hide_brush()
+		else:
+			var col := Color(1.0, 1.0, 1.0)
+			if mode == "bulldoze":
+				col = Color(1.0, 0.5, 0.4)
+			elif mode == "hole":
+				col = Color(0.4, 0.75, 1.0)
+			terrain.set_brush(hover, radius_m(), col)
+	_preview_frame += 1
 	if mode == "hole" and _tee != null and hover != null:
-		_update_preview()
+		_update_preview(true)
+	elif mode == "hole" and hover == null:
+		# Forget the tile, or coming back to it would skip the search and
+		# leave the line hidden.
+		_preview_text = ""
+		_preview_tile = Vector2i(-999, -999)
+		_preview_due = _preview_frame
+		if _ribbon != null:
+			_ribbon.visible = false
+		_hide_tag()
 	elif _ribbon != null and mode != "hole":
 		_ribbon.visible = false
+		_hide_tag()
 	if _down and mode == "sculpt" and hover != null:
 		_tick -= delta
 		if _tick <= 0.0:
@@ -327,26 +365,85 @@ func _apply() -> void:
 				SoundDesk.ui("remove")
 
 
-## Par and yardage of the hole the pointer would make, and a ribbon along it.
-func _update_preview() -> void:
+## Par and yardage of the hole the pointer would make, and a faint line along
+## the same route the hole will be scored on. `paced` is the per-frame path:
+## the search waits for the throttle in the preview data. A direct call, from
+## a test or the first look, searches as soon as the tile changes.
+func _update_preview(paced: bool = false) -> void:
 	if sim == null or _tee == null or hover == null:
 		_preview_text = ""
+		_hide_tag()
+		if _ribbon != null:
+			_ribbon.visible = false
 		return
 	var p: Vector3 = hover
 	var tile := sim.course.tile_of(p.x, p.z)
 	if tile == _preview_tile and _preview_text != "":
+		_place_tag()
 		return
+	var book := _preview_book()
+	var every := maxi(int(book.get("throttle_frames", 1)), 1)
+	if paced and _preview_frame < _preview_due:
+		_place_tag()
+		return
+	_preview_due = _preview_frame + every
 	_preview_tile = tile
+	_preview_searches += 1
 	var tee: Vector3 = _tee
 	var pin := sim.course.on_ground(p.x, p.z)
-	if Vector2(pin.x - tee.x, pin.z - tee.z).length() < 40.0:
-		_preview_text = "Too short (a hole needs 45 yards)."
-		_show_route(PackedVector2Array())
-		return
 	var measured: Dictionary = Hole.measure(sim.course, tee, pin)
-	_preview_text = "Par %d · %d yd." % [int(measured.par), Defs.yards(float(measured.length))]
+	preview_par = int(measured.par)
+	preview_length = float(measured.length)
+	var short_m := float(book.get("short_metres", 90.0))
+	preview_warn = preview_length < short_m or not bool(measured.playable)
+	_preview_text = "Par %d · %d yd." % [preview_par, Defs.yards(preview_length)]
+	if Vector2(pin.x - tee.x, pin.z - tee.z).length() < 40.0:
+		_preview_text = "Too short (a hole needs 45 yards). " + _preview_text
 	var pts: PackedVector2Array = measured.line
 	_show_route(pts)
+	_place_tag()
+
+
+func _preview_book() -> Dictionary:
+	if sim != null and sim.db != null:
+		return sim.db.preview
+	return {}
+
+
+func _ink(book: Dictionary, key: String, fallback: Color) -> Color:
+	var raw: Variant = book.get(key, [])
+	if raw is Array:
+		var row: Array = raw
+		if row.size() >= 3:
+			var a := 1.0
+			if row.size() > 3:
+				a = float(row[3])
+			return Color(float(row[0]), float(row[1]), float(row[2]), a)
+	return fallback
+
+
+func _place_tag() -> void:
+	if _tag == null:
+		return
+	var vp := get_viewport()
+	if vp == null:
+		return
+	var book := _preview_book()
+	var ink := _ink(book, "warn_colour" if preview_warn else "colour", Color(0.97, 0.45, 0.4) if preview_warn else Color(0.93, 0.96, 0.93))
+	if _tag.text != _preview_text:
+		_tag.text = _preview_text
+	if not _tag_ink.is_equal_approx(ink):
+		_tag.add_theme_color_override("font_color", ink)
+		_tag_ink = ink
+	_tag.visible = _preview_text != ""
+	var origin := vp.get_mouse_position() + Vector2(float(book.get("offset_x", 18.0)), float(book.get("offset_y", -32.0)))
+	var bounds := vp.get_visible_rect().size
+	_tag.position = Vector2(clampf(origin.x, 8.0, maxf(bounds.x - 8.0, 8.0)), clampf(origin.y, 8.0, maxf(bounds.y - 8.0, 8.0)))
+
+
+func _hide_tag() -> void:
+	if _tag != null:
+		_tag.visible = false
 
 
 func _show_route(pts: PackedVector2Array) -> void:
@@ -356,6 +453,9 @@ func _show_route(pts: PackedVector2Array) -> void:
 	if pts.size() < 2:
 		_ribbon.visible = false
 		return
+	var book := _preview_book()
+	if _ribbon_mat != null:
+		_ribbon_mat.albedo_color = _ink(book, "warn_line_colour" if preview_warn else "line_colour", Color(0.75, 0.9, 1.0, 0.38))
 	_ribbon_mesh.surface_begin(Mesh.PRIMITIVE_TRIANGLE_STRIP)
 	for i in pts.size():
 		var p: Vector2 = pts[i]
@@ -366,7 +466,7 @@ func _show_route(pts: PackedVector2Array) -> void:
 			dir = Vector2(1.0, 0.0)
 		else:
 			dir = dir.normalized()
-		var side := Vector2(-dir.y, dir.x) * 0.45
+		var side := Vector2(-dir.y, dir.x) * 0.35
 		var y := sim.course.height_at(p.x, p.y) + 0.35
 		_ribbon_mesh.surface_add_vertex(Vector3(p.x + side.x, y, p.y + side.y))
 		_ribbon_mesh.surface_add_vertex(Vector3(p.x - side.x, y, p.y - side.y))
@@ -391,6 +491,7 @@ func _click_hole(p: Vector3) -> void:
 		_tee = course.tile_center(tile.x, tile.y)
 		_marker.position = (_tee as Vector3) + Vector3(0, 3.0, 0)
 		_marker.visible = true
+		_update_preview()
 		tool_changed.emit()
 		return
 	if not Defs.is_green(course.terrain_at(p.x, p.z)):
