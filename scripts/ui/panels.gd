@@ -1232,6 +1232,11 @@ func _goals(body: VBoxContainer) -> Callable:
 	var recs := UIKit.vbox(3)
 	body.add_child(recs)
 	body.add_child(UIKit.gap(6))
+	body.add_child(UIKit.heading("Design checklist"))
+	body.add_child(UIKit.para("Each line is part of the design score, and the next thing that would raise it. A round's length is listed too, and it does not change the score.", 12))
+	var accred := UIKit.vbox(2)
+	body.add_child(accred)
+	body.add_child(UIKit.gap(6))
 	body.add_child(UIKit.heading("World rankings"))
 	var ranks := UIKit.vbox(2)
 	body.add_child(ranks)
@@ -1280,6 +1285,12 @@ func _goals(body: VBoxContainer) -> Callable:
 		if sim.eruption.has_volcano():
 			recs.add_child(UIKit.row("Eruptions survived", str(sim.stats.eruptions)))
 		recs.add_child(UIKit.row("Your holes played", str(sim.player.holes_played)))
+		UIKit.clear(accred)
+		for row in sim.accreditation():
+			var met := bool(row.met)
+			var head := ("\u2713  " if met else "\u25cb  ") + str(row.text)
+			accred.add_child(UIKit.para(head, 13, UIKit.GOOD if met else UIKit.TEXT))
+			accred.add_child(UIKit.para(str(row.detail), 12, UIKit.MUTED))
 		# the ranking table, with your course slotted in
 		UIKit.clear(ranks)
 		var table: Array = []
