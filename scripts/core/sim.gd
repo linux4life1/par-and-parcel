@@ -347,7 +347,7 @@ func _end_month(d: int) -> void:
 	var prev := Defs.date_parts(d - 1)
 	var label := "%s, Year %d" % [Defs.MONTH_NAMES[prev.month], prev.year]
 	var net := economy.net()
-	economy.close_month(label)
+	economy.close_month(label, rating, visitors.average_satisfaction() if not visitors.recent.is_empty() else -1.0)
 	toast.emit("%s closed: %s%s." % [Defs.MONTH_NAMES[prev.month], "profit of " if net >= 0.0 else "loss of ", Defs.money(absf(net))], "good" if net >= 0.0 else "bad")
 	month_ended.emit(label)
 
@@ -362,12 +362,11 @@ func monthly_upkeep() -> float:
 # ------------------------------------------------------- course standing
 
 func _update_rating(dt: float) -> void:
-	var n := 0
+	var n := course.open_count()
 	var pars := {}
 	var scenery := 0.0
 	for hole in course.holes:
 		if hole.open:
-			n += 1
 			pars[hole.par] = true
 			scenery += scenery_score(hole)
 	if n == 0:
@@ -394,13 +393,12 @@ func _update_rating(dt: float) -> void:
 ## and the next thing that line wants. The points are the score. A round's
 ## length is on the list and adds nothing. Nothing counts until a hole is open.
 func accreditation() -> Array[Dictionary]:
-	var n := 0
+	var n := course.open_count()
 	var pars := {}
 	var scenery := 0.0
 	for hole in course.holes:
 		if not hole.open:
 			continue
-		n += 1
 		pars[hole.par] = true
 		scenery += scenery_score(hole)
 	var am := visitors.amenity_counts()

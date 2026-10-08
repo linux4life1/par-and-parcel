@@ -492,6 +492,24 @@ func remove_hole(i: int) -> void:
 	holes_changed.emit()
 
 
+## Every comment tag on the course, summed across the holes, strongest first.
+func comment_report() -> Array[Dictionary]:
+	var sums := {}
+	for hole in holes:
+		for tag: String in hole.comments:
+			sums[tag] = float(sums.get(tag, 0.0)) + float(hole.comments[tag])
+	var rows: Array[Dictionary] = []
+	for tag: String in sums:
+		rows.append({"tag": str(tag), "total": float(sums[tag])})
+	rows.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		var da := absf(float(a.total))
+		var db := absf(float(b.total))
+		if not is_equal_approx(da, db):
+			return da > db
+		return str(a.tag) < str(b.tag))
+	return rows
+
+
 ## Holes the public may play. Drafts are left out.
 func open_count() -> int:
 	var n := 0
