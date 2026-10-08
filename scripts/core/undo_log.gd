@@ -95,7 +95,8 @@ func commit() -> void:
 	var charged := float(_open["charged"])
 	var gifts: Dictionary = _open["used"]
 	var built := int(sim.stats.get("holes_built", 0)) - int(_open["built"])
-	if not any and not hole_added and is_zero_approx(charged) and gifts.is_empty() and built == 0:
+	var have_turn := _open.has("turn_mark")
+	if not any and not hole_added and is_zero_approx(charged) and gifts.is_empty() and built == 0 and not have_turn:
 		_open = {}
 		return
 	var entry := {
@@ -107,6 +108,8 @@ func commit() -> void:
 	}
 	if hole_added:
 		entry["hole"] = _snap_hole(c.holes[c.holes.size() - 1])
+	if have_turn:
+		entry["turn_mark"] = _open["turn_mark"]
 	past.append(entry)
 	while past.size() > depth:
 		past.pop_front()
@@ -152,12 +155,26 @@ func note_gift(o: int) -> void:
 	used[o] = int(used.get(o, 0)) + 1
 
 
+## A turning point placed during this stroke. Undo takes the stake off and
+## refunds the charge; redo puts the same spot back.
+func note_turn(hole: Hole, at: Vector3) -> void:
+	if not _stroking:
+		return
+	var layout := hole.design_pin()
+	_open["turn_mark"] = {
+		"name": hole.name,
+		"tee": [hole.tee.x, hole.tee.y, hole.tee.z],
+		"pin": [layout.x, layout.y, layout.z],
+		"at": [at.x, at.y, at.z],
+	}
+
+
 func undo() -> bool:
 	if _blocked() or past.is_empty():
 		return false
 	var e: Dictionary = past[past.size() - 1]
 	past.remove_at(past.size() - 1)
-	if not _intact(e, false) or (e.has("hole") and _find_hole(e["hole"]) < 0):
+	if not _intact(e, false) or (e.has("hole") and _find_hole(e["hole"]) < 0) or (e.has("turn_mark") and _find_hole(e["turn_mark"]) < 0):
 		clear()
 		return false
 	if not _apply(e, false):
@@ -200,7 +217,7 @@ func _intact(e: Dictionary, forward: bool) -> bool:
 		var rec: Dictionary = heights[key]
 		if not is_equal_approx(c.heights[vi], float(rec[side])):
 			return false
-	return true
+	return _turn_intact(e, forward)
 
 
 func _blocked() -> bool:
@@ -316,10 +333,49 @@ func _apply(e: Dictionary, forward: bool) -> bool:
 			var at := _find_hole(e["hole"])
 			if at >= 0:
 				sim.remove_hole(at)
+	if not _apply_turn(e, forward):
+		applying = false
+		return false
 	_books(e, forward)
-	if x1 >= 0 or hx1 >= 0 or e.has("hole"):
+	if x1 >= 0 or hx1 >= 0 or e.has("hole") or e.has("turn_mark"):
 		c.revision += 1
 	applying = false
+	return true
+
+
+func _turn_intact(e: Dictionary, forward: bool) -> bool:
+	if not e.has("turn_mark"):
+		return true
+	var snap: Dictionary = e["turn_mark"]
+	var at := _find_hole(snap)
+	if at < 0:
+		return false
+	var hole := sim.course.holes[at]
+	var ad: Array = snap["at"]
+	var pos := Vector3(float(ad[0]), float(ad[1]), float(ad[2]))
+	var there := hole.has_turn(pos)
+	if forward:
+		return not there
+	return there
+
+
+func _apply_turn(e: Dictionary, forward: bool) -> bool:
+	if not e.has("turn_mark"):
+		return true
+	var snap: Dictionary = e["turn_mark"]
+	var at := _find_hole(snap)
+	if at < 0:
+		return false
+	var hole := sim.course.holes[at]
+	var ad: Array = snap["at"]
+	var pos := Vector3(float(ad[0]), float(ad[1]), float(ad[2]))
+	if forward:
+		if hole.has_turn(pos):
+			return false
+		hole.add_turn(pos)
+	else:
+		if not hole.remove_turn(pos):
+			return false
 	return true
 
 

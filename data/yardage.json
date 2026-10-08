@@ -11,6 +11,7 @@
 	"label_gap": 8,
 	"tee_dot": 0.99,
 	"pin_dot": 0.88,
+	"turn_dot": 2.2,
 	"flag": 4.84,
 	"colours": {
 		"paper": "f4f0e6",
@@ -30,6 +31,7 @@
 		"line": "1c1914",
 		"tee_mark": "1c1914",
 		"pin": "8e2e2e",
+		"turn_mark": "8a5a2b",
 		"ink": "1c1914"
 	}
 }

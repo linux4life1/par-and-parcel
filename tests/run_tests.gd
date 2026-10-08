@@ -80,6 +80,7 @@ func _ready() -> void:
 	_test_undo()
 	_test_undo_books()
 	_test_yardage()
+	_test_turns()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -6537,3 +6538,90 @@ func _test_yardage() -> void:
 	var kept_draws := kept.draws
 	kept.ensure(c, other_hole)
 	check(kept == second and lost == first and kept.draws == kept_draws and is_equal_approx(kept.path_metres, second_len) and not is_equal_approx(first_len, second_len), "after a hole is removed, reopening the panel keeps each card with its own hole")
+
+
+func _test_turns() -> void:
+	print("-- turning points")
+	var sim := _sim("sandbox", 19)
+	sim.economy.money = 10000.0
+	var c := sim.course
+	for leg_y in range(20, 46):
+		c.set_terrain(30, leg_y, Defs.T.FAIRWAY)
+	for leg_x in range(30, 51):
+		c.set_terrain(leg_x, 45, Defs.T.FAIRWAY)
+	c.set_terrain(30, 20, Defs.T.TEE)
+	for green_y in range(-1, 2):
+		for green_x in range(-1, 2):
+			c.set_terrain(50 + green_x, 45 + green_y, Defs.T.GREEN)
+	var hole := sim.add_hole(c.tile_center(30, 20), c.tile_center(50, 45))
+	check(hole != null, "a dogleg can be laid out")
+	if hole == null:
+		return
+	var par0 := hole.par
+	var len0 := hole.length
+	var price := float(db.turns.get("price", -1.0))
+	var on_line := float(db.turns.get("on_line", -1.0))
+	var gap := float(db.turns.get("gap", -1.0))
+	var cap := int(db.turns.get("max", 0))
+	check(is_equal_approx(price, 15.0) and on_line > 0.0 and gap > 0.0 and cap >= 2, "turning-point price, tolerance and limit live in the turns file")
+	var first_at := hole.point_along(0.35)
+	var second_at := hole.point_along(0.70)
+	var tee_flat := Vector2(hole.tee.x, hole.tee.z)
+	var pin_flat := Vector2(hole.design_pin().x, hole.design_pin().z)
+	var chord := pin_flat - tee_flat
+	var chord_len := chord.length()
+	var side := Vector2(0.0, 1.0)
+	if chord_len > 0.01:
+		var dir := chord / chord_len
+		side = Vector2(-dir.y, dir.x)
+	var bend := Vector2(first_at.x, first_at.z)
+	var off_at := bend + side * (on_line + 4.0)
+	var cash := sim.economy.money
+	var why_off := sim.place_turn(hole, Vector3(off_at.x, 0.0, off_at.y))
+	check(why_off != "" and hole.turns.is_empty() and is_equal_approx(sim.economy.money, cash), "a marker off the line of play is refused (%s)" % why_off)
+	sim.economy.money = price - 1.0
+	var why_broke := sim.place_turn(hole, Vector3(bend.x, 0.0, bend.y))
+	check(why_broke != "" and hole.turns.is_empty() and is_equal_approx(sim.economy.money, price - 1.0), "a marker you can't afford is refused and charges nothing (%s)" % why_broke)
+	sim.economy.money = cash
+	var card := YardageCard.new(db.yardage)
+	card.ensure(c, hole)
+	var drawn := card.draws
+	var why_bend := sim.place_turn(hole, Vector3(bend.x, 0.0, bend.y))
+	check(why_bend == "" and hole.turns.size() == 1 and hole.par == par0 and is_equal_approx(hole.length, len0) and is_equal_approx(cash - sim.economy.money, price), "a stake on the line of play leaves par and length alone (%s)" % why_bend)
+	card.ensure(c, hole)
+	var turn_col := Color.html(str((db.yardage["colours"] as Dictionary).get("turn_mark", "8a5a2b")))
+	var marked := false
+	if card.turn_px.size() == 1:
+		var dot := card.image.get_pixel(int(round(card.turn_px[0].x)), int(round(card.turn_px[0].y)))
+		marked = dot.is_equal_approx(turn_col)
+	check(card.draws == drawn + 1 and marked, "the yardage diagram draws the turning point")
+	var why_next := sim.place_turn(hole, second_at)
+	check(why_next == "" and hole.turns.size() == 2 and hole.par == par0 and is_equal_approx(hole.length, len0), "a second stake further along the line is kept (%s)" % why_next)
+	var parts := hole.turn_lengths()
+	var sum := 0.0
+	for part in parts:
+		sum += part
+	var named := hole.turn_line()
+	var named_ok := named != ""
+	for shown in parts:
+		if not named.contains("%d yd" % Defs.yards(shown)):
+			named_ok = false
+	check(parts.size() == hole.turns.size() + 1 and is_equal_approx(sum, hole.length) and named_ok, "the yardage between markers sums to the hole length (%s, %.2f against %.2f)" % [named, sum, hole.length])
+	var spent := sim.economy.money
+	check(sim.undo.undo() and hole.turns.size() == 1 and is_equal_approx(sim.economy.money, spent + price), "undo of a marker refunds it")
+	check(sim.undo.redo() and hole.turns.size() == 2 and is_equal_approx(sim.economy.money, spent), "redo of a marker charges it again")
+	var text := JSON.stringify(sim.to_dict())
+	var packed: Dictionary = JSON.parse_string(text)
+	var saved_holes: Array = packed["course"]["holes"]
+	var saved: Dictionary = saved_holes[0]
+	check(saved.has("turns"), "a save with turning points stores them")
+	var modern := Sim.from_dict(db, JSON.parse_string(text), gear)
+	var loaded: Hole = modern.course.holes[0]
+	var loaded_sum := 0.0
+	for loaded_part in loaded.turn_lengths():
+		loaded_sum += loaded_part
+	check(loaded.turns.size() == 2 and is_equal_approx(loaded_sum, loaded.length) and loaded.par == par0 and is_equal_approx(loaded.length, len0), "save and load keep the turning points, and the stretches still add up")
+	saved.erase("turns")
+	var legacy := Sim.from_dict(db, packed, gear)
+	var old_hole: Hole = legacy.course.holes[0]
+	check(old_hole.turns.is_empty() and old_hole.par == par0 and is_equal_approx(old_hole.length, len0), "an old save loads with no turning points")

@@ -23,6 +23,9 @@ var length := 0.0
 ## world x/z. Par and yardage are the length of this line, not the chord.
 ## Named route because `line` is the queue of parties waiting on the tee.
 var route := PackedVector2Array()
+## Stakes on the line of play, where the player says a dogleg changes
+## direction. Ordered from the tee. Par and length do not use them.
+var turns: Array[Vector3] = []
 ## False while the hole is a draft. Paying golfers skip it until it is opened.
 ## Generated holes and old saves stay open.
 var open := true
@@ -613,8 +616,124 @@ func touches_water(course: Course) -> bool:
 	return course.water_near(end.x, end.z, 14.0)
 
 
+## Closest point of the line of play. `along` is metres from the tee,
+## `off` is metres away from the line, `point` is on the line.
+func route_snap(at: Vector2) -> Dictionary:
+	var pts := route
+	if pts.size() < 2:
+		var end := design_pin()
+		pts = PackedVector2Array([Vector2(tee.x, tee.z), Vector2(end.x, end.z)])
+	var best_off := 1000000.0
+	var best_along := 0.0
+	var best_pt := pts[0]
+	var walked := 0.0
+	for i in range(1, pts.size()):
+		var a := pts[i - 1]
+		var b := pts[i]
+		var seg := b - a
+		var span := seg.length()
+		var u := 0.0
+		if span > 0.0001:
+			u = clampf((at - a).dot(seg) / (span * span), 0.0, 1.0)
+		var p := a.lerp(b, u)
+		var off := at.distance_to(p)
+		if off < best_off:
+			best_off = off
+			best_along = walked + span * u
+			best_pt = p
+		walked += span
+	return {"along": best_along, "off": best_off, "point": best_pt}
+
+
+## Metres of each stretch from the tee, through each stake, to the pin.
+## They add up to the hole's length.
+func turn_lengths() -> PackedFloat32Array:
+	var cuts: Array[float] = []
+	for m in turns:
+		var snap := route_snap(Vector2(m.x, m.z))
+		cuts.append(clampf(float(snap["along"]), 0.0, length))
+	cuts.sort()
+	var parts := PackedFloat32Array()
+	var prev := 0.0
+	for c in cuts:
+		var step := c - prev
+		if step < 0.0:
+			step = 0.0
+		parts.append(step)
+		prev = c
+	var tail := length - prev
+	if tail < 0.0:
+		tail = 0.0
+	parts.append(tail)
+	return parts
+
+
+## Yardage between the tee, the stakes and the pin, for the hole card.
+func turn_line() -> String:
+	if turns.is_empty():
+		return ""
+	var parts := turn_lengths()
+	var bits: PackedStringArray = []
+	for span in parts:
+		bits.append("%d yd" % Defs.yards(span))
+	return "  ·  ".join(bits)
+
+
+func has_turn(at: Vector3) -> bool:
+	for m in turns:
+		if Vector2(m.x - at.x, m.z - at.z).length_squared() < 0.05:
+			return true
+	return false
+
+
+func add_turn(at: Vector3) -> void:
+	turns.append(at)
+	_sort_turns()
+
+
+func remove_turn(at: Vector3) -> bool:
+	for i in turns.size():
+		var m := turns[i]
+		if Vector2(m.x - at.x, m.z - at.z).length_squared() < 0.05:
+			turns.remove_at(i)
+			return true
+	return false
+
+
+func _sort_turns() -> void:
+	for i in range(1, turns.size()):
+		var key := turns[i]
+		var key_snap := route_snap(Vector2(key.x, key.z))
+		var along := float(key_snap["along"])
+		var j := i - 1
+		while j >= 0:
+			var other := route_snap(Vector2(turns[j].x, turns[j].z))
+			if float(other["along"]) <= along:
+				break
+			turns[j + 1] = turns[j]
+			j -= 1
+		turns[j + 1] = key
+
+
+## Empty when this spot may take a stake. Otherwise the reason it may not.
+func refuse_turn(at: Vector3, on_line: float, gap: float, cap: int) -> String:
+	if turns.size() >= cap:
+		return "This hole has all the turning points it can take."
+	var snap := route_snap(Vector2(at.x, at.z))
+	if float(snap["off"]) > on_line:
+		return "Put it on the line of play."
+	var along := float(snap["along"])
+	if along < gap or length - along < gap:
+		return "Put it between the tee and the green."
+	for m in turns:
+		var other := route_snap(Vector2(m.x, m.z))
+		if absf(float(other["along"]) - along) < gap:
+			return "That turn is already marked."
+	return ""
+
+
 func to_dict() -> Dictionary:
-	return {
+	var d := {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
 		"placed": [placed.x, placed.y, placed.z], "pin_spot": pin_spot, "pin_locked": pin_locked,
 		"pin_due": pin_due,
@@ -624,6 +743,12 @@ func to_dict() -> Dictionary:
 		"name": name, "award": award, "themes": themes, "gap": gap, "comments": comments, "open": open,
 		"play_times": play_times,
 	}
+	if not turns.is_empty():
+		var pts: Array = []
+		for m in turns:
+			pts.append([m.x, m.y, m.z])
+		d["turns"] = pts
+	return d
 
 
 static var _known_themes := {}
@@ -686,6 +811,13 @@ static func from_dict(d: Dictionary) -> Hole:
 			continue
 		hole.themes.append(name)
 	hole.comments = d.get("comments", {})
+	if d.has("turns"):
+		var raw: Array = d["turns"]
+		for row in raw:
+			if row is Array:
+				var rec: Array = row
+				if rec.size() >= 3:
+					hole.turns.append(Vector3(float(rec[0]), float(rec[1]), float(rec[2])))
 	# Par is filled in properly once the ground is loaded (Course.from_dict).
 	# Until then, a save that recorded one keeps it, and an older save keeps
 	# the straight-line par its rounds were scored against.

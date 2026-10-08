@@ -1,0 +1,7 @@
+{
+	"_about": "Stakes the player puts on the line of play where a dogleg changes direction. The price is a boulder's. A click more than on_line metres off that line is refused. gap is how close, in metres, a stake may sit to the tee, the green or another stake. max is how many one hole can carry. Par and length stay on the line as it is.",
+	"price": 15,
+	"on_line": 3.0,
+	"gap": 4.0,
+	"max": 4
+}

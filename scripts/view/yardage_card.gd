@@ -22,6 +22,8 @@ var image: Image
 var draws := 0
 var tee_px := Vector2.ZERO
 var pin_px := Vector2.ZERO
+## Player-marked turning points, in picture pixels. Empty when the hole has none.
+var turn_px: Array[Vector2] = []
 ## Length, in metres, of the line drawn on the card.
 var path_metres := 0.0
 
@@ -89,6 +91,7 @@ func _ends(hole: Hole) -> int:
 	for p in hole.route:
 		h = _mix(h, int(round(p.x * 10.0)))
 		h = _mix(h, int(round(p.y * 10.0)))
+	h = _mix_turns(h, hole)
 	return h
 
 
@@ -105,6 +108,7 @@ func _signature(course: Course, hole: Hole) -> int:
 	for p in hole.route:
 		h = _mix(h, int(round(p.x * 10.0)))
 		h = _mix(h, int(round(p.y * 10.0)))
+	h = _mix_turns(h, hole)
 	var box := _region(course, hole)
 	var x0 := int(box.x0)
 	var y0 := int(box.y0)
@@ -120,6 +124,14 @@ func _signature(course: Course, hole: Hole) -> int:
 
 func _mix(h: int, v: int) -> int:
 	return (h * 16777619) ^ v
+
+
+func _mix_turns(h: int, hole: Hole) -> int:
+	h = _mix(h, hole.turns.size())
+	for m in hole.turns:
+		h = _mix(h, int(round(m.x * 10.0)))
+		h = _mix(h, int(round(m.z * 10.0)))
+	return h
 
 
 ## Tiles the picture covers: the line of play, plus a margin from the data.
@@ -208,6 +220,8 @@ func _draw(course: Course, hole: Hole) -> void:
 	_dot(pin_px, pin_r, pin_c)
 	_stroke(pin_px, pin_px + Vector2(0.0, -flag), 1.0, pin_c)
 	_yards(line, ink, float(_book.get("label_gap", 8.0)))
+	var turn_c := _hex(str(colours.get("turn_mark", "8a5a2b")))
+	_turn_marks(hole, turn_c, ink)
 
 
 func _fit(line: PackedVector2Array, hole: Hole, width: int, height: int, pad: float) -> void:
@@ -226,6 +240,8 @@ func _fit(line: PackedVector2Array, hole: Hole, width: int, height: int, pad: fl
 	pts.append(Vector2(hole.tee.x, hole.tee.z))
 	pts.append(Vector2(end.x, end.z))
 	pts.append(Vector2(hole.pin.x, hole.pin.z))
+	for m in hole.turns:
+		pts.append(Vector2(m.x, m.z))
 	for p in pts:
 		var rel := p - _anchor
 		var across := rel.dot(_right)
@@ -279,6 +295,30 @@ func _yards(line: PackedVector2Array, ink: Color, gap: float) -> void:
 				_number(int(round(px.x)), int(round(px.y)), Defs.yards(carried), ink, glyph)
 				last = px
 		prev = step
+
+
+func _turn_marks(hole: Hole, col: Color, ink: Color) -> void:
+	turn_px.clear()
+	var radius := float(_book.get("turn_dot", 2.2))
+	var glyph := maxi(int(_book.get("glyph", 1)), 1)
+	for m in hole.turns:
+		var px := _to_px(Vector2(m.x, m.z))
+		turn_px.append(px)
+		_dot(px, radius, col)
+	if hole.turns.is_empty():
+		return
+	var parts := hole.turn_lengths()
+	var spots: Array[Vector2] = [Vector2(hole.tee.x, hole.tee.z)]
+	for stake in hole.turns:
+		spots.append(Vector2(stake.x, stake.z))
+	var end := hole.design_pin()
+	spots.append(Vector2(end.x, end.z))
+	for i in parts.size():
+		if i + 1 >= spots.size():
+			break
+		var mid := spots[i].lerp(spots[i + 1], 0.5)
+		var at := _to_px(mid)
+		_number(int(round(at.x)), int(round(at.y)), Defs.yards(parts[i]), ink, glyph)
 
 
 func _number(x: int, y: int, n: int, ink: Color, glyph: int) -> void:
