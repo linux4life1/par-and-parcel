@@ -185,10 +185,12 @@ func bar_taste() -> float:
 
 
 ## Share of normal power available from a lie.
-func lie_power(lie: int) -> float:
+func lie_power(lie: int, course: Course = null) -> float:
 	if lie < 0:
 		return 1.0
 	var p: float = Defs.T_LIE_POWER[lie]
+	if course != null and (lie == Defs.T.ROUGH or lie == Defs.T.DEEP_ROUGH):
+		p *= course.rough_power
 	if lie == Defs.T.BUNKER:
 		p = 1.0 - (1.0 - p) * (1.0 - bonus_sand)
 		p = minf(1.0, p * ball.m_sand)

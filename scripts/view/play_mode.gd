@@ -250,7 +250,7 @@ func _setup_shot() -> void:
 	if lie == Defs.T.GREEN:
 		club_i = sim.gear.putter_i
 	else:
-		club_i = int(sim.gear.pick(g, pin_dist, lie)[0])
+		club_i = int(sim.gear.pick(g, pin_dist, lie, sim.course)[0])
 	putting = club_i == sim.gear.putter_i
 	power = 0.0
 	meter = 0.0
@@ -281,7 +281,7 @@ func _refresh_numbers() -> void:
 ## Ball speed of a flat-out swing from here: the club, the golfer, the
 ## shot shape and the lie.
 func _full_speed() -> float:
-	return sim.gear.full_speed(g, club_i) * g.lie_power(lie) * float(shape().power) * float(lie_read.get("power", 1.0))
+	return sim.gear.full_speed(g, club_i) * g.lie_power(lie, sim.course) * float(shape().power) * float(lie_read.get("power", 1.0))
 
 
 ## The lie in a few words: "Rough, sitting down".
@@ -325,7 +325,7 @@ func advice() -> String:
 
 
 func _putt_full_speed() -> float:
-	return sqrt(2.0 * Defs.T_DECEL[Defs.T.GREEN] * 1.32 * MAX_PUTT)
+	return sqrt(2.0 * sim.course.roll_decel(Defs.T.GREEN) * 1.32 * MAX_PUTT)
 
 
 func _frame_camera() -> void:

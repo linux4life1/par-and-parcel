@@ -295,7 +295,7 @@ func _roll(dt: float, course: Course, pin: Vector3, has_pin: bool) -> int:
 	if course.locked[ti] == 0:
 		last_land = pos
 	var wetv := course.wet[ti] * m_wet
-	var decel: float = Defs.T_DECEL[t] * (1.0 + 1.6 * wetv) / m_roll
+	var decel: float = course.roll_decel(t) * (1.0 + 1.6 * wetv) / m_roll
 	decel *= 1.0 + course.weeds[ti] * 0.8
 	if wetv < 0.12:
 		decel *= 0.88

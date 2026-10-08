@@ -57,6 +57,7 @@ func _ready() -> void:
 	_test_mood_map()
 	_test_draft_hole()
 	_test_pace()
+	_test_setup()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2824,6 +2825,45 @@ func _test_pace() -> void:
 	sim.remove_hole(0)
 	check(on_it.state == Group.S.TO_TEE and absf(on_it.hole_time) < 0.001, "removing the hole they were on starts the next one from zero")
 	check(later.hole_i == 1 and absf(later.hole_time - 4.0) < 0.001, "a party further along keeps the time on the hole they are still playing")
+
+
+func _test_setup() -> void:
+	print("-- tournament setup")
+	var sim := _sim("three_holes", 11)
+	var c := sim.course
+	var hole := c.holes[0]
+	var home := hole.pin
+	var tile := c.tile_of(home.x, home.z)
+	c.guard = false
+	for dy in range(-4, 5):
+		for dx in range(-4, 5):
+			c.set_terrain(tile.x + dx, tile.y + dy, Defs.T.GREEN)
+	check(is_equal_approx(c.roll_decel(Defs.T.GREEN), Defs.T_DECEL[Defs.T.GREEN]), "an ordinary week stops a putt the usual way")
+	var g := sim.visitors.make_golfer("public", 0.5)
+	var plain := g.lie_power(Defs.T.ROUGH)
+	var def: Dictionary = sim.db.tournaments[0]
+	var friendly := sim.tourney.expected_income(def, "friendly")
+	var stern := sim.tourney.expected_income(def, "stern")
+	check(stern > friendly, "a stern week sells more tickets (%.0f against %.0f)" % [stern, friendly])
+	sim.economy.money = 100000.0
+	sim.rating = 80.0
+	check(sim.tourney.schedule("club", "stern"), "the club championship can be booked stern")
+	var booked := str(sim.tourney.scheduled.get("setup", ""))
+	check(booked == "stern", "the booking remembers the setup")
+	sim.tourney.on_day(int(sim.tourney.scheduled.day))
+	check(is_equal_approx(c.green_decel, 0.72) and is_equal_approx(c.roll_decel(Defs.T.GREEN), Defs.T_DECEL[Defs.T.GREEN] * 0.72), "the greens are faster for the event")
+	check(g.lie_power(Defs.T.ROUGH, c) < plain and is_equal_approx(g.lie_power(Defs.T.TEE, c), g.lie_power(Defs.T.TEE)), "the rough is thicker and the tee is not")
+	check(hole.pin.distance_to(home) > 1.0 and c.terrain_at(hole.pin.x, hole.pin.z) == Defs.T.GREEN, "the pin is tucked and still on the green")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(c.to_dict()))
+	var back := Course.from_dict(saved)
+	check(is_equal_approx(back.green_decel, 0.72) and is_equal_approx(back.rough_power, 0.8), "a save keeps the setup")
+	var course_d: Dictionary = saved
+	course_d.erase("green_decel")
+	course_d.erase("rough_power")
+	var legacy := Course.from_dict(saved)
+	check(is_equal_approx(legacy.green_decel, 1.0) and is_equal_approx(legacy.rough_power, 1.0), "an old save plays the course as the members do")
+	sim.tourney._finish()
+	check(is_equal_approx(c.green_decel, 1.0) and is_equal_approx(c.rough_power, 1.0) and hole.pin.distance_to(home) < 0.05, "when the event ends the course is put back")
 
 
 func _test_bar_and_vending() -> void:
