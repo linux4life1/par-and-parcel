@@ -13,6 +13,7 @@ var rig: CameraRig
 var world: WorldView
 var enabled := true
 var mode := ""                 # "", terrain, sculpt, object, bulldoze, hole
+var station_for: Crew.Member = null   # the next ground click is their post
 var terrain_type: int = Defs.T.FAIRWAY
 var brush := 1                 # radius in tiles
 var sculpt_mode := "raise"
@@ -57,6 +58,8 @@ func bind(s: Sim) -> void:
 
 func set_mode(m: String) -> void:
 	mode = m
+	if m != "":
+		station_for = null
 	_down = false
 	_tee = null
 	_preview_tile = Vector2i(-999, -999)
@@ -73,7 +76,16 @@ func set_mode(m: String) -> void:
 	tool_changed.emit()
 
 
+func arm_station(who: Crew.Member) -> void:
+	if mode != "":
+		set_mode("")
+	station_for = who
+	tool_changed.emit()
+
+
 func hint() -> String:
+	if station_for != null and sim != null and sim.crew.members.has(station_for):
+		return "Click the ground where %s should work." % station_for.name
 	var body := ""
 	match mode:
 		"terrain":
@@ -128,6 +140,8 @@ func _process(delta: float) -> void:
 		var parcel := sim.course.parcel_of(int(hp.x / Defs.TILE), int(hp.z / Defs.TILE))
 		var ok := sim.course.parcel_for_sale(parcel)
 		terrain.set_land_rect(sim.course.parcel_rect(parcel), Color(0.5, 1.0, 0.6) if ok else Color(1.0, 0.45, 0.4))
+	elif station_for != null and enabled and hover != null:
+		terrain.set_brush(hover, sim.crew.home_radius(), Color(0.95, 0.75, 0.35))
 	elif mode == "" or not enabled or hover == null:
 		terrain.hide_brush()
 	else:
@@ -180,6 +194,19 @@ func _unhandled_input(event: InputEvent) -> void:
 			# With no tool out, a click picks a person. A drag moved the map
 			# instead, so it picks nobody.
 			if mode == "" and not rig.dragged:
+				if station_for != null and sim.crew.members.has(station_for):
+					var posted: Crew.Member = station_for
+					var person: Variant = world.pick_person(mb.position)
+					var spot: Variant = terrain.pick(rig.cam, mb.position)
+					if person == null and spot != null:
+						var at: Vector3 = spot
+						sim.crew.station(posted, at)
+						sim.toast.emit("%s will work around that spot." % posted.name, "good")
+						station_for = null
+						world.selected = posted
+						selection_changed.emit(posted)
+						return
+				station_for = null
 				var who: Variant = world.pick_person(mb.position)
 				world.selected = who
 				selection_changed.emit(who)

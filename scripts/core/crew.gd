@@ -19,6 +19,8 @@ class Member:
 	var walking := false
 	var jobs_done := 0
 	var level := 1          # 2 once promoted: faster, and better at the job
+	var has_home := false   # stationed: work stays inside the circle around home
+	var home := Vector3.ZERO
 	var route := PackedVector2Array()
 	var route_i := 0
 	var route_goal := Vector3.ZERO
@@ -83,6 +85,40 @@ func monthly_wages() -> float:
 
 
 ## Promote someone: they work faster and better, for more pay.
+func home_radius() -> float:
+	return sim.db.home_radius
+
+
+## Park this member. They look for work inside the circle and walk back
+## when there is none, instead of roaming the course.
+func station(m: Member, at: Vector3) -> void:
+	m.has_home = true
+	m.home = sim.course.on_ground(at.x, at.z)
+	sim.staff_changed.emit()
+
+
+func clear_station(m: Member) -> void:
+	m.has_home = false
+	sim.staff_changed.emit()
+
+
+func _in_home(m: Member, p: Vector3) -> bool:
+	if not m.has_home:
+		return true
+	var r := home_radius()
+	return Vector2(p.x - m.home.x, p.z - m.home.z).length_squared() <= r * r
+
+
+## Walk back to the post, or wait there if they have already arrived.
+func _go_home(m: Member) -> void:
+	if m.pos.distance_squared_to(m.home) > 4.0:
+		m.target = m.home
+		m.target_i = -1
+		m.state = 1
+	else:
+		m.timer = 2.5
+
+
 func promote(m: Member) -> bool:
 	var cost := float(m.role.wage) * 3.0 * sim.diff("wages")
 	if m.level > 1 or not sim.economy.can_afford(cost):
@@ -166,10 +202,16 @@ func _find_job(m: Member) -> void:
 		_find_drinks_job(m)
 		return
 	if m.role.id == "club_pro":
-		# the pro stays by the clubhouse, greeting arrivals
-		var door := sim.clubhouse_door()
-		m.target = course.on_ground(door.x + sim.rng.randf_range(-8.0, 8.0), door.z + sim.rng.randf_range(-3.0, 6.0))
+		# the pro stays by the clubhouse, greeting arrivals, unless posted
+		if m.has_home:
+			m.target = m.home
+		else:
+			var door := sim.clubhouse_door()
+			m.target = course.on_ground(door.x + sim.rng.randf_range(-8.0, 8.0), door.z + sim.rng.randf_range(-3.0, 6.0))
 		m.state = 1
+		return
+	if m.has_home:
+		_find_home_job(m)
 		return
 	sim.grounds.refresh_layout()
 	var pests: bool = m.role.id == "exterminator"
@@ -223,19 +265,71 @@ func _find_marshal_job(m: Member) -> void:
 	var ww := 8.0
 	for gr in sim.visitors.groups:
 		if gr.wait > ww and not gr.members.is_empty():
+			if not _in_home(m, gr.members[0].pos):
+				continue
 			ww = gr.wait
 			worst = gr
 	var course := sim.course
 	if worst != null:
 		var p := worst.members[0].pos
 		m.target = course.on_ground(p.x + 8.0, p.z + 8.0)
+		m.state = 1
+	elif m.has_home:
+		_go_home(m)
 	elif not course.holes.is_empty():
 		var hole := course.holes[sim.rng.randi() % course.holes.size()]
 		var mid := hole.point_along(sim.rng.randf())
 		m.target = course.on_ground(mid.x + sim.rng.randf_range(-20.0, 20.0), mid.z + sim.rng.randf_range(-20.0, 20.0))
+		m.state = 1
 	else:
 		m.timer = 3.0
+
+
+## Grounds crew with a post only take tiles inside the circle. Scanning the
+## circle keeps the choice off the dice, so a roaming keeper still draws the
+## same numbers as before.
+func _find_home_job(m: Member) -> void:
+	var course := sim.course
+	sim.grounds.refresh_layout()
+	var pests: bool = m.role.id == "exterminator"
+	var r := home_radius()
+	var reach := int(ceil(r / Defs.TILE))
+	var hx := int(m.home.x / Defs.TILE)
+	var hz := int(m.home.z / Defs.TILE)
+	var best := -1
+	var best_score := 0.1
+	for oy in range(-reach, reach + 1):
+		for ox in range(-reach, reach + 1):
+			var x := hx + ox
+			var y := hz + oy
+			if not course.in_bounds(x, y):
+				continue
+			var i := y * course.w + x
+			if _claimed.has(i):
+				continue
+			var cx := (x + 0.5) * Defs.TILE
+			var cz := (y + 0.5) * Defs.TILE
+			if Vector2(cx - m.home.x, cz - m.home.z).length_squared() > r * r:
+				continue
+			var t: int = course.terrain[i]
+			var need := 0.0
+			if pests:
+				need = course.pests[i] * 3.0 if course.pests[i] > 0.05 else 0.0
+			else:
+				need = ((1.0 - course.health[i]) + course.weeds[i] * 1.3) * Defs.T_CARE[t]
+			if need <= 0.1:
+				continue
+			var dist := Vector2(cx - m.pos.x, cz - m.pos.z).length()
+			var score := need - dist / 300.0
+			if score > best_score:
+				best_score = score
+				best = i
+	if best < 0:
+		_go_home(m)
 		return
+	m.target_i = best
+	_claimed[best] = true
+	m.target = course.tile_center(best % course.w, best / course.w)
 	m.state = 1
 
 
@@ -245,6 +339,8 @@ func _find_drinks_job(m: Member) -> void:
 	var worst := 0.7
 	for gr in sim.visitors.groups:
 		if gr.members.is_empty() or gr.state == Group.S.LEAVING:
+			continue
+		if not _in_home(m, gr.members[0].pos):
 			continue
 		var need := 0.0
 		for g in gr.members:
@@ -256,14 +352,16 @@ func _find_drinks_job(m: Member) -> void:
 	if best != null:
 		var p := best.members[0].pos
 		m.target = course.on_ground(p.x + 4.0, p.z + 4.0)
+		m.state = 1
+	elif m.has_home:
+		_go_home(m)
 	elif not course.holes.is_empty():
 		var hole := course.holes[sim.rng.randi() % course.holes.size()]
 		var mid := hole.point_along(sim.rng.randf())
 		m.target = course.on_ground(mid.x + 14.0, mid.z + 14.0)
+		m.state = 1
 	else:
 		m.timer = 3.0
-		return
-	m.state = 1
 
 
 func _serve_drinks(m: Member) -> void:

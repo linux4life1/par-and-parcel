@@ -25,6 +25,7 @@ var tutorial: Dictionary = {}   # the guided first round
 var tips: Dictionary = {}       # for the loading screen
 var stories: Dictionary = {}    # the long golfer stories
 var landmarks: Dictionary = {}  # area effects of landmark objects
+var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
 var feed: Dictionary = {}
 
@@ -35,7 +36,9 @@ func _init() -> void:
 	categories = c.get("categories", [])
 	brands = c.get("brands", [])
 	balls = _load("balls").get("balls", [])
-	roles = _load("staff").get("roles", [])
+	var staff := _load("staff")
+	roles = staff.get("roles", [])
+	home_radius = float(staff.get("home_radius", 45.0))
 	skills = _load("skills").get("skills", [])
 	tournaments = _load("tournaments").get("tournaments", [])
 	scenarios = _load("scenarios").get("scenarios", [])
