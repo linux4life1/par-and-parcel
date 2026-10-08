@@ -1405,7 +1405,8 @@ func hire(role_id: String) -> bool:
 
 ## Move each cup to today's spot on the green. A greenkeeper has to be on
 ## staff, and a tournament that is holding the pins is left alone. A locked
-## hole keeps its cup. Par and length stay on the pin that was placed.
+## hole keeps its cup. The cup is set here, with the morning: nobody is sent
+## to walk to it. Par and length stay on the pin that was placed.
 func move_pins() -> void:
 	if crew.count("greenkeeper") < 1 or tourney.pins_held():
 		return
@@ -1417,7 +1418,6 @@ func move_pins() -> void:
 	var names: Array = spec.get("spots", [])
 	var today := day()
 	var moved := false
-	var visits: Array[Vector3] = []
 	for i in course.holes.size():
 		var hole := course.holes[i]
 		if hole.pin_locked:
@@ -1432,12 +1432,10 @@ func move_pins() -> void:
 		if hole.pin.distance_squared_to(cup) > 0.01:
 			hole.pin = cup
 			moved = true
-			visits.append(hole.pin)
 	if not moved:
 		return
 	course.revision += 1
 	course.holes_changed.emit()
-	crew.post_pins(visits)
 	if today > 0 and today % Defs.DAYS_PER_MONTH == 0:
 		toast.emit("The greenkeepers have moved the pins.", "info")
 

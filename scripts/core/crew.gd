@@ -24,35 +24,15 @@ class Member:
 	var route := PackedVector2Array()
 	var route_i := 0
 	var route_goal := Vector3.ZERO
-	var cup_cut := false       # this job is the morning mow of a new cup
 
 var sim: Sim
 var members: Array[Member] = []
 var _claimed := {}
 var _next_id := 1
-## Cups a greenkeeper still has to mow, after the morning move. One tile
-## each, then they go back to the weeds.
-var pin_cuts: Array[int] = []
 
 
 func _init(s: Sim) -> void:
 	sim = s
-
-
-func post_pins(points: Array[Vector3]) -> void:
-	pin_cuts.clear()
-	if points.is_empty():
-		return
-	var seen := {}
-	for p in points:
-		var t := sim.course.tile_of(p.x, p.z)
-		if not sim.course.in_bounds(t.x, t.y):
-			continue
-		var i := t.y * sim.course.w + t.x
-		if seen.has(i):
-			continue
-		seen[i] = true
-		pin_cuts.append(i)
 
 
 func count(role_id: String) -> int:
@@ -199,24 +179,20 @@ func _walk(m: Member, dt: float, _course: Course) -> bool:
 
 func _work_time(m: Member) -> float:
 	var base := 3.0
-	if m.cup_cut:
-		base = float(sim.db.pins.get("mow", 0.6))
-	else:
-		match m.role.id:
-			"exterminator":
-				base = 4.0
-			"marshal":
-				base = 6.0
-			"beverage":
-				base = 3.0
-			"club_pro":
-				base = 5.0
+	match m.role.id:
+		"exterminator":
+			base = 4.0
+		"marshal":
+			base = 6.0
+		"beverage":
+			base = 3.0
+		"club_pro":
+			base = 5.0
 	return base / (sim.skills.mult("staff_eff") * (1.5 if m.level > 1 else 1.0))
 
 
 func _find_job(m: Member) -> void:
 	var course := sim.course
-	m.cup_cut = false
 	if m.target_i >= 0:
 		_claimed.erase(m.target_i)
 		m.target_i = -1
@@ -279,29 +255,11 @@ func _find_job(m: Member) -> void:
 		if score > best_score:
 			best_score = score
 			best = i
-	# A new cup is posted under a weedy patch, and mowed only when the
-	# keeper has not found weeds. The number lives in pins.json.
-	if m.role.id == "greenkeeper":
-		var cut_base := float(sim.db.pins.get("cut", 0.12))
-		for ci in pin_cuts.size():
-			var cut := pin_cuts[ci]
-			if _claimed.has(cut):
-				continue
-			var cut_x := (cut % course.w + 0.5) * Defs.TILE
-			var cut_z := (int(cut / course.w) + 0.5) * Defs.TILE
-			var cut_score := cut_base - Vector2(cut_x - m.pos.x, cut_z - m.pos.z).length() / 300.0
-			if cut_score > best_score:
-				best_score = cut_score
-				best = cut
 	if best < 0:
 		m.timer = 2.5
 		return
 	m.target_i = best
 	_claimed[best] = true
-	var posted := pin_cuts.find(best)
-	if posted >= 0:
-		pin_cuts.remove_at(posted)
-		m.cup_cut = true
 	m.target = course.tile_center(best % course.w, best / course.w)
 	m.state = 1
 
@@ -487,12 +445,6 @@ func _finish_job(m: Member) -> void:
 	m.jobs_done += 1
 	if m.role.id == "porter":
 		_clear_mess(course, i)
-		return
-	if m.cup_cut:
-		m.cup_cut = false
-		if Defs.T_GRASS[course.terrain[i]]:
-			var tidy := float(sim.db.pins.get("tidy", 0.02))
-			course.health[i] = minf(1.0, course.health[i] + tidy)
 		return
 	var tx := i % course.w
 	var ty := int(i / course.w)

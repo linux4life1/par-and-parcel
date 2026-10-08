@@ -1173,8 +1173,9 @@ func _test_season() -> void:
 	check(sim.stats.rounds > 20, "golfers complete rounds")
 	check(sim.economy.history.size() == 4, "four months of books closed")
 	check(sim.feed.posts.size() > 5, "the feed fills up")
-	check(sim.grounds.condition > 0.5, "one greenkeeper keeps three holes in shape")
-	check(sim.visitors.average_satisfaction() > 40.0, "golfers are not miserable")
+	check(sim.grounds.condition > 0.80, "one greenkeeper keeps three holes in shape (%.0f%%)" % (sim.grounds.condition * 100.0))
+	check(sim.grounds.weed_cover < 0.03, "the weeds stay about where a course with still pins leaves them (%.1f%%)" % (sim.grounds.weed_cover * 100.0))
+	check(sim.rating >= 45.0 and sim.visitors.average_satisfaction() >= 64.0, "rating and satisfaction hold the line of a course whose pins stay put (%.0f, %.0f)" % [sim.rating, sim.visitors.average_satisfaction()])
 
 	print("-- hosting a tournament")
 	sim.economy.money = 50000.0
@@ -5211,8 +5212,15 @@ func _test_pin_rules() -> void:
 	filed.erase("pin_locked")
 	check(not Hole.from_dict(filed).pin_locked, "an old save, with no lock stored, loads unlocked")
 	hold.pin_locked = false
+	var sheet := YardageCard.new(db.yardage)
+	sheet.ensure(lc, hold)
+	var sheet_draws := sheet.draws
+	var sheet_path := sheet.path_metres
+	var sheet_flag := sheet.pin_px
 	locked.move_pins()
+	sheet.ensure(lc, hold)
 	check(hold.pin.z < kept.z - 1.0, "an unlocked hole moves its pin")
+	check(sheet.draws == sheet_draws + 1 and is_equal_approx(sheet.path_metres, hold.length) and is_equal_approx(sheet.path_metres, sheet_path) and sheet.pin_px.distance_to(sheet_flag) > 2.0, "the yardage line stays on the placed pin and the flag follows the day's cup")
 	var narrow := _sim("sandbox", 43)
 	var nc := narrow.course
 	var pin_tile := Vector2i(40, 50)
@@ -5297,7 +5305,7 @@ func _test_pin_rules() -> void:
 	chooser.state = 0
 	chooser.timer = 0.0
 	weeded.crew.step(0.05)
-	check(chooser.target_i == rough_i and weeded.crew.pin_cuts.has(wc.index_at(weed_hole.pin.x, weed_hole.pin.z)), "a weedy patch is taken before the new cup")
+	check(chooser.target_i == rough_i, "the morning move does not send the keeper to the cup, so the weedy patch is the job")
 	var twin := _sim("three_holes", 48)
 	check(twin.hire("greenkeeper"), "a greenkeeper on the saved course")
 	twin.time = Defs.DAY_SECONDS * 2.0
@@ -5349,7 +5357,7 @@ func _test_pin_rules() -> void:
 	check(busy.hire("greenkeeper"), "a greenkeeper for both cups")
 	busy.time = Defs.DAY_SECONDS
 	busy.move_pins()
-	check(left.pin.z < left.placed.z - 1.0 and right.pin.distance_squared_to(right.placed) > 1.0 and busy.crew.pin_cuts.size() == 2, "a quiet day moves both cups, and both are posted")
+	check(left.pin.z < left.placed.z - 1.0 and right.pin.distance_squared_to(right.placed) > 1.0, "a quiet day moves both cups, and does not post a walking job")
 	left.pin = left.placed
 	right.pin = right.placed
 	left.pin_spot = 0
@@ -5358,7 +5366,7 @@ func _test_pin_rules() -> void:
 	left.groups.append(party)
 	var waiting := left.pin
 	busy.move_pins()
-	check(left.pin.distance_squared_to(waiting) < 0.01 and right.pin.distance_squared_to(right.placed) > 1.0 and busy.crew.pin_cuts.size() == 1, "a hole with a group on it keeps its pin, and the quiet hole is still posted")
+	check(left.pin.distance_squared_to(waiting) < 0.01 and right.pin.distance_squared_to(right.placed) > 1.0, "a hole with a group on it keeps its pin, and the quiet hole still moves")
 	left.groups.clear()
 	busy.move_pins()
 	check(left.pin.z < waiting.z - 1.0, "on a quiet day that hole moves its pin")
@@ -5422,7 +5430,8 @@ func _test_pin_rules() -> void:
 	check(moved_mornings > 100, "the rotating cups left the placed pin on quiet mornings")
 	check(spread >= 2 and peaks_ok, "where the cup changes tile, the worst of those tiles took less wear than a pin that stayed put")
 	check(totals_ok, "rotating spreads the cup wear: each hole takes the same amount as when the pin stays put")
-	check(absf(still.grounds.condition - turning.grounds.condition) < 0.04, "the course stays about as healthy as one whose pins are locked (%.3f against %.3f)" % [still.grounds.condition, turning.grounds.condition])
+	check(absf(still.grounds.weed_cover - turning.grounds.weed_cover) < 0.005, "rotating the pins leaves the weeds within half a point of a locked course (%.1f%% against %.1f%%)" % [still.grounds.weed_cover * 100.0, turning.grounds.weed_cover * 100.0])
+	check(absf(still.grounds.condition - turning.grounds.condition) < 0.01, "and the condition within a point (%.3f against %.3f)" % [still.grounds.condition, turning.grounds.condition])
 func _test_yardage() -> void:
 	print("-- yardage card")
 	var sim := _sim("sandbox", 8)
@@ -5466,12 +5475,18 @@ func _test_yardage() -> void:
 	var fly_px := book.image.get_pixel(sx, sy)
 	var nub_px := nub.image.get_pixel(sx, int(round(nub.pin_px.y)) - 3)
 	check(sy >= 0 and fly_px.is_equal_approx(pin_col) and not nub_px.is_equal_approx(pin_col), "the flag length in the yardage file is what gets drawn")
+	var home_path := book.path_metres
+	var home_flag := book.pin_px
 	drawn = book.draws
 	var moved_pin := c.tile_center(42, 48)
 	hole.pin = c.on_ground(moved_pin.x, moved_pin.z)
 	hole.update_metrics(c)
 	book.ensure(c, hole)
-	check(book.draws == drawn + 1, "moving the pin redraws the card")
+	var flag_at := int(round(book.pin_px.y)) - 2
+	var flag_px := Color.BLACK
+	if flag_at >= 0 and flag_at < book.image.get_height():
+		flag_px = book.image.get_pixel(int(round(book.pin_px.x)), flag_at)
+	check(book.draws == drawn + 1 and is_equal_approx(book.path_metres, home_path) and is_equal_approx(book.path_metres, hole.length) and book.pin_px.distance_to(home_flag) > 2.0 and flag_px.is_equal_approx(pin_col), "moving the day's cup redraws the card: the line stays on the placed pin and the flag follows the cup")
 	drawn = book.draws
 	var moved_tee := c.tile_center(40, 16)
 	hole.tee = c.on_ground(moved_tee.x, moved_tee.z)

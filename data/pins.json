@@ -7,8 +7,5 @@
 	"reach": 2.5,
 	"wear": 0.00002,
 	"played": 0.5,
-	"play_cap": 4,
-	"cut": 0.15,
-	"mow": 0.6,
-	"tidy": 0.02
+	"play_cap": 4
 }

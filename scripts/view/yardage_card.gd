@@ -1,8 +1,9 @@
 class_name YardageCard
 extends RefCounted
 ## A printed yardage diagram for one hole. Drawn once into an image and kept
-## until that hole's ground, tee or pin changes. The size and the colours
-## live in data/yardage.json.
+## until that hole's ground, tee, placed pin or the day's cup changes. The
+## line runs to the pin that was placed. The flag is the day's cup. The size
+## and the colours live in data/yardage.json.
 
 const GLYPHS: Array[String] = [
 	"111101101101111",
@@ -57,8 +58,8 @@ static func for_hole(cards: Dictionary, hole: Hole, book: Dictionary) -> Yardage
 
 
 ## The cached image. The tile hash runs only when the course revision or
-## this hole's tee, pin or line has changed, and the picture is redrawn
-## only when that hash changes.
+## this hole's tee, placed pin, day's cup or line has changed, and the
+## picture is redrawn only when that hash changes.
 func ensure(course: Course, hole: Hole) -> Image:
 	var ends := _ends(hole)
 	if _have and image != null and course.revision == _rev and ends == _mark:
@@ -77,8 +78,11 @@ func ensure(course: Course, hole: Hole) -> Image:
 
 func _ends(hole: Hole) -> int:
 	var h := 2166136261
+	var end := hole.design_pin()
 	h = _mix(h, int(round(hole.tee.x * 10.0)))
 	h = _mix(h, int(round(hole.tee.z * 10.0)))
+	h = _mix(h, int(round(end.x * 10.0)))
+	h = _mix(h, int(round(end.z * 10.0)))
 	h = _mix(h, int(round(hole.pin.x * 10.0)))
 	h = _mix(h, int(round(hole.pin.z * 10.0)))
 	h = _mix(h, hole.route.size())
@@ -90,8 +94,11 @@ func _ends(hole: Hole) -> int:
 
 func _signature(course: Course, hole: Hole) -> int:
 	var h := 2166136261
+	var end := hole.design_pin()
 	h = _mix(h, int(round(hole.tee.x * 10.0)))
 	h = _mix(h, int(round(hole.tee.z * 10.0)))
+	h = _mix(h, int(round(end.x * 10.0)))
+	h = _mix(h, int(round(end.z * 10.0)))
 	h = _mix(h, int(round(hole.pin.x * 10.0)))
 	h = _mix(h, int(round(hole.pin.z * 10.0)))
 	h = _mix(h, hole.route.size())
@@ -118,10 +125,11 @@ func _mix(h: int, v: int) -> int:
 ## Tiles the picture covers: the line of play, plus a margin from the data.
 func _region(course: Course, hole: Hole) -> Dictionary:
 	var margin := int(_book.get("margin", 3))
-	var min_x := minf(hole.tee.x, hole.pin.x)
-	var max_x := maxf(hole.tee.x, hole.pin.x)
-	var min_z := minf(hole.tee.z, hole.pin.z)
-	var max_z := maxf(hole.tee.z, hole.pin.z)
+	var end := hole.design_pin()
+	var min_x := minf(hole.tee.x, minf(end.x, hole.pin.x))
+	var max_x := maxf(hole.tee.x, maxf(end.x, hole.pin.x))
+	var min_z := minf(hole.tee.z, minf(end.z, hole.pin.z))
+	var max_z := maxf(hole.tee.z, maxf(end.z, hole.pin.z))
 	for p in hole.route:
 		min_x = minf(min_x, p.x)
 		max_x = maxf(max_x, p.x)
@@ -156,9 +164,10 @@ func _draw(course: Course, hole: Hole) -> void:
 		ground[i] = _hex(str(colours.get(Defs.T_KEYS[i], "f4f0e6")))
 	image = Image.create(width, height, false, Image.FORMAT_RGBA8)
 	image.fill(paper)
+	var end := hole.design_pin()
 	var line: PackedVector2Array = hole.route
 	if line.size() < 2:
-		line = PackedVector2Array([Vector2(hole.tee.x, hole.tee.z), Vector2(hole.pin.x, hole.pin.z)])
+		line = PackedVector2Array([Vector2(hole.tee.x, hole.tee.z), Vector2(end.x, end.z)])
 	path_metres = 0.0
 	for i in range(1, line.size()):
 		path_metres += line[i - 1].distance_to(line[i])
@@ -203,7 +212,8 @@ func _draw(course: Course, hole: Hole) -> void:
 
 func _fit(line: PackedVector2Array, hole: Hole, width: int, height: int, pad: float) -> void:
 	_anchor = Vector2(hole.tee.x, hole.tee.z)
-	var away := Vector2(hole.pin.x - hole.tee.x, hole.pin.z - hole.tee.z)
+	var end := hole.design_pin()
+	var away := Vector2(end.x - hole.tee.x, end.z - hole.tee.z)
 	if away.length_squared() < 0.01:
 		away = Vector2(0.0, 1.0)
 	_up = away.normalized()
@@ -214,6 +224,7 @@ func _fit(line: PackedVector2Array, hole: Hole, width: int, height: int, pad: fl
 	var max_a := 0.0
 	var pts: PackedVector2Array = line.duplicate()
 	pts.append(Vector2(hole.tee.x, hole.tee.z))
+	pts.append(Vector2(end.x, end.z))
 	pts.append(Vector2(hole.pin.x, hole.pin.z))
 	for p in pts:
 		var rel := p - _anchor
