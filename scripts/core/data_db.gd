@@ -25,6 +25,7 @@ var tutorial: Dictionary = {}   # the guided first round
 var tips: Dictionary = {}       # for the loading screen
 var stories: Dictionary = {}    # the long golfer stories
 var landmarks: Dictionary = {}  # area effects of landmark objects
+var accreditation: Dictionary = {}  # the design-score checklist
 var names: Dictionary = {}
 var feed: Dictionary = {}
 
@@ -54,6 +55,7 @@ func _init() -> void:
 	tips = _load("tips")
 	stories = _load("stories")
 	landmarks = _load("landmarks")
+	accreditation = _load("accreditation")
 	names = _load("names")
 	feed = _load("feed")
 

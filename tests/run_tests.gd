@@ -58,6 +58,7 @@ func _ready() -> void:
 	_test_draft_hole()
 	_test_pace()
 	_test_landmarks()
+	_test_accreditation()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -3121,3 +3122,132 @@ func _test_tee_line() -> void:
 	for i in 600:
 		s2.visitors.wait_on(seated, 1.0 / 60.0, "tee", 25.0 + i / 60.0, true)
 	check(60.0 - seated.satisfaction < lost * 0.6, "a bench makes the wait easier")
+
+
+func _accredit(sim: Sim, id: String) -> Dictionary:
+	for row in sim.accreditation():
+		var got: Dictionary = row
+		if str(got.get("id", "")) == id:
+			return got
+	return {}
+
+
+func _design_sum(sim: Sim) -> float:
+	var t := 0.0
+	for row in sim.accreditation():
+		var got: Dictionary = row
+		t += float(got.get("points", 0.0))
+	return t
+
+
+## The design score as it was summed before the checklist, so a change to
+## data/accreditation.json cannot quietly move it.
+func _legacy_design(sim: Sim) -> float:
+	var n := 0
+	var pars := {}
+	var scenery := 0.0
+	for hole in sim.course.holes:
+		if not hole.open:
+			continue
+		n += 1
+		pars[hole.par] = true
+		scenery += sim.scenery_score(hole)
+	if n == 0:
+		return 0.0
+	var am := sim.visitors.amenity_counts()
+	var d := minf(float(n), 18.0) / 18.0 * 52.0
+	d += float([0.0, 0.0, 7.0, 13.0][mini(pars.size(), 3)])
+	d += minf(int(am.drink) + int(am.snack) + sim.crew.count("beverage"), 1) * 5.0 + minf(int(am.snack), 1) * 3.0
+	d += minf(int(am.restroom), 1) * 4.0 + minf(int(am.bench), 4) * 0.75 + minf(int(am.washer), 3) * 0.7
+	d += minf(int(am.putting), 1) * 3.0 + minf(int(am.range), 1) * 3.0 + minf(int(am.cart_barn), 1) * 2.0
+	d += minf(int(am.landmark), 1) * 3.0 + float(sim.clubhouse_level) * 1.2
+	d += scenery / float(n) * 10.0
+	return clampf(d, 0.0, 100.0)
+
+
+func _test_accreditation() -> void:
+	print("-- accreditation")
+	var lines: Array = db.accreditation.get("lines", [])
+	var ids := {}
+	for item in lines:
+		if item is Dictionary:
+			ids[str(item.get("id", ""))] = true
+	check(ids.has("holes") and ids.has("pars") and ids.has("restroom") and ids.has("pace"), "the design checklist is data")
+	var sim := _sim("three_holes", 4)
+	var holes := _accredit(sim, "holes")
+	check(int(holes.get("have", -1)) == 3 and not bool(holes.get("met", true)), "three open holes are not the full eighteen")
+	check(is_equal_approx(float(holes.get("points", 0.0)), 52.0 * 3.0 / 18.0), "each open hole is an equal share of 52 points")
+	check(is_equal_approx(sim.design, _design_sum(sim)) and is_equal_approx(sim.design, _legacy_design(sim)), "the checklist is the design score, and it is the score the course already had (%.2f)" % sim.design)
+	var pace := _accredit(sim, "pace")
+	check(not bool(pace.get("met", true)) and is_equal_approx(float(pace.get("points", 1.0)), 0.0) and str(pace.get("next", "")) != "", "a round that has not been timed is listed and adds nothing")
+	sim.course.set_open(sim.course.holes[0], false)
+	sim._update_rating(0.0)
+	check(int(_accredit(sim, "holes").get("have", -1)) == 2 and is_equal_approx(sim.design, _legacy_design(sim)), "closing a hole takes it off the list")
+	for h in sim.course.holes:
+		sim.course.set_open(h, false)
+	sim._update_rating(0.0)
+	check(sim.design == 0.0 and is_equal_approx(_design_sum(sim), 0.0), "with nothing open the score is zero, facilities included")
+	var fresh := _sim("three_holes", 4)
+	var par_pts := float(_accredit(fresh, "pars").get("points", 0.0))
+	var before := fresh.design
+	for h in fresh.course.holes:
+		h.par = 4
+	fresh._update_rating(0.0)
+	check(is_equal_approx(float(_accredit(fresh, "pars").get("points", -1.0)), 0.0) and is_equal_approx(fresh.design, before - par_pts), "one par is worth nothing, and the score drops by that")
+	fresh.course.holes[0].par = 3
+	fresh._update_rating(0.0)
+	check(is_equal_approx(float(_accredit(fresh, "pars").get("points", 0.0)), 7.0) and not bool(_accredit(fresh, "pars").get("met", true)), "a second par is worth 7, and the list still wants a third")
+	fresh.course.holes[1].par = 5
+	fresh._update_rating(0.0)
+	check(bool(_accredit(fresh, "pars").get("met", false)) and is_equal_approx(float(_accredit(fresh, "pars").get("points", 0.0)), 13.0) and is_equal_approx(fresh.design, _legacy_design(fresh)), "three pars are the full 13, and the score follows")
+	var built := _sim("three_holes", 4)
+	var c := built.course
+	c.guard = false
+	var had := float(_accredit(built, "restroom").get("points", 0.0))
+	if had > 0.0:
+		for i in c.objects.size():
+			if c.objects[i] == Defs.O.RESTROOM:
+				c.set_object(i % c.w, int(i / c.w), Defs.O.NONE)
+		built._update_rating(0.0)
+		check(is_equal_approx(float(_accredit(built, "restroom").get("points", -1.0)), 0.0) and is_equal_approx(built.design, _legacy_design(built)), "taking out the restroom takes its points off the score")
+	else:
+		var placed := false
+		for y in range(8, c.h - 8):
+			if placed:
+				break
+			for x in range(8, c.w - 8):
+				if c.objects[y * c.w + x] == 0 and c.terrain[y * c.w + x] != Defs.T.WATER:
+					placed = c.set_object(x, y, Defs.O.RESTROOM)
+					if placed:
+						break
+		built._update_rating(0.0)
+		check(placed and bool(_accredit(built, "restroom").get("met", false)) and is_equal_approx(float(_accredit(built, "restroom").get("points", 0.0)), 4.0), "a restroom is worth 4 once a hole is open")
+	var cart := _sim("three_holes", 4)
+	var ground := cart.course
+	ground.guard = false
+	for i in ground.objects.size():
+		var o := int(ground.objects[i])
+		if o == Defs.O.DRINK_STAND or o == Defs.O.SNACK_BAR:
+			ground.set_object(i % ground.w, int(i / ground.w), Defs.O.NONE)
+	while cart.crew.fire_one("beverage"):
+		pass
+	cart._update_rating(0.0)
+	var dry := cart.design
+	check(not bool(_accredit(cart, "refreshment").get("met", true)) and is_equal_approx(float(_accredit(cart, "refreshment").get("points", -1.0)), 0.0), "with nowhere to eat or drink, that line is open")
+	check(cart.crew.hire("beverage") != null, "a drinks cart can be hired")
+	cart._update_rating(0.0)
+	check(bool(_accredit(cart, "refreshment").get("met", false)) and is_equal_approx(float(_accredit(cart, "refreshment").get("points", 0.0)), 5.0) and is_equal_approx(cart.design, dry + 5.0), "the drinks cart fills it, for 5 points")
+	var timed := _sim("three_holes", 4)
+	var steady := timed.design
+	for h in timed.course.holes:
+		if h.open:
+			h.note_time(10.0)
+	timed._update_rating(0.0)
+	check(bool(_accredit(timed, "pace").get("met", false)) and is_equal_approx(timed.design, steady), "a round under five hours is met, and the score does not move")
+	timed.course.holes[0].note_time(200.0)
+	timed._update_rating(0.0)
+	check(not bool(_accredit(timed, "pace").get("met", true)) and str(_accredit(timed, "pace").get("next", "")).contains("five hours") and is_equal_approx(timed.design, steady), "a round over five hours is named, and the score still does not move")
+	var stuffed := _sim("three_holes", 4)
+	stuffed.clubhouse_level = 80
+	stuffed._update_rating(0.0)
+	check(_design_sum(stuffed) > 100.0 and is_equal_approx(stuffed.design, 100.0), "past the top, the lines still add up and the score stops at 100")
