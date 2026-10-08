@@ -1235,10 +1235,30 @@ func _update_inspector(force: bool = false) -> void:
 					show_toast("You can't afford that.", "bad")
 				_update_inspector(true), "Senior staff work faster and better, for 60% more pay. A senior marshal walks furious golfers off before they blow up."))
 		head.add_child(UIKit.button("Fire", func() -> void:
+			if tools != null and tools.station_for == m:
+				tools.station_for = null
 			sim.crew.fire(m)
 			world.selected = null
 			inspect(null)))
+		var post := UIKit.hbox()
+		inspector_body.add_child(post)
+		var posting := tools != null and tools.station_for == m
+		post.add_child(UIKit.button("Cancel" if posting else "Station", func() -> void:
+			if tools == null:
+				return
+			if tools.station_for == m:
+				tools.station_for = null
+				tools.tool_changed.emit()
+			else:
+				tools.arm_station(m)
+			_update_inspector(true), "Click the ground. They work inside that circle and walk back when it is quiet."))
+		if m.has_home:
+			post.add_child(UIKit.button("Roam", func() -> void:
+				sim.crew.clear_station(m)
+				_update_inspector(true), "Let them work anywhere on the course again."))
 		inspector_body.add_child(UIKit.label(("Senior " + str(m.role.name).to_lower()) if m.level > 1 else str(m.role.name), 13, UIKit.GOLD if m.level > 1 else UIKit.MUTED))
+		if m.has_home:
+			inspector_body.add_child(UIKit.row("Post", "within %d yd" % Defs.yards(sim.crew.home_radius())))
 		var doing: String = ["Looking for work", "On the way to a job", "Working"][m.state]
 		if m.hit_t > 0.0:
 			doing = "Recovering from a golf ball"

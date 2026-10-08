@@ -1,4 +1,5 @@
 {
+  "home_radius": 45,
   "roles": [
     {
       "id": "greenkeeper",
