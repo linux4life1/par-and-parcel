@@ -27,7 +27,7 @@ static func read(sim: Sim, g: Golfer, heading: float) -> Dictionary:
 	var notes: Array[String] = []
 	var out := {"t": t, "name": sim.terrain_name(t), "sit": "", "power": 1.0, "spread": 1.0, "spin": 1.0,
 		"lift": 1.0, "loft": 0.0, "side": 0.0, "mishit": 1.0, "notes": notes}
-	if t == Defs.T.GREEN or t == Defs.T.WATER:
+	if Defs.is_green(t) or t == Defs.T.WATER:
 		return out
 	var all: Dictionary = sim.db.lies.get("lies", {})
 	var d: Dictionary = all.get(Defs.T_KEYS[t], {})

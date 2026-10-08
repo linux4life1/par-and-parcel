@@ -18,7 +18,8 @@ check. **Basic** works but is thin. **Not yet** is planned.
 
 | Feature | Status | Notes |
 | --- | --- | --- |
-| Paint terrain | Built | Fairway, green, tee, bunker, water, rough, deep rough, cart path. Four brush sizes. Priced per tile. |
+| Paint terrain | Built | Fairway, firm fairway, green, fast green, tee, bunker, water, rough, deep rough, cart path. Four brush sizes. Priced per tile. |
+| Firm fairway and fast green | Built | Two more paints. A firm fairway runs further than an ordinary one. A fast green is quicker, and a tournament week speeds it the same way it speeds any green. Both count as the short grass: a pin can go on a fast green, and a hole's length follows a firm fairway. |
 | Shape the land | Built | Raise, lower, smooth, level. Slopes change every bounce and roll. Hollows hold rainwater. |
 | Green elevation | Built | Putts break with the slope. Contour lines every 25 cm. |
 | Biomes | Built | Lush parkland, highlands, desert and volcanic. Each has its own land, climate, turf behaviour, plants, colours and landmark. |

@@ -247,17 +247,17 @@ func shot_done(ball: Ball, lie: int, to_pin: float, holed: bool) -> void:
 	if stroke == 1 and par >= 4 and lie >= 0:
 		# a tee shot on a hole long enough to need one
 		_best("longest_drive", went * Defs.YARDS)
-		if lie == Defs.T.FAIRWAY or lie == Defs.T.GREEN:
+		if Defs.is_fairway(lie) or Defs.is_green(lie):
 			rd.fairways = int(rd.fairways) + 1
 	if sh.get("putt", false):
 		if holed:
 			_best("longest_putt", float(sh.get("to_pin", 0.0)) * 3.281)
 	else:
-		if holed and int(sh.get("lie", -1)) != Defs.T.GREEN:
+		if holed and not Defs.is_green(int(sh.get("lie", -1))):
 			_bump("chip_ins")
-		if (lie == Defs.T.GREEN or holed) and float(sh.get("to_pin", 0.0)) >= 100.0 / Defs.YARDS:
+		if (Defs.is_green(lie) or holed) and float(sh.get("to_pin", 0.0)) >= 100.0 / Defs.YARDS:
 			_least("closest_100", to_pin * 3.281)
-		if lie == Defs.T.GREEN or holed:
+		if Defs.is_green(lie) or holed:
 			if int(hl.get("green_in", 0)) == 0:
 				hl.green_in = stroke
 			var shape := str(sh.get("shape", "straight"))

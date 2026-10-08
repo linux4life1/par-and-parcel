@@ -589,7 +589,7 @@ func set_open(hole: Hole, on: bool) -> void:
 ## or slow the greens without touching any other surface.
 func roll_decel(t: int) -> float:
 	var d: float = Defs.T_DECEL[t]
-	if t == Defs.T.GREEN:
+	if Defs.is_green(t):
 		d *= green_decel
 	return d
 
@@ -608,7 +608,7 @@ func tuck_pin(hole: Hole, metres: float) -> Vector3:
 	for i in 9:
 		var dist := metres * (1.0 - float(i) / 8.0)
 		var p := was + side * dist
-		if terrain_at(p.x, p.z) == Defs.T.GREEN:
+		if Defs.is_green(terrain_at(p.x, p.z)):
 			hole.pin = on_ground(p.x, p.z)
 			revision += 1
 			holes_changed.emit()

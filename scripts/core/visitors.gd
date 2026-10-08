@@ -839,7 +839,7 @@ func react_to_lie(g: Golfer, hole: Hole, hole_i: int) -> void:
 			sim.feed.say("greens_good", g, {"hole": n})
 	else:
 		match t:
-			Defs.T.GREEN:
+			Defs.T.GREEN, Defs.T.FAST_GREEN:
 				if shot_len > 60.0:
 					g.feel(2.5, "On the green from %d yards!" % Defs.yards(shot_len), "shot")
 				if d < 2.5 and shot_len > 30.0:
@@ -849,7 +849,7 @@ func react_to_lie(g: Golfer, hole: Hole, hole_i: int) -> void:
 				g.feel(-0.6, "In the sand on hole %d." % n, "bunker")
 			Defs.T.DEEP_ROUGH:
 				g.feel(-0.6, "I'm in the thick stuff on hole %d." % n, "rough")
-			Defs.T.FAIRWAY:
+			Defs.T.FAIRWAY, Defs.T.FIRM:
 				if g.strokes == 1 and shot_len > 170.0:
 					g.feel(1.5, "Striped that drive down the middle.", "shot")
 		if g.mishit:
@@ -857,14 +857,14 @@ func react_to_lie(g: Golfer, hole: Hole, hole_i: int) -> void:
 		if b.hits > 0 and b.hit_obj != 0 and not Defs.is_tree(b.hit_obj):
 			# a ricochet: a gift or a curse, depending on where it finished
 			var thing := sim.object_name(b.hit_obj).to_lower()
-			if t == Defs.T.GREEN or t == Defs.T.FAIRWAY:
+			if Defs.is_green(t) or Defs.is_fairway(t):
 				g.feel(1.5, "A lucky bounce off the %s on hole %d!" % [thing, n], "shot")
 				sim.feed.say("lucky_bounce", g, {"hole": n, "thing": thing})
 			else:
 				g.feel(-0.6, "Clattered off the %s on hole %d." % [thing, n], "")
 		elif b.tree_tile >= 0:
 			if Defs.is_tree(course.objects[b.tree_tile]):
-				if b.hits > 0 and (t == Defs.T.GREEN or t == Defs.T.FAIRWAY):
+				if b.hits > 0 and (Defs.is_green(t) or Defs.is_fairway(t)):
 					g.feel(1.2, "Off a tree and back into play on hole %d. I'll take it." % n, "shot")
 					sim.feed.say("lucky_bounce", g, {"hole": n, "thing": "tree"})
 				else:

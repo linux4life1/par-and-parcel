@@ -28,7 +28,7 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 	var p2 := Vector2(p.x, p.z)
 	var to_pin := Vector2(hole.pin.x - p.x, hole.pin.z - p.z)
 	var d := to_pin.length()
-	if lie == Defs.T.GREEN:
+	if Defs.is_green(lie):
 		return _plan_putt(sim, g, hole)
 
 	var gear := sim.gear
@@ -113,7 +113,7 @@ static func _spot_cost(sim: Sim, hole: Hole, pt: Vector2, care: float = 1.0) -> 
 			f += COST_ROUGH * care
 		Defs.T.ROCK, Defs.T.ASH:
 			f += COST_DEEP * care
-		Defs.T.GREEN:
+		Defs.T.GREEN, Defs.T.FAST_GREEN:
 			f -= GAIN_GREEN
 	if Defs.is_tree(course.objects[i]):
 		f += COST_TREE * care
@@ -181,7 +181,10 @@ static func putt_speed(sim: Sim, g: Golfer, from: Vector3, to: Vector3, over: fl
 	var wetv := 0.2
 	if ti >= 0:
 		wetv = course.wet[ti] * g.ball.m_wet
-	var decel: float = course.roll_decel(Defs.T.GREEN) * (1.0 + 1.6 * wetv) / g.ball.m_roll
+	var ground := Defs.T.GREEN
+	if ti >= 0 and Defs.is_green(int(course.terrain[ti])):
+		ground = int(course.terrain[ti])
+	var decel: float = course.roll_decel(ground) * (1.0 + 1.6 * wetv) / g.ball.m_roll
 	if wetv < 0.12:
 		decel *= 0.88
 	var d := Vector2(to.x - from.x, to.z - from.z).length()

@@ -403,10 +403,13 @@ func carried_money() -> float:
 func _store_career(_won: bool = false) -> void:
 	if sim == null:
 		return
+	# Read first. Opening for write empties the file, and the book is the
+	# album and the clubs already taken.
+	var previous := _read_career()
 	var f := FileAccess.open(CAREER_PATH, FileAccess.WRITE)
 	if f == null:
 		return
-	f.store_string(JSON.stringify(CareerBook.pack(sim, _read_career())))
+	f.store_string(JSON.stringify(CareerBook.pack(sim, previous)))
 	f.close()
 
 

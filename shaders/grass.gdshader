@@ -27,7 +27,7 @@ uniform float weed_gain = 0.8;           // brightness of the painted weed colou
 uniform float weed_density = 1.0;        // 0 switches standing weeds off
 
 // must match the terrain shader, so grass ends where the turf does
-const float PRIORITY[10] = float[10](1.0, 1.12, 1.38, 1.5, 1.62, 1.32, 0.94, 1.58, 1.25, 1.05);
+const float PRIORITY[12] = float[12](1.0, 1.12, 1.38, 1.5, 1.62, 1.32, 0.94, 1.58, 1.25, 1.05, 1.16, 1.42);
 
 varying vec3 tint;
 varying float tip;
@@ -92,8 +92,8 @@ void vertex() {
 		vec2 f = tp - base - 0.5;
 		vec3 wx = vec3(0.5 * (0.5 - f.x) * (0.5 - f.x), 0.75 - f.x * f.x, 0.5 * (0.5 + f.x) * (0.5 + f.x));
 		vec3 wy = vec3(0.5 * (0.5 - f.y) * (0.5 - f.y), 0.75 - f.y * f.y, 0.5 * (0.5 + f.y) * (0.5 + f.y));
-		float cov[10];
-		for (int k = 0; k < 10; k++) {
+		float cov[12];
+		for (int k = 0; k < 12; k++) {
 			cov[k] = 0.0;
 		}
 		float lock = 0.0;
@@ -105,7 +105,7 @@ void vertex() {
 				vec4 d = texelFetch(tile_tex, c, 0);
 				float w = wx[i] * wy[j];
 				int raw = int(d.r * 255.0 + 0.5);
-				cov[min(raw & 63, 9)] += w;
+				cov[min(raw & 63, 11)] += w;
 				lock += raw >= 128 ? w : 0.0;
 				bare += (raw & 64) != 0 ? w : 0.0;
 				data += d.gba * w;
@@ -116,17 +116,17 @@ void vertex() {
 		float w_deep = 0.0;
 		float w_green = 0.0;
 		float w_soft = 0.0;      // any turf weeds can grow in
-		for (int k = 0; k < 10; k++) {
+		for (int k = 0; k < 12; k++) {
 			float v = pow(cov[k] * PRIORITY[k], 12.0);
 			total += v;
 			if (k == 0) {
 				w_rough = v;
 			} else if (k == 6) {
 				w_deep = v;
-			} else if (k == 2) {
-				w_green = v;
+			} else if (k == 2 || k == 11) {
+				w_green += v;
 			}
-			if (k <= 3 || k == 6) {
+			if (k <= 3 || k == 6 || k == 10 || k == 11) {
 				w_soft += v;
 			}
 		}
