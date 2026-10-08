@@ -575,6 +575,8 @@ func tuck_pin(hole: Hole, metres: float) -> Vector3:
 		var p := was + side * dist
 		if terrain_at(p.x, p.z) == Defs.T.GREEN:
 			hole.pin = on_ground(p.x, p.z)
+			revision += 1
+			holes_changed.emit()
 			return was
 	return was
 

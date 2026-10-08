@@ -29,7 +29,7 @@ var _gallery_rng := RandomNumberGenerator.new()   # its own dice: the crowd neve
 var size_override := 0       # tests and screenshots: force the gallery's size
 var _knot := {}              # the knot of spectators being filled while the gallery is laid out
 var _knot_left := 0
-var _pin_home: Array[Vector3] = []   # where the pins were before this event tucked them
+var _pin_home: Dictionary = {}   # Hole -> Vector3, where that pin was before the tuck
 
 
 func _init(s: Sim) -> void:
@@ -71,8 +71,8 @@ func schedule(id: String, setup_id: String = "standard") -> bool:
 	var def := DataDB.find(sim.db.tournaments, id)
 	if def.is_empty() or can_host(def) != "":
 		return false
-	if setup_of(setup_id).is_empty():
-		setup_id = "standard"
+	if DataDB.find(sim.db.setups, setup_id).is_empty():
+		return false
 	scheduled = {"def": def, "day": sim.day() + int(def.lead_days), "setup": setup_id}
 	sim.feed.say("tournament_announce", null, {"event": def.name}, true)
 	sim.toast.emit("%s booked for %s." % [def.name, Defs.date_text(int(scheduled.day))], "good")
@@ -344,17 +344,27 @@ func apply_setup(id: String) -> void:
 	var tuck := float(s.get("pin_tuck", 0.0))
 	_pin_home.clear()
 	for hole in sim.course.holes:
-		_pin_home.append(sim.course.tuck_pin(hole, tuck))
+		_pin_home[hole] = sim.course.tuck_pin(hole, tuck)
 
 
 ## Greens, rough and pins go back to how the members play them.
+## A hole taken out during the event is skipped: its home pin is not
+## written onto whichever hole now sits at that index.
 func clear_setup() -> void:
-	var holes := sim.course.holes
-	for i in mini(_pin_home.size(), holes.size()):
-		holes[i].pin = _pin_home[i]
+	var moved := false
+	for hole in sim.course.holes:
+		if not _pin_home.has(hole):
+			continue
+		var back: Vector3 = _pin_home[hole]
+		if hole.pin.distance_squared_to(back) > 0.0001:
+			hole.pin = back
+			moved = true
 	_pin_home.clear()
 	sim.course.green_decel = 1.0
 	sim.course.rough_power = 1.0
+	if moved:
+		sim.course.revision += 1
+		sim.course.holes_changed.emit()
 
 
 func _finish() -> void:
