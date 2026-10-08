@@ -20,12 +20,15 @@ var _mi := MultiMeshInstance3D.new()
 
 func _ready() -> void:
 	_mm.transform_format = MultiMesh.TRANSFORM_3D
+	_mm.mesh = _arrow_mesh()
 	_mi.multimesh = _mm
-	_mi.mesh = _arrow_mesh()
 	_mi.material_override = _arrow_mat()
 	_mi.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_mi.gi_mode = GeometryInstance3D.GI_MODE_DISABLED
 	_mi.extra_cull_margin = 8.0
+	# The marks are flat on the ground. A zero-height box can be thrown out
+	# before it is drawn, so give the batch a box that covers the course.
+	_mi.custom_aabb = AABB(Vector3(-50.0, -30.0, -50.0), Vector3(4000.0, 100.0, 4000.0))
 	add_child(_mi)
 	visible = false
 
@@ -98,13 +101,11 @@ func _rebuild(mode: int) -> void:
 	var reach := float(Slope.book().get("view_range", 180.0))
 	var near := float(Slope.book().get("near", 10.0))
 	var ball := Vector3.ZERO
-	var planes: Array = []
 	var cam: Camera3D = null
 	if mode == 2 and play != null and play.g != null:
 		ball = play.g.ball.pos
 	elif rig != null:
 		cam = rig.cam
-		planes = cam.get_frustum()
 	for ty in course.h:
 		for tx in course.w:
 			if not Defs.is_green(course.terrain[ty * course.w + tx]):
@@ -116,7 +117,7 @@ func _rebuild(mode: int) -> void:
 			elif cam != null:
 				if cam.global_position.distance_to(center) > reach:
 					continue
-				if not _in_front(center, planes):
+				if not _in_front(center, cam):
 					continue
 			_lay(course, tx, ty, marks)
 			if marks.size() > 6000:
@@ -128,11 +129,12 @@ func _rebuild(mode: int) -> void:
 		_mm.set_instance_transform(i, marks[i])
 
 
-func _in_front(p: Vector3, planes: Array) -> bool:
-	for plane: Plane in planes:
-		if plane.distance_to(p) < -Defs.TILE:
-			return false
-	return true
+func _in_front(p: Vector3, cam: Camera3D) -> bool:
+	if cam.is_position_behind(p):
+		return false
+	var sp := cam.unproject_position(p)
+	var vp := cam.get_viewport().get_visible_rect().size
+	return sp.x >= -80.0 and sp.y >= -80.0 and sp.x <= vp.x + 80.0 and sp.y <= vp.y + 80.0
 
 
 func _lay(course: Course, tx: int, ty: int, marks: Array[Transform3D]) -> void:
@@ -158,7 +160,7 @@ func _lay(course: Course, tx: int, ty: int, marks: Array[Transform3D]) -> void:
 			var axis := Vector3(fall.x, 0.0, fall.y).normalized()
 			var side := Vector3(-axis.z, 0.0, axis.x)
 			var basis := Basis(axis * length, Vector3.UP, side * 0.55)
-			var at := Vector3(x, course.height_at(x, z) + 0.06, z)
+			var at := Vector3(x, course.height_at(x, z) + 0.12, z)
 			marks.append(Transform3D(basis, at))
 
 
@@ -177,9 +179,10 @@ func _quad(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3, d: Vector3) -> v
 
 
 func _tri(st: SurfaceTool, a: Vector3, b: Vector3, c: Vector3) -> void:
-	st.add_vertex(a)
-	st.add_vertex(b)
-	st.add_vertex(c)
+	var lift := Vector3(0.0, 0.02, 0.0)
+	st.add_vertex(a + lift)
+	st.add_vertex(b + lift)
+	st.add_vertex(c + lift)
 	st.add_vertex(a)
 	st.add_vertex(c)
 	st.add_vertex(b)
@@ -191,5 +194,5 @@ func _arrow_mat() -> StandardMaterial3D:
 	mat.albedo_color = Color(float(ink[0]), float(ink[1]), float(ink[2]))
 	mat.roughness = 1.0
 	mat.cull_mode = BaseMaterial3D.CULL_DISABLED
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_PER_PIXEL
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	return mat

@@ -4161,4 +4161,9 @@ func _test_slope() -> void:
 	check(float(Slope.book().get("green_full", 0.0)) < float(Slope.book().get("course_full", 0.0)), "greens use a finer scale than the rest of the course")
 	hud.set_overlay(0)
 	check(int(tv.material.get_shader_parameter("overlay")) == 0 and not hud.overlay_btns[Slope.OVERLAY].button_pressed, "the slope overlay turns off")
+	var marks := SlopeArrows.new()
+	add_child(marks)
+	var mi := marks.get_child(0) as MultiMeshInstance3D
+	check(mi != null and mi.multimesh != null and mi.multimesh.mesh != null, "the downhill marks are a multimesh")
+	marks.queue_free()
 	hud.queue_free()
