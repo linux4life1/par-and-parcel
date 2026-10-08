@@ -268,6 +268,7 @@ const COMMENT_WORDS := {
 	"wait": "waiting", "weeds": "weeds", "pests": "pest damage", "wet": "wet ground",
 	"greens": "the greens", "greens_bad": "poor greens", "hit": "being hit by balls", "eruption": "the volcano", "tired": "the walk",
 	"amenity": "the facilities", "rest": "the bench", "prestige": "its reputation", "story": "the company", "putt": "missed putts",
+	"easy": "it being too easy",
 	"dark": "unlit holes", "night": "golf under the lights", "drink": "the drinks", "snack": "the food",
 	"rain": "the rain", "storm": "the storms", "celebrity": "seeing a celebrity",
 	"thirst": "nowhere to drink", "hungry": "nothing to eat", "restroom": "no restroom",
@@ -307,6 +308,8 @@ func _design_tip(hole: Hole, worst: String) -> String:
 	var sim := hud.sim
 	if not hole.lab_ready or hole.plays < 3:
 		return ""
+	if worst == "easy":
+		return "Designer's tip: the better golfers are bored. A bunker where the drives land, or water short of the green, would make it a test."
 	if hole.fun >= 72.0:
 		return "Designer's tip: they love it. Leave it be."
 	var scenery := sim.scenery_score(hole)
@@ -719,6 +722,10 @@ func _golfer(body: VBoxContainer) -> Callable:
 		rows.append([id, pips, up, perk_labels])
 
 	body.add_child(UIKit.gap(2))
+	body.add_child(UIKit.heading("Album"))
+	var album_line := UIKit.para("", 13, UIKit.TEXT)
+	body.add_child(album_line)
+	body.add_child(UIKit.gap(2))
 	body.add_child(UIKit.heading("Medals"))
 	var medal_line := UIKit.para("", 13, UIKit.TEXT)
 	body.add_child(medal_line)
@@ -791,6 +798,15 @@ func _golfer(body: VBoxContainer) -> Callable:
 			medal_line.text = "No medals yet. Play a round."
 		else:
 			medal_line.text = "%d gold  ·  %d silver  ·  %d bronze" % [counts[3], counts[2], counts[1]]
+		if sim.album.is_empty():
+			album_line.text = "Aces and tournament wins are kept here, and they come with you to the next course."
+		else:
+			var lines := ""
+			var start := maxi(sim.album.size() - 6, 0)
+			for i in range(sim.album.size() - 1, start - 1, -1):
+				var page: Dictionary = sim.album[i]
+				lines += str(page.get("text", "")) + "\n"
+			album_line.text = lines.strip_edges()
 		left.text = "%d points still to win" % car.challenge_points_left()
 		for row: Array in ch_rows:
 			var c: Dictionary = row[0]

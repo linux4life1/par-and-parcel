@@ -65,6 +65,7 @@ func _ready() -> void:
 	_test_station()
 	_test_comments()
 	_test_course_file()
+	_test_easy_and_album()
 	_test_firm()
 	_test_lights_gap_awards()
 	_test_length_scale()
@@ -3811,6 +3812,227 @@ func _test_course_file() -> void:
 	slick_course["rough_power"] = 0.0
 	var hosted_slick := CourseFile.host(db, slick, {}, gear, 3)
 	check(is_equal_approx(hosted_slick.course.green_decel, 1.0) and is_equal_approx(hosted_slick.course.rough_power, 1.0), "a file that claims frictionless greens still plays at the usual pace")
+	var career_path := Game.CAREER_PATH
+	var save_path := Game.SAVE_PATH
+	var live := Game._session_live
+	var old_sim := Game.sim
+	Game.CAREER_PATH = "user://career_share_test.json"
+	Game.SAVE_PATH = "user://save_share_test.json"
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	var home := _sim("three_holes", 21)
+	home.economy.money = home.opening_money + 5000.0
+	home.player.golfer.name = "Member"
+	home.album.append({"kind": "ace", "text": "Ace on the shared nine"})
+	home.career.levels["power"] = 2
+	Game.sim = home
+	Game._session_live = true
+	var left_id := home.club_id
+	var shared_path := Game.share_course()
+	check(shared_path != "", "the live club can be written out for a friend")
+	var purse := float(DataDB.find(db.scenarios, "free_play").get("money", 0.0))
+	check(Game.play_shared(shared_path.get_file()), "opening that file starts a club through the career book")
+	check(is_equal_approx(Game.sim.economy.money, purse + 5000.0), "the profit above the opening purse comes along")
+	check(is_equal_approx(Game.sim.opening_money, Game.sim.economy.money), "that bank is part of the hosted club's opening")
+	check(Game.sim.club_id != "" and Game.sim.club_id != left_id, "the hosted club gets its own id")
+	check(Game.sim.player.golfer.name == "Member" and Game.sim.career.level("power") == 2, "the pro comes along through the career book")
+	check(Game.sim.album.size() == 1 and str(Game.sim.album[0].get("text", "")) == "Ace on the shared nine", "the album comes along")
+	check(Game.play_shared(shared_path.get_file()), "the same file can be opened again")
+	check(is_equal_approx(Game.sim.economy.money, purse), "opening it again does not take the same bank twice")
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	var layout := _sim("three_holes", 22)
+	layout.economy.money = layout.opening_money + 9000.0
+	Game.sim = layout
+	Game._session_live = false
+	var layout_path := Game.share_course()
+	check(Game.play_shared(layout_path.get_file()), "a file can be opened before a club has started")
+	check(is_equal_approx(Game.sim.economy.money, purse), "the hidden first layout does not add its purse")
+	if FileAccess.file_exists(shared_path):
+		DirAccess.remove_absolute(shared_path)
+	if FileAccess.file_exists(layout_path):
+		DirAccess.remove_absolute(layout_path)
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	if FileAccess.file_exists(Game.SAVE_PATH):
+		DirAccess.remove_absolute(Game.SAVE_PATH)
+	Game.CAREER_PATH = career_path
+	Game.SAVE_PATH = save_path
+	Game.sim = old_sim
+	Game._session_live = live
+
+
+func _test_easy_and_album() -> void:
+	print("-- too easy, the album, and a career that travels")
+	var sim := _sim("three_holes", 3)
+	for h in sim.course.holes:
+		h.open = true
+		h.lab_ready = true
+		h.kind = 0
+	var good := Golfer.new()
+	good.skill = 0.85
+	good.persona = {}
+	good.satisfaction = 60.0
+	sim.visitors._judge_design(good, sim.course.holes[0], 1)
+	check(float(good.gripes.get("easy", 0.0)) < -1.0, "a skilled golfer on a course of breathers says it is too easy")
+	var poor := Golfer.new()
+	poor.skill = 0.3
+	poor.persona = {}
+	poor.satisfaction = 60.0
+	sim.visitors._judge_design(poor, sim.course.holes[0], 1)
+	check(not poor.gripes.has("easy"), "a beginner on the same course does not")
+	sim.course.holes[1].kind = 5
+	sim.course.holes[2].kind = 5
+	var asked := Golfer.new()
+	asked.skill = 0.9
+	asked.persona = {}
+	asked.satisfaction = 60.0
+	sim.visitors._judge_design(asked, sim.course.holes[0], 1)
+	check(not asked.gripes.has("easy"), "one breather among harder holes is not too easy")
+	var words: Dictionary = load("res://scripts/ui/panels.gd").get_script_constant_map().get("COMMENT_WORDS", {})
+	check(str(words.get("easy", "")) == "it being too easy", "the hole report has words for too easy")
+	var named: Hole = sim.course.holes[0]
+	if named.name == "":
+		named.name = "Magnolia"
+	sim.career.hole_done(named, 1, false)
+	check(sim.album.size() == 1 and str(sim.album[0].get("kind", "")) == "ace" and str(sim.album[0].get("text", "")).contains(named.name), "an ace is written into the album")
+	var def: Dictionary = DataDB.find(db.tournaments, "club")
+	sim.tourney.active = {"def": def, "setup": "standard"}
+	sim.tourney.board.append({"g": null, "name": "You", "thru": sim.course.holes.size(), "to_par": -3, "total": 0})
+	sim.tourney._finish()
+	check(sim.album.size() == 2 and str(sim.album[-1].get("kind", "")) == "win" and str(sim.album[-1].get("text", "")).contains(str(def.name)), "a tournament win is written into the album")
+	var attr := str(sim.db.attributes[0].get("id", "power"))
+	sim.career.levels[attr] = 4
+	sim.economy.money = 44000.0
+	check(sim.skills.unlock("frugal"), "the manager can unlock a perk at this club")
+	sim.skills.xp["golfer"] = 40
+	sim.skills.level["golfer"] = 3
+	sim.skills.points["golfer"] = 2
+	var profit := maxf(sim.economy.money - sim.opening_money, 0.0)
+	var packed := CareerBook.pack(sim)
+	check(profit > 0.0 and profit < sim.economy.money and is_equal_approx(float(packed.get("money", -1.0)), profit), "only the profit above the opening purse is packed")
+	var nxt := _sim("first_tee", 4)
+	var purse := nxt.economy.money
+	CareerBook.apply(nxt, packed)
+	check(is_equal_approx(nxt.economy.money, purse + profit), "the next course starts with its own purse plus the profit you made")
+	check(nxt.career.level(attr) == 4, "the pro's attributes come along")
+	check(nxt.album.size() == 2 and str(nxt.album[-1].get("kind", "")) == "win", "the album comes along")
+	check(not nxt.skills.has("frugal") and int(nxt.skills.level.manager) == 1, "a perk unlocked at one club is not unlocked at the next, and the manager starts at level 1")
+	check(int(nxt.skills.xp.golfer) == 40 and int(nxt.skills.level.golfer) == 3 and int(nxt.skills.points.golfer) == 2, "the golfer's experience, level and points come along")
+	var broke := _sim("weed_patch", 5)
+	var stake := broke.economy.money
+	var debt := CareerBook.pack(broke)
+	debt["money"] = -200.0
+	CareerBook.apply(broke, debt)
+	check(is_equal_approx(broke.economy.money, stake), "a debt does not follow you")
+	var kept := sim.to_dict()
+	var loaded := Sim.from_dict(db, kept, gear)
+	check(loaded.album.size() == sim.album.size() and str(loaded.album[0].get("kind", "")) == "ace", "a save keeps the album")
+	check(loaded.club_id == sim.club_id and is_equal_approx(loaded.opening_money, sim.opening_money), "a save keeps the club and what it started with")
+	kept.erase("album")
+	kept.erase("opening")
+	kept.erase("club")
+	var older := Sim.from_dict(db, kept, gear)
+	check(older.album.is_empty(), "an older save, with no album stored, still loads")
+	check(is_equal_approx(older.opening_money, older.economy.money) and older.club_id == Sim.legacy_club_id(kept), "an older save, with no opening or club stored, still loads")
+	var path := Game.CAREER_PATH
+	var live := Game._session_live
+	var old_sim := Game.sim
+	Game.CAREER_PATH = "user://career_bank_test.json"
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	Game._session_live = false
+	Game.new_game("free_play", 3)
+	var fresh := Game.sim.economy.money
+	Game.new_game("free_play", 4)
+	check(is_equal_approx(Game.sim.economy.money, fresh), "two new games in a row do not stack purses")
+	Game.sim.economy.money += 8000.0
+	var snap: Dictionary = Game.sim.to_dict()
+	Game.new_game("free_play", 5)
+	check(is_equal_approx(Game.sim.economy.money, fresh + 8000.0), "profit above the opening purse is carried once")
+	check(is_equal_approx(Game.sim.opening_money, Game.sim.economy.money), "the carried bank is part of the new club's opening")
+	Game.sim = Sim.from_dict(db, snap, gear)
+	Game._session_live = true
+	Game.new_game("free_play", 6)
+	check(is_equal_approx(Game.sim.economy.money, fresh), "a reloaded club does not carry its bank again")
+	Game.sim.economy.money = -200.0
+	Game.sim.opening_money = fresh
+	Game._session_live = true
+	Game.new_game("free_play", 7)
+	check(is_equal_approx(Game.sim.economy.money, fresh), "a debt stays behind")
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	var src := _sim("three_holes", 8)
+	var bare: Dictionary = src.to_dict()
+	bare.erase("club")
+	bare.erase("opening")
+	var again := Sim.from_dict(db, bare, gear)
+	var twice := Sim.from_dict(db, bare, gear)
+	check(again.club_id == twice.club_id and again.club_id == Sim.legacy_club_id(bare), "a club-less save loads the same id every time")
+	var free_play: Dictionary = DataDB.find(db.scenarios, "free_play")
+	var free_purse := float(free_play.get("money", -1.0))
+	Game.sim = again
+	Game._session_live = true
+	Game.sim.economy.money += 8000.0
+	var stale := FileAccess.open(Game.CAREER_PATH, FileAccess.WRITE)
+	stale.store_string(JSON.stringify({"money": 99999.0, "taken": []}))
+	stale.close()
+	check(is_equal_approx(Game.carried_money(), 8000.0), "the scenario screen reads the live club, not a stale file")
+	Game.new_game("free_play", 11)
+	check(is_equal_approx(Game.sim.economy.money, free_purse + 8000.0), "an older club carries its profit once")
+	Game.sim = Sim.from_dict(db, bare, gear)
+	Game._session_live = true
+	Game.sim.economy.money += 8000.0
+	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(Game.CAREER_PATH))
+	var book: Dictionary = {}
+	if raw is Dictionary:
+		book = raw
+	book["money"] = 99999.0
+	var stuffed := FileAccess.open(Game.CAREER_PATH, FileAccess.WRITE)
+	stuffed.store_string(JSON.stringify(book))
+	stuffed.close()
+	check(is_equal_approx(Game.carried_money(), 0.0), "a club already taken shows nothing, even when the file still names a sum")
+	Game.new_game("free_play", 12)
+	check(is_equal_approx(Game.sim.economy.money, free_purse), "loading that older club again does not carry the bank a second time")
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	var keeper := _sim("three_holes", 13)
+	keeper.album.append({"kind": "ace", "text": "Ace on Magnolia"})
+	var kept_id := "club-kept"
+	var seeded := FileAccess.open(Game.CAREER_PATH, FileAccess.WRITE)
+	seeded.store_string(JSON.stringify({"money": 0.0, "taken": [kept_id], "album": [{"kind": "ace", "text": "Ace on Magnolia"}]}))
+	seeded.close()
+	var save_path := Game.SAVE_PATH
+	Game.SAVE_PATH = "user://save_career_twice.json"
+	Game.sim = keeper
+	Game._session_live = true
+	Game.save_game()
+	Game.save_game()
+	var saved_raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(Game.CAREER_PATH))
+	var saved_book: Dictionary = {}
+	if saved_raw is Dictionary:
+		saved_book = saved_raw
+	var saved_album: Array = saved_book.get("album", [])
+	var saved_taken: Array = saved_book.get("taken", [])
+	var album_kept := false
+	for page in saved_album:
+		if page is Dictionary:
+			var row: Dictionary = page
+			if str(row.get("text", "")) == "Ace on Magnolia":
+				album_kept = true
+	var id_kept := false
+	for id in saved_taken:
+		if str(id) == kept_id:
+			id_kept = true
+	check(album_kept and id_kept, "a second save still holds the album and the clubs taken by the first")
+	if FileAccess.file_exists(Game.SAVE_PATH):
+		DirAccess.remove_absolute(Game.SAVE_PATH)
+	Game.SAVE_PATH = save_path
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	Game.CAREER_PATH = path
+	Game.sim = old_sim
+	Game._session_live = live
 
 
 func _test_firm() -> void:

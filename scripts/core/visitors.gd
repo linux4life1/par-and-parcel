@@ -3,6 +3,8 @@ extends RefCounted
 ## Everyone on the course who is not staff: arrivals, green fees, moods,
 ## flying balls, and people getting hit by them.
 
+## A golfer this good is bored by a course that never asks a question.
+const SKILLED := 0.7
 const GOOD_REASONS := {
 	"scenery": "Beautiful scenery.", "score": "Played the round of my life.", "drink": "Cold drinks out on the course.",
 	"greens": "The greens were perfect.", "celebrity": "I even spotted a celebrity.",
@@ -15,6 +17,7 @@ const BAD_REASONS := {
 	"greens_bad": "The greens were in terrible shape.", "water": "Lost too many balls in the water.",
 	"bare": "Dull, featureless holes.", "bunker": "Bunkers everywhere.", "rough": "Spent the day hacking out of rough.",
 	"oob": "Too easy to hit it off the property.", "storm": "Caught in a thunderstorm.",
+	"easy": "Too easy for me.",
 	"eruption": "The volcano erupted while I was on the course.", "restroom": "Not a restroom in sight.",
 	"hungry": "Nothing to eat out there.", "tired": "Nowhere to sit down.",
 }
@@ -969,7 +972,9 @@ func _judge_design(g: Golfer, hole: Hole, n: int) -> void:
 				g.feel(1.6, "Hole %d suits my game." % n, "suits")
 			elif have < 0.3:
 				g.feel(-1.5, "Hole %d asks for %s I just don't have." % [n, str(a[2])], "hard")
-		if hole.kind == 0 and g.last_kind > 0 and g.last_kind != 0:
+		if hole.kind == 0 and g.skill >= SKILLED and _breather_heavy():
+			g.feel(-1.8, "This course is too easy for me.", "easy")
+		elif hole.kind == 0 and g.last_kind > 0 and g.last_kind != 0:
 			g.feel(1.0, "A breather after that last hole. Lovely.", "suits")
 		if g.last_kind >= 0:
 			if g.last_kind == hole.kind and g.last_par == hole.par:
@@ -985,6 +990,19 @@ func _judge_design(g: Golfer, hole: Hole, n: int) -> void:
 		g.feel(-0.8, "Hole %d is a steep walk." % n, "tired")
 	if hole.award != "":
 		g.feel(1.5, "I've read about this hole in the magazines.", "prestige")
+
+
+## Most of the rated, open holes are breathers: nothing asks a question.
+func _breather_heavy() -> bool:
+	var rated := 0
+	var breathers := 0
+	for hole in sim.course.holes:
+		if not hole.open or not hole.lab_ready:
+			continue
+		rated += 1
+		if hole.kind == 0:
+			breathers += 1
+	return rated >= 2 and breathers * 2 >= rated
 
 
 # ------------------------------------------------------------ live balls
