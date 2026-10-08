@@ -416,6 +416,7 @@ func _process(delta: float) -> void:
 #   --cheertest=ovation (the gallery hears it every 2.5 s) --cheerhold (arms stay up) --posetest (a sulk and a fist pump)
 #   --ragetest[=toss] (a golfer has a tantrum; the camera follows them off)
 #   --weeds=all|N (the course goes to weeds: a west-to-east gradient, or N random tiles)
+#   --swatch (a band of firm fairway and a band of fast green on the first hole)
 #   --tee=N (centre on hole N's tee box)
 #   --day=N (jump to a day of the year: 0 March 1st, 168 the first of September)
 #   --stories=<id|1> (the Feed panel's Stories tab, starting that story first)
@@ -477,6 +478,26 @@ func _apply_test_args() -> void:
 				var n := int(a.weeds)
 				for k in n:
 					sim.course.weeds[tiles[wrng.randi() % tiles.size()]] = lerpf(0.15, 1.0, float(k) / maxf(float(n - 1), 1.0))
+	if a.has("swatch") and not sim.course.holes.is_empty():
+		# bands of the two new paints on the first hole, so a screenshot can judge them
+		var ground := sim.course
+		ground.guard = false
+		var hole: Hole = ground.holes[0]
+		var aim := hole.direction_at(0.35)
+		var side_dir := Vector2(-aim.y, aim.x)
+		for i in ground.terrain.size():
+			var tx := i % ground.w
+			var ty := int(i / ground.w)
+			var centre := ground.tile_center(tx, ty)
+			var from_tee := Vector2(centre.x - hole.tee.x, centre.z - hole.tee.z)
+			var along := from_tee.dot(aim)
+			var side := absf(from_tee.dot(side_dir))
+			if side < 22.0 and along > 30.0 and along < hole.length * 0.5:
+				ground.set_terrain(tx, ty, Defs.T.FIRM)
+			elif side < 16.0 and along > hole.length * 0.62 and along < hole.length * 0.92:
+				ground.set_terrain(tx, ty, Defs.T.FAST_GREEN)
+		rig.follow = null
+		rig.focus = hole.point_along(0.4)
 	if a.has("fast"):
 		Game.fast_forward(float(a.fast))
 	if a.has("shot"):
