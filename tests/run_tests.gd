@@ -3651,5 +3651,14 @@ func _test_length_scale() -> void:
 	shifted["power_floor"] = 0.5
 	shifted["power_cap"] = 1.2
 	check(is_equal_approx(Members.power_at(0.0, shifted), 0.5) and is_equal_approx(Members.power_at(1.0, shifted), 1.2) and is_equal_approx(Members.power_share(1.2, shifted), 1.0), "a change in the progression data is the length scale")
-	var card := roundi(Members.power_share(Members.power_at(0.4, progress), progress) * 100.0)
+	var card := roundi(clampf(Members.power_share(Members.power_at(0.4, progress), progress), 0.0, 1.0) * 100.0)
 	check(card == 40, "the golfer card reads the same scale")
+	var rolled := Golfer.new()
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 11
+	rolled.roll_stats(0.5, dice, {"power_floor": 2.0, "power_cap": 2.0})
+	check(rolled.power >= 1.94 and rolled.power <= 2.06, "a flat length scale still leaves room for the small roll")
+	sim.members.progress["power_floor"] = 1.5
+	sim.members.progress["power_cap"] = 1.8
+	var lab_g := sim.lab._test_golfer(HoleLab.CLASSES[0])
+	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")
