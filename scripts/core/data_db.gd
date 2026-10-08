@@ -31,6 +31,7 @@ var lights: Dictionary = {}     # which lights pay only for the hours they are o
 var starter: Dictionary = {}    # how far apart the starter sends parties
 var awards: Dictionary = {}     # themed hole awards
 var debt: Dictionary = {}       # how a balance below zero meets a new arrival
+var preview: Dictionary = {}    # the par and yardage label while a hole is laid out
 var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
 var feed: Dictionary = {}
@@ -69,6 +70,7 @@ func _init() -> void:
 	starter = _load("starter")
 	awards = _load("awards")
 	debt = _load("debt")
+	preview = _load("preview")
 	names = _load("names")
 	feed = _load("feed")
 

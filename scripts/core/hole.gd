@@ -101,6 +101,10 @@ var _hk := PackedFloat32Array()
 var _hv := PackedInt32Array()
 var _hn := 0
 var _pop_key := 0.0
+## True when the line of play reached the pin and is not a detour. The
+## preview reads this. It is not stored: the route is measured again on load.
+var playable := true
+var _linked := true
 
 
 func straight_length() -> float:
@@ -133,7 +137,11 @@ func update_metrics(course: Course) -> void:
 	var walked := _polyline_length(route)
 	if walked < straight:
 		walked = straight
+	# A route longer than ROUTE_CAP times the straight line is a detour, not
+	# the hole. The length is capped, and the preview treats that as unplayable.
+	playable = _linked
 	if straight > 1.0 and walked > straight * ROUTE_CAP:
+		playable = false
 		walked = straight * ROUTE_CAP
 	length = walked
 	var now := par_for(length)
@@ -148,7 +156,7 @@ static func measure(course: Course, tee_at: Vector3, pin_at: Vector3) -> Diction
 	hole.tee = tee_at
 	hole.pin = pin_at
 	hole.update_metrics(course)
-	return {"par": hole.par, "length": hole.length, "line": hole.route}
+	return {"par": hole.par, "length": hole.length, "line": hole.route, "playable": hole.playable}
 
 
 func _shift_tally(from_par: int, to_par: int) -> void:
@@ -176,6 +184,7 @@ func _route(course: Course) -> PackedVector2Array:
 	var a := Vector2(tee.x, tee.z)
 	var b := Vector2(pin.x, pin.z)
 	if a.distance_to(b) < 1.0 or _segment_clear(course, a, b):
+		_linked = true
 		return PackedVector2Array([a, b])
 	var margin := 18
 	var tt := course.tile_of(tee.x, tee.z)
@@ -234,6 +243,7 @@ func _route(course: Course) -> PackedVector2Array:
 					parent[ni] = cur
 					_heap_push(nd, ni)
 	if dist[goal] == INF:
+		_linked = false
 		return PackedVector2Array([a, b])
 	var chain: Array[int] = []
 	var guard := 0
@@ -245,6 +255,7 @@ func _route(course: Course) -> PackedVector2Array:
 		walk = parent[walk]
 		guard += 1
 	if chain.is_empty() or chain[chain.size() - 1] != start:
+		_linked = false
 		return PackedVector2Array([a, b])
 	chain.reverse()
 	var pts := PackedVector2Array()
@@ -256,6 +267,7 @@ func _route(course: Course) -> PackedVector2Array:
 		var center := course.tile_center(tx, ty)
 		pts.append(Vector2(center.x, center.z))
 	pts.append(b)
+	_linked = true
 	return _smooth(course, pts)
 
 

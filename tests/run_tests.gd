@@ -2595,7 +2595,20 @@ func _test_dogleg() -> void:
 	c.revision += 1
 	var tee := c.tile_center(tee_t.x, tee_t.y)
 	var pin := c.tile_center(pin_t.x, pin_t.y)
+	var laid := BuildTools.new()
+	laid.sim = sim
+	laid.mode = "hole"
+	laid._tee = tee
+	laid.hover = pin
+	laid._update_preview()
+	var dog_par := laid.preview_par
+	var dog_len := laid.preview_length
+	var searches := laid._preview_searches
+	laid.hover = Vector3(pin.x + 0.4, pin.y, pin.z + 0.4)
+	laid._update_preview()
+	check(laid._preview_searches == searches, "the throttle doesn't recompute when the tile is unchanged")
 	var hole := sim.add_hole(tee, pin)
+	check(dog_par == hole.par and is_equal_approx(dog_len, hole.length), "the dogleg preview is the par and length the hole gets (%d, %.1f m)" % [dog_par, dog_len])
 	var chord := hole.straight_length()
 	print("   dogleg straight %.0f m (%d yd), along the fairway %.0f m (%d yd), par %d" % [chord, Defs.yards(chord), hole.length, Defs.yards(hole.length), hole.par])
 	check(chord <= Hole.PAR_3, "the straight line across a 30 by 28 dogleg is a par 3 distance (%.0f m)" % chord)
@@ -2605,7 +2618,16 @@ func _test_dogleg() -> void:
 	var across := hole.tee.lerp(hole.pin, 0.5)
 	check(Vector2(mid.x, mid.z).distance_to(Vector2(bend.x, bend.z)) < 40.0, "the line of play goes round the corner")
 	check(Vector2(mid.x, mid.z).distance_to(Vector2(bend.x, bend.z)) < Vector2(across.x, across.z).distance_to(Vector2(bend.x, bend.z)), "and not across the rough in the corner")
-	var straight_hole := sim.add_hole(c.tile_center(sx, 90), c.tile_center(sx, 30))
+	var st_tee := c.tile_center(sx, 90)
+	var st_pin := c.tile_center(sx, 30)
+	laid._preview_tile = Vector2i(-999, -999)
+	laid._preview_text = ""
+	laid._tee = st_tee
+	laid.hover = st_pin
+	laid._update_preview()
+	var straight_hole := sim.add_hole(st_tee, st_pin)
+	check(laid.preview_par == straight_hole.par and is_equal_approx(laid.preview_length, straight_hole.length), "the straight preview is the par and length the hole gets (%.1f m)" % laid.preview_length)
+	laid.free()
 	check(straight_hole.par == 4 and absf(straight_hole.length - 300.0) < 2.0, "a straight 60-tile hole is still a 300 m par 4 (%.1f m)" % straight_hole.length)
 	check(c.set_object(tee_t.x, pin_t.y, Defs.O.FLOODLIGHT), "a floodlight can stand at the corner")
 	var share := hole.lit_share(c)
@@ -2658,6 +2680,7 @@ func _test_dogleg() -> void:
 	tools.mode = "hole"
 	tools._tee = hole.tee
 	tools.hover = hole.pin
+	tools._update_preview()
 	var preview := tools.hint()
 	check(preview.contains("Par 4") and preview.contains("yd") and preview.contains("1 tile ≈ 5.5 yd."), "laying out a hole previews par and yardage (%s)" % preview.replace("\n", " "))
 	tools.free()
