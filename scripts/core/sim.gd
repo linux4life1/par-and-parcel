@@ -75,6 +75,15 @@ var _slow := 0.0
 var _day := 0
 var _scenery := {}
 var _lines_rev := -1
+var _lot_rev := -2
+var _lot_funs := PackedFloat32Array()
+var _lot_builds := 0
+var _lot_shade := PackedByteArray()
+var _lot_sat := PackedFloat32Array()
+var _lot_cellv := PackedFloat32Array()
+var _lot_price := PackedFloat32Array()
+var _lot_lava := false
+var _lot_marina := false
 var _mark_rev := -2
 var _marks: Array = []
 var _mark_scale := PackedFloat32Array()
@@ -627,6 +636,151 @@ func lot_value(tx: int, ty: int) -> float:
 	if resort.has("marina"):
 		v *= 1.4
 	return float(int(maxf(v, 500.0) / 50.0) * 50)
+
+
+## 0 is the cheapest ground on the course right now, 255 the dearest.
+## The shade is relative, so the course rating does not change it. Kept
+## until the course changes, or any one hole's fun has moved by a point.
+## The 9 by 9 neighbourhood is a summed-area table, so a rebuild does not
+## walk those neighbours again for every tile. lot_value stays the reference.
+func lot_shade() -> PackedByteArray:
+	var n := course.w * course.h
+	if _lot_rev == course.revision and _lot_fun_held() and _lot_shade.size() == n:
+		return _lot_shade
+	_lot_rev = course.revision
+	_lot_funs.resize(course.holes.size())
+	for i in course.holes.size():
+		_lot_funs[i] = course.holes[i].fun
+	_lot_builds += 1
+	_build_lot_sat()
+	_price_lots()
+	var lo := 1.0e12
+	var hi := -1.0e12
+	for i in n:
+		var v := _lot_price[i]
+		lo = minf(lo, v)
+		hi = maxf(hi, v)
+	_lot_shade.resize(n)
+	var span := hi - lo
+	for i in n:
+		var t := 0.5 if span < 1.0 else (_lot_price[i] - lo) / span
+		_lot_shade[i] = int(clampf(t, 0.0, 1.0) * 255.0)
+	return _lot_shade
+
+
+func _lot_fun_held() -> bool:
+	if _lot_funs.size() != course.holes.size():
+		return false
+	for i in course.holes.size():
+		if absf(course.holes[i].fun - _lot_funs[i]) >= 1.0:
+			return false
+	return true
+
+
+## What one tile adds to a neighbour's price. The centre tile is left out,
+## the same way lot_value skips it.
+func _lot_cell(i: int) -> float:
+	var o := int(course.objects[i])
+	var a := Defs.O_SCENERY[o] * 55.0
+	if o == Defs.O.HOUSE or o == Defs.O.HOME_SITE:
+		a -= 60.0
+	if course.terrain[i] == Defs.T.WATER and not _lot_lava:
+		a += 22.0
+	return a
+
+
+func _build_lot_sat() -> void:
+	_lot_lava = is_lava()
+	_lot_marina = resort.has("marina")
+	var w := course.w
+	var h := course.h
+	var stride := w + 1
+	if _lot_sat.size() != stride * (h + 1):
+		_lot_sat = PackedFloat32Array()
+		_lot_sat.resize(stride * (h + 1))
+	else:
+		_lot_sat.fill(0.0)
+	if _lot_cellv.size() != w * h:
+		_lot_cellv = PackedFloat32Array()
+		_lot_cellv.resize(w * h)
+	for y in h:
+		var run := 0.0
+		var row := y * w
+		var below := y * stride
+		var dest := (y + 1) * stride
+		for x in w:
+			var cell := _lot_cell(row + x)
+			_lot_cellv[row + x] = cell
+			run += cell
+			_lot_sat[dest + x + 1] = _lot_sat[below + x + 1] + run
+
+
+## Prices every tile from the table. Hole geometry is cached so the inner
+## loop does not build vectors or call out.
+func _price_lots() -> void:
+	var w := course.w
+	var h := course.h
+	var n := w * h
+	var stride := w + 1
+	var tile := Defs.TILE
+	var base := 1200.0 + rating * 22.0
+	var nh := course.holes.size()
+	var hx := PackedFloat32Array()
+	var hz := PackedFloat32Array()
+	var abx := PackedFloat32Array()
+	var abz := PackedFloat32Array()
+	var inv := PackedFloat32Array()
+	var fun := PackedFloat32Array()
+	hx.resize(nh)
+	hz.resize(nh)
+	abx.resize(nh)
+	abz.resize(nh)
+	inv.resize(nh)
+	fun.resize(nh)
+	for hi in nh:
+		var hole := course.holes[hi]
+		hx[hi] = hole.tee.x
+		hz[hi] = hole.tee.z
+		var dx := hole.pin.x - hole.tee.x
+		var dz := hole.pin.z - hole.tee.z
+		abx[hi] = dx
+		abz[hi] = dz
+		var l2 := dx * dx + dz * dz
+		inv[hi] = 0.0 if l2 < 1e-9 else 1.0 / l2
+		fun[hi] = hole.fun
+	if _lot_price.size() != n:
+		_lot_price = PackedFloat32Array()
+		_lot_price.resize(n)
+	var marina := _lot_marina
+	for y in h:
+		var pz := (float(y) + 0.5) * tile
+		var y0 := maxi(y - 4, 0)
+		var y1 := mini(y + 4, h - 1)
+		var row := y * w
+		for x in w:
+			var x0 := maxi(x - 4, 0)
+			var x1 := mini(x + 4, w - 1)
+			var neigh := _lot_sat[(y1 + 1) * stride + (x1 + 1)] - _lot_sat[y0 * stride + (x1 + 1)] - _lot_sat[(y1 + 1) * stride + x0] + _lot_sat[y0 * stride + x0]
+			var v := base + neigh - _lot_cellv[row + x]
+			var px := (float(x) + 0.5) * tile
+			for hi in nh:
+				var d2: float
+				if inv[hi] == 0.0:
+					var ddx := hx[hi] - px
+					var ddz := hz[hi] - pz
+					d2 = ddx * ddx + ddz * ddz
+				else:
+					var tt := clampf(((px - hx[hi]) * abx[hi] + (pz - hz[hi]) * abz[hi]) * inv[hi], 0.0, 1.0)
+					var qx := hx[hi] + abx[hi] * tt - px
+					var qz := hz[hi] + abz[hi] * tt - pz
+					d2 = qx * qx + qz * qz
+				if d2 < 484.0:
+					v -= 700.0
+				elif d2 < 4900.0:
+					v += fun[hi] * 4.0
+			if marina:
+				v *= 1.4
+			_lot_price[row + x] = float(int(maxf(v, 500.0) / 50.0) * 50)
 
 
 ## A member buys a free home site, if there is one. The lot becomes a house.

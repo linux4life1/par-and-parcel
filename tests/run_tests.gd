@@ -57,6 +57,7 @@ func _ready() -> void:
 	_test_mood_map()
 	_test_draft_hole()
 	_test_pace()
+	_test_lot_shade()
 	_test_setup()
 	_test_landmarks()
 	_test_station()
@@ -2827,6 +2828,97 @@ func _test_pace() -> void:
 	sim.remove_hole(0)
 	check(on_it.state == Group.S.TO_TEE and absf(on_it.hole_time) < 0.001, "removing the hole they were on starts the next one from zero")
 	check(later.hole_i == 1 and absf(later.hole_time - 4.0) < 0.001, "a party further along keeps the time on the hole they are still playing")
+
+
+func _test_lot_shade() -> void:
+	print("-- home value")
+	var sim := _sim("three_holes", 5)
+	var c := sim.course
+	var tx := -1
+	var ty := -1
+	for y in range(6, c.h - 6):
+		if tx >= 0:
+			break
+		for x in range(6, c.w - 6):
+			var at := y * c.w + x
+			if c.terrain[at] == Defs.T.ROUGH and c.objects[at] == 0 and c.terrain[at + 1] != Defs.T.WATER:
+				tx = x
+				ty = y
+				break
+	check(tx >= 0 and c.w == 128 and c.h == 128, "the starter course has a rough tile to price, on a 128 by 128 map")
+	var i := ty * c.w + tx
+	var first := sim.lot_shade()
+	var mismatch := 0
+	for y in c.h:
+		for x in c.w:
+			if not is_equal_approx(sim._lot_price[y * c.w + x], sim.lot_value(x, y)):
+				mismatch += 1
+	check(mismatch == 0, "the fast lot map matches the reference price on every tile (%d differ)" % mismatch)
+	c.revision += 1
+	var t0 := Time.get_ticks_usec()
+	sim.lot_shade()
+	var ms := float(Time.get_ticks_usec() - t0) / 1000.0
+	print("   lot map rebuild on 128 by 128: %.2f ms" % ms)
+	var slow0 := Time.get_ticks_usec()
+	for y2 in c.h:
+		for x2 in c.w:
+			sim.lot_value(x2, y2)
+	var slow := float(Time.get_ticks_usec() - slow0) / 1000.0
+	print("   pricing every tile with lot_value on 128 by 128: %.2f ms" % slow)
+	check(slow > ms * 10.0, "the fast rebuild is at least ten times quicker than pricing every tile (%.2f ms against %.2f)" % [ms, slow])
+	var again := sim.lot_shade()
+	check(first.size() == c.w * c.h and int(first[i]) == int(again[i]), "the lot map covers the course and is kept until it changes")
+	var hi := 0
+	var lo := 255
+	for b in first:
+		var n := int(b)
+		if n > hi:
+			hi = n
+		if n < lo:
+			lo = n
+	check(hi > lo, "the dearest ground is brighter than the cheapest")
+	var worth := sim.lot_value(tx, ty)
+	var was := int(first[i])
+	c.guard = false
+	var painted := 0
+	for dy in range(-1, 2):
+		for dx in range(-1, 2):
+			if dx == 0 and dy == 0:
+				continue
+			if c.set_terrain(tx + dx, ty + dy, Defs.T.WATER):
+				painted += 1
+	check(painted > 0 and sim.lot_value(tx, ty) > worth, "water next door raises what the lot is worth (%.0f to %.0f)" % [worth, sim.lot_value(tx, ty)])
+	var second := sim.lot_shade()
+	check(int(second[i]) > was, "and the map gets brighter there (%d to %d)" % [was, int(second[i])])
+	var hole0 := c.holes[0]
+	var watch: Array[int] = []
+	var watch_was: Array[int] = []
+	for y in c.h:
+		for x in c.w:
+			var p := Vector2((x + 0.5) * Defs.TILE, (y + 0.5) * Defs.TILE)
+			var d := Ball._seg_dist(Vector2(hole0.tee.x, hole0.tee.z), Vector2(hole0.pin.x, hole0.pin.z), p)
+			if d < 70.0:
+				var at := y * c.w + x
+				watch.append(at)
+				watch_was.append(int(second[at]))
+	check(not watch.is_empty(), "hole 1 has ground within 70 m of the line of play")
+	var built := sim._lot_builds
+	sim.rating += 25.0
+	sim.lot_shade()
+	check(sim._lot_builds == built, "changing only the rating does not rebuild the lot map")
+	hole0.fun += 20.0
+	var third := sim.lot_shade()
+	var moved := false
+	for k in watch.size():
+		if int(third[watch[k]]) != watch_was[k]:
+			moved = true
+			break
+	check(sim._lot_builds == built + 1 and moved, "a hole the golfers enjoy more changes the shade within 70 m of its line")
+	var swapped := sim._lot_builds
+	c.holes[0].fun += 5.0
+	c.holes[1].fun -= 5.0
+	sim.lot_shade()
+	check(sim._lot_builds == swapped + 1, "fun moving from one hole to another still rebuilds the lot map")
 
 
 func _test_setup() -> void:
