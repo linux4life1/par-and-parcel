@@ -58,6 +58,7 @@ func _ready() -> void:
 	_test_draft_hole()
 	_test_pace()
 	_test_landmarks()
+	_test_progress()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -3121,3 +3122,105 @@ func _test_tee_line() -> void:
 	for i in 600:
 		s2.visitors.wait_on(seated, 1.0 / 60.0, "tee", 25.0 + i / 60.0, true)
 	check(60.0 - seated.satisfaction < lost * 0.6, "a bench makes the wait easier")
+
+
+func _test_progress() -> void:
+	print("-- golfer progression")
+	var sim := _sim("three_holes", 7)
+	var spec: Dictionary = sim.members.progress
+	var step := float(spec.get("per_visit", 0.0))
+	var range_extra := float(spec.get("range", 0.0))
+	var putt_extra := float(spec.get("putting", 0.0))
+	check(step > 0.0 and range_extra > step and putt_extra > step, "how fast regulars improve is data, and the facilities add more than a plain visit")
+	var joined := sim.visitors.make_golfer("public", 0.45)
+	joined.holes_played = 3
+	joined.satisfaction = 90.0
+	var m := sim.members.enroll(joined, true)
+	var skill0 := float(m.skill)
+	var power0 := float(m.power)
+	var putt0 := float(m.putting)
+	var back := sim.members.make_golfer(m)
+	back.holes_played = 3
+	back.satisfaction = 75.0
+	sim.members.on_depart(back)
+	check(is_equal_approx(float(m.skill), skill0 + step) and is_equal_approx(float(m.power), power0 + step) and is_equal_approx(float(m.putting), putt0 + step), "a finished visit improves the stored game by the plain amount")
+	var again := sim.members.make_golfer(m)
+	check(is_equal_approx(again.power, float(m.power)) and again.power > power0, "the next visit starts from what they kept")
+	var held := float(m.power)
+	var skip := sim.members.make_golfer(m)
+	skip.holes_played = 0
+	sim.members.on_depart(skip)
+	check(is_equal_approx(float(m.power), held) and not m.on_course, "leaving without a hole teaches nothing")
+	var p1 := float(m.power)
+	var s1 := float(m.skill)
+	var u1 := float(m.putting)
+	var plain := sim.members.make_golfer(m)
+	plain.holes_played = 2
+	plain.satisfaction = 70.0
+	sim.members.on_depart(plain)
+	var plain_power := float(m.power) - p1
+	var plain_skill := float(m.skill) - s1
+	var plain_putt := float(m.putting) - u1
+	var c := sim.course
+	var spot := c.clubhouse + Vector2i(8, -6)
+	c.guard = false
+	c.set_terrain(spot.x, spot.y, Defs.T.ROUGH)
+	c.set_object(spot.x, spot.y, Defs.O.NONE)
+	c.guard = true
+	sim.economy.money = 50000.0
+	check(sim.place_object(spot.x, spot.y, Defs.O.DRIVING_RANGE) == 1, "a driving range goes up")
+	var p2 := float(m.power)
+	var s2 := float(m.skill)
+	var ranged := sim.members.make_golfer(m)
+	ranged.holes_played = 2
+	ranged.satisfaction = 70.0
+	sim.members.on_depart(ranged)
+	check(is_equal_approx(float(m.power) - p2, plain_power + range_extra) and is_equal_approx(float(m.skill) - s2, plain_skill), "the range adds length on top, and does not teach the rest of the game any faster")
+	c.guard = false
+	c.set_object(spot.x, spot.y, Defs.O.NONE)
+	c.set_terrain(spot.x + 3, spot.y, Defs.T.ROUGH)
+	c.set_object(spot.x + 3, spot.y, Defs.O.NONE)
+	c.guard = true
+	check(sim.place_object(spot.x + 3, spot.y, Defs.O.PUTTING_GREEN) == 1, "a practice green goes up")
+	var u2 := float(m.putting)
+	var power_at_green := float(m.power)
+	var green := sim.members.make_golfer(m)
+	green.holes_played = 2
+	green.satisfaction = 70.0
+	sim.members.on_depart(green)
+	check(is_equal_approx(float(m.putting) - u2, plain_putt + putt_extra), "the practice green adds putting on top")
+	check(is_equal_approx(float(m.power) - power_at_green, plain_power), "without the range, length grows only at the plain rate")
+	var stored := float(m.power)
+	var day := sim.members.make_golfer(m)
+	c.guard = false
+	c.set_object(spot.x + 3, spot.y, Defs.O.NONE)
+	c.set_terrain(spot.x, spot.y, Defs.T.ROUGH)
+	c.set_object(spot.x, spot.y, Defs.O.NONE)
+	c.guard = true
+	check(sim.place_object(spot.x, spot.y, Defs.O.DRIVING_RANGE) == 1, "the range is back for the bucket")
+	sim.visitors._register(day)
+	check(day.power > stored and is_equal_approx(float(m.power), stored), "the bucket is not written onto the member; only a finished visit is")
+	var bucket := sim.visitors.make_golfer("public", 0.5)
+	bucket.power = 0.9
+	var bucket_acc := bucket.accuracy
+	sim.visitors._register(bucket)
+	check(is_equal_approx(bucket.power, 0.9 + float(sim.members.warmup.get("range_power", 0.0))) and is_equal_approx(bucket.accuracy, bucket_acc), "a bucket on the range adds length for the round, not accuracy")
+	c.guard = false
+	c.set_object(spot.x, spot.y, Defs.O.NONE)
+	c.guard = true
+	var cold := sim.visitors.make_golfer("public", 0.5)
+	var cold_power := cold.power
+	var cold_acc := cold.accuracy
+	var cold_putt := cold.putting
+	sim.visitors._register(cold)
+	check(is_equal_approx(cold.power, cold_power) and is_equal_approx(cold.accuracy, cold_acc) and is_equal_approx(cold.putting, cold_putt), "with no range and no practice green, arriving changes neither length nor putting")
+	m.power = float(spec.get("power_cap", 1.06))
+	m.skill = float(spec.get("skill_cap", 0.99))
+	m.accuracy = float(m.skill)
+	m.putting = float(m.skill)
+	m.imagination = float(m.skill)
+	var topped := sim.members.make_golfer(m)
+	topped.holes_played = 2
+	topped.satisfaction = 70.0
+	sim.members.on_depart(topped)
+	check(is_equal_approx(float(m.power), float(spec.get("power_cap", 1.06))) and is_equal_approx(float(m.skill), float(spec.get("skill_cap", 0.99))) and is_equal_approx(float(m.putting), float(spec.get("skill_cap", 0.99))), "a member stops at the top of the scale")

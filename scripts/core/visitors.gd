@@ -261,18 +261,22 @@ func _register(g: Golfer) -> void:
 	var shop := sim.skills.mult("retail") * (1.0 + 0.12 * sim.clubhouse_level)
 	if sim.rng.randf() < 0.14 * shop:
 		sim.economy.earn("pro_shop", sim.rng.randf_range(15.0, 90.0) * shop)
-	# a warm-up before the round
+	# a warm-up before the round. It lasts this round only; a member keeps
+	# the slower gain in Members._grow.
+	var warm := sim.members.warmup
+	var skill_cap := float(warm.get("skill_cap", sim.members.progress.get("skill_cap", 0.99)))
+	var power_cap := float(warm.get("power_cap", sim.members.progress.get("power_cap", 1.06)))
 	if int(amenities.get("putting", 0)) > 0:
-		g.putting = minf(0.99, g.putting + 0.05)
+		g.putting = minf(skill_cap, g.putting + float(warm.get("putting", 0.05)))
 		g.feel(1.5, "Rolled a few on the practice green first.", "practice")
 	if int(amenities.get("range", 0)) > 0:
-		g.accuracy = minf(0.99, g.accuracy + 0.03)
+		g.power = minf(power_cap, g.power + float(warm.get("range_power", 0.03)))
 		sim.economy.earn("range", 4.0)
 		g.feel(1.5, "Hit a bucket of balls on the range first.", "practice")
 	if sim.clubhouse_level > 0:
 		g.feel(0.4 * sim.clubhouse_level, "", "prestige")
 	if sim.crew.count("club_pro") > 0:
-		g.accuracy = minf(0.99, g.accuracy + 0.02)
+		g.accuracy = minf(skill_cap, g.accuracy + float(warm.get("pro_accuracy", 0.02)))
 		g.feel(2.5, "Got a quick tip from the club pro.", "practice")
 	if sim.resort.has("tennis") and g.satisfaction < 55.0:
 		g.satisfaction = 55.0

@@ -7,6 +7,20 @@
     {"id": "gold", "name": "Gold", "dues": 50, "discount": 0.20, "color": "f2c94c", "visits": 3, "rating": 62, "holes": 6},
     {"id": "platinum", "name": "Platinum", "dues": 90, "discount": 0.30, "color": "e6e9f2", "visits": 3, "rating": 75, "holes": 9}
   ],
+  "progress": {
+    "_about": "What a member keeps after a round they finished. per_visit is added to skill, power, accuracy, putting and imagination. range is added to power again when the course has a driving range. putting is added to putting again when it has a practice green. power_cap and skill_cap are the top of the scale a new golfer can roll.",
+    "per_visit": 0.004,
+    "range": 0.01,
+    "putting": 0.01,
+    "power_cap": 1.06,
+    "skill_cap": 0.99
+  },
+  "warmup": {
+    "_about": "A one-round warm-up as a public golfer arrives. The range adds length (power). The practice green adds putting. The club pro adds accuracy. None of this is written back onto a member; what they keep is progress.",
+    "range_power": 0.03,
+    "putting": 0.05,
+    "pro_accuracy": 0.02
+  },
   "factors": [
     {"id": "challenge", "name": "A proper test of golf", "hint": "wants holes that test their game without beating them up"},
     {"id": "scenery", "name": "Beautiful surroundings", "hint": "wants prettier holes to look at"},
