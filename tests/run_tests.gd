@@ -75,6 +75,7 @@ func _ready() -> void:
 	_test_slope()
 	_test_debt_welcome()
 	_test_close_structure()
+	_test_yardage()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -5042,3 +5043,38 @@ func _test_storm_resign() -> void:
 	mem.on_depart(last)
 	check(not mem.roster.has(card), "the third strike resigns them")
 	check(Members.strike_limit(0) == 1 and Members.strike_limit(-3) == 1, "a resign strike count below 1 is raised to 1")
+
+
+func _test_yardage() -> void:
+	print("-- yardage card")
+	var sim := _sim("sandbox", 8)
+	var c := sim.course
+	for ty in range(20, 52):
+		c.set_terrain(40, ty, Defs.T.FAIRWAY)
+	c.set_terrain(40, 20, Defs.T.TEE)
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
+			c.set_terrain(40 + ox, 50 + oy, Defs.T.GREEN)
+	var hole := sim.add_hole(c.tile_center(40, 20), c.tile_center(40, 50))
+	check(hole != null and hole.route.size() >= 2, "a hole with a line of play to draw")
+	if hole == null:
+		return
+	var book := YardageCard.new(db.yardage)
+	var img := book.ensure(c, hole)
+	var want_w := int(db.yardage.get("width", 0))
+	var want_h := int(db.yardage.get("height", 0))
+	check(img.get_width() == want_w and img.get_height() == want_h, "the card is the size in the yardage file")
+	check(book.tee_px.y > book.pin_px.y, "the tee sits at the bottom of the card")
+	check(is_equal_approx(book.path_metres, hole.length), "the drawn path is the length the par is measured on")
+	var drawn := book.draws
+	book.ensure(c, hole)
+	check(book.draws == drawn, "an unchanged hole is not drawn again")
+	var mid := hole.point_along(0.5, c)
+	var tile := c.tile_of(mid.x, mid.z)
+	var was := int(c.terrain[tile.y * c.w + tile.x])
+	var other := Defs.T.BUNKER
+	if was == Defs.T.BUNKER:
+		other = Defs.T.WATER
+	check(c.set_terrain(tile.x, tile.y, other), "a tile on the hole can be changed")
+	book.ensure(c, hole)
+	check(book.draws == drawn + 1, "changing a tile on the hole redraws the card")
