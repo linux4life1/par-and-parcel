@@ -25,6 +25,7 @@ var rng := RandomNumberGenerator.new()
 ## Next eddy number to hand a golfer. Starts at 1 in every simulation.
 var _eddy := 1
 var course: Course
+var undo: UndoLog              # build steps that Ctrl+Z can take back; not saved
 var gear: Gear
 var weather := Weather.new()
 var grounds: Grounds
@@ -60,6 +61,7 @@ var course_name := "Pine Hollow Golf Club"
 var biome: Dictionary = {}
 var time := 0.0
 var open := true
+var playing_round := false   # a round is on the course; build history will not move
 var rating := 45.0          # 0..100 quality of the course as golfers see it
 var design := 0.0           # the layout's share of the rating
 var reputation := 30.0      # follows the rating slowly; drives how many turn up
@@ -145,6 +147,8 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	course = CourseGen.generate(map, rng, biome)
 	course.biome = biome
 	nav = Nav.new(course)
+	undo = UndoLog.new(self)
+	_bind_undo()
 	members = Members.new(self)
 	stories = Stories.new(self)
 	lab = HoleLab.new(self)
@@ -217,6 +221,7 @@ func step(dt: float) -> void:
 	if d != _day:
 		_day = d
 		_new_day(d)
+	settle_pins()
 
 
 func day() -> int:
@@ -914,20 +919,29 @@ func touch_landmark(g: Golfer) -> bool:
 
 # ------------------------------------------------- building, with a budget
 
+func _bind_undo() -> void:
+	course.watch_edits(Callable(undo, "note_tile"), Callable(undo, "note_height"), Callable(undo, "clear"))
+
+
 ## Paint terrain with a round brush. Returns tiles changed, or -1 if broke.
 func paint(tx: int, ty: int, radius: int, t: int) -> int:
 	var unit := float(Defs.T_COST[t])
 	if not economy.can_afford(unit):
 		return -1
+	var started := undo.begin()
 	var n := course.paint(tx, ty, radius, t)
 	if n > 0:
-		economy.spend("construction", n * unit + course.clear_cost)
+		var bill := n * unit + course.clear_cost
+		economy.spend("construction", bill)
+		undo.note_charge(bill)
 		if Defs.is_green(t) or t == Defs.T.TEE:
 			# Fresh greens and tees are graded as they are laid, so they are
 			# playable straight away. Sculpt them afterwards to add break.
 			var c := course.tile_center(tx, ty)
 			for i in 2:
 				course.smooth(c.x, c.z, (radius + 1.5) * Defs.TILE, 0.5)
+	if started:
+		undo.commit()
 	return n
 
 
@@ -963,12 +977,18 @@ func place_object(tx: int, ty: int, o: int) -> int:
 	var t := course.terrain[ty * course.w + tx]
 	if Defs.is_green(t) or t == Defs.T.TEE or t == Defs.T.BUNKER:
 		return 0
+	var started := undo.begin()
+	var placed := 0
 	if course.set_object(tx, ty, o):
 		economy.spend("construction", cost)
+		undo.note_charge(cost)
 		if free:
 			gifts[o] = int(gifts[o]) - 1
-		return 1
-	return 0
+			undo.note_gift(o)
+		placed = 1
+	if started:
+		undo.commit()
+	return placed
 
 
 ## What a home site is worth to a buyer: views, water and a good course push
@@ -989,7 +1009,8 @@ func lot_value(tx: int, ty: int) -> float:
 				v += 22.0
 	var p := Vector2((tx + 0.5) * Defs.TILE, (ty + 0.5) * Defs.TILE)
 	for hole in course.holes:
-		var d := Ball._seg_dist(Vector2(hole.tee.x, hole.tee.z), Vector2(hole.pin.x, hole.pin.z), p)
+		var end := hole.design_pin()
+		var d := Ball._seg_dist(Vector2(hole.tee.x, hole.tee.z), Vector2(end.x, end.z), p)
 		if d < 22.0:
 			v -= 700.0
 		elif d < 70.0:
@@ -1102,8 +1123,9 @@ func _price_lots() -> void:
 		var hole := course.holes[hi]
 		hx[hi] = hole.tee.x
 		hz[hi] = hole.tee.z
-		var dx := hole.pin.x - hole.tee.x
-		var dz := hole.pin.z - hole.tee.z
+		var end := hole.design_pin()
+		var dx := end.x - hole.tee.x
+		var dz := end.z - hole.tee.z
 		abx[hi] = dx
 		abz[hi] = dz
 		var l2 := dx * dx + dz * dz
@@ -1158,6 +1180,8 @@ func sell_home(m: Dictionary, celebrity: bool = false) -> bool:
 				best = i
 	if best < 0:
 		return false
+	if undo != null:
+		undo.clear()
 	if celebrity:
 		best_v *= 3.0
 	m["home"] = true
@@ -1321,13 +1345,24 @@ func upgrade_clubhouse() -> bool:
 
 
 func remove_object(tx: int, ty: int) -> bool:
-	return course.set_object(tx, ty, Defs.O.NONE)
+	var started := undo.begin()
+	var cleared := course.set_object(tx, ty, Defs.O.NONE)
+	if started:
+		undo.commit()
+	return cleared
 
 
 func sculpt(mode: String, x: float, z: float, radius_m: float, amount: float) -> bool:
 	var cost := 3.0 + radius_m * 0.25
 	if not economy.can_afford(cost):
 		return false
+	# Smoothing and flattening are not steps. They drop the history so a
+	# later undo cannot put the ground back under a shape it did not record.
+	if (mode == "smooth" or mode == "flatten") and undo != null:
+		undo.clear()
+	var started := false
+	if mode == "raise" or mode == "lower":
+		started = undo.begin()
 	match mode:
 		"raise":
 			course.sculpt(x, z, radius_m, amount)
@@ -1338,6 +1373,10 @@ func sculpt(mode: String, x: float, z: float, radius_m: float, amount: float) ->
 		"flatten":
 			course.flatten(x, z, radius_m, amount, 0.5)
 	economy.spend("construction", cost)
+	if mode == "raise" or mode == "lower":
+		undo.note_charge(cost)
+	if started:
+		undo.commit()
 	return true
 
 
@@ -1353,11 +1392,15 @@ func buy_land(tx: int, ty: int) -> int:
 		return 0
 	if land_credits > 0:
 		land_credits -= 1
+		if undo != null:
+			undo.clear()
 		course.set_parcel(p, true)
 		return 1
 	var price := land_price()
 	if not economy.can_afford(price):
 		return -1
+	if undo != null:
+		undo.clear()
 	economy.spend("land", price)
 	course.set_parcel(p, true)
 	return 1
@@ -1366,17 +1409,25 @@ func buy_land(tx: int, ty: int) -> int:
 func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 	if not economy.can_afford(250.0) or course.holes.size() >= hole_cap():
 		return null
+	var started := undo.begin()
 	economy.spend("construction", 250.0)
+	undo.note_charge(250.0)
 	var hole := course.add_hole(tee, pin)
 	name_hole(hole)
 	stats.holes_built = int(stats.holes_built) + 1
 	feed.say("new_hole", null, {"hole": course.holes.size(), "score": hole.par}, true)
+	if started:
+		undo.commit()
 	return hole
 
 
 func remove_hole(i: int) -> void:
 	if i < 0 or i >= course.holes.size():
 		return
+	# Taking a hole off the card is not a step. Undo of a layout removes the
+	# hole itself and sets applying so this does not wipe the step it is in.
+	if undo != null and not undo.applying:
+		undo.clear()
 	course.remove_hole(i)
 	visitors.on_hole_removed(i)
 
@@ -1387,6 +1438,8 @@ func move_hole(i: int, dir: int) -> bool:
 	var j := i + dir
 	if i < 0 or j < 0 or i >= course.holes.size() or j >= course.holes.size():
 		return false
+	if undo != null and not undo.applying:
+		undo.clear()
 	var tmp := course.holes[i]
 	course.holes[i] = course.holes[j]
 	course.holes[j] = tmp
@@ -1405,39 +1458,86 @@ func hire(role_id: String) -> bool:
 
 ## Move each cup to today's spot on the green. A greenkeeper has to be on
 ## staff, and a tournament that is holding the pins is left alone. A locked
-## hole keeps its cup. The cup is set here, with the morning: nobody is sent
-## to walk to it. Par and length stay on the pin that was placed.
+## hole keeps its cup. The cup is set here, with the morning, even when a
+## group is still on the hole: nobody is sent to walk to it, and the ball
+## in play is aimed at the placed pin. Par and length stay on that pin. A
+## cup that actually moves drops the undo history, so the old spot cannot
+## be put back.
 func move_pins() -> void:
 	if crew.count("greenkeeper") < 1 or tourney.pins_held():
 		return
-	var spec: Dictionary = db.pins
-	var front_m := float(spec.get("front", 6.0))
-	var back_m := float(spec.get("back", 6.0))
-	var edge_m := float(spec.get("edge", 2.0))
-	var slope_max := float(spec.get("slope", 4.0))
-	var names: Array = spec.get("spots", [])
 	var today := day()
 	var moved := false
 	for i in course.holes.size():
 		var hole := course.holes[i]
 		if hole.pin_locked:
+			hole.pin_due = -1
 			continue
-		if not hole.groups.is_empty() or hole.teeing_group != null or not hole.line.is_empty():
-			continue
-		var spot := 0
-		if names.size() > 0:
-			spot = (today + i) % names.size()
-		var cup := course.day_cup(hole, spot, front_m, back_m, edge_m, slope_max)
-		hole.pin_spot = spot
-		if hole.pin.distance_squared_to(cup) > 0.01:
-			hole.pin = cup
+		# The morning sets the cup even with a group on the hole. Play
+		# follows the placed pin, so the ball they are hitting does not move.
+		if _place_cup(hole, _cup_spot(i)):
 			moved = true
 	if not moved:
 		return
-	course.revision += 1
-	course.holes_changed.emit()
+	_pins_moved()
 	if today > 0 and today % Defs.DAYS_PER_MONTH == 0:
 		toast.emit("The greenkeepers have moved the pins.", "info")
+
+
+## A cup that was waiting on a busy hole, once that hole is clear.
+## The spot is the one the last morning asked for.
+func settle_pins() -> void:
+	if crew.count("greenkeeper") < 1 or tourney.pins_held():
+		return
+	var moved := false
+	for hole in course.holes:
+		if hole.pin_due < 0:
+			continue
+		if hole.pin_locked:
+			hole.pin_due = -1
+			continue
+		if _hole_busy(hole):
+			continue
+		var waiting := hole.pin_due
+		if _place_cup(hole, waiting):
+			moved = true
+	if moved:
+		_pins_moved()
+
+
+func _hole_busy(hole: Hole) -> bool:
+	return not hole.groups.is_empty() or hole.teeing_group != null or not hole.line.is_empty()
+
+
+func _cup_spot(i: int) -> int:
+	var names: Array = db.pins.get("spots", [])
+	if names.is_empty():
+		return 0
+	return (day() + i) % names.size()
+
+
+func _place_cup(hole: Hole, spot: int) -> bool:
+	var spec: Dictionary = db.pins
+	var front_m := float(spec.get("front", 6.0))
+	var back_m := float(spec.get("back", 6.0))
+	var edge_m := float(spec.get("edge", 2.0))
+	var slope_max := float(spec.get("slope", 4.0))
+	var cup := course.day_cup(hole, spot, front_m, back_m, edge_m, slope_max)
+	hole.pin_spot = spot
+	hole.pin_due = -1
+	if hole.pin.distance_squared_to(cup) <= 0.01:
+		return false
+	hole.pin = cup
+	return true
+
+
+func _pins_moved() -> void:
+	if undo != null:
+		undo.clear()
+	# The day's cup is not a change to how the hole plays, so the path
+	# cache and the turf index stay as they are. Bumping the revision here
+	# sent everyone to replan and reshuffled the round.
+	course.holes_changed.emit()
 
 
 ## middle, front, back, or held while a tournament has the pins.
@@ -1478,6 +1578,9 @@ func install_course(course_d: Dictionary) -> void:
 	course = Course.from_dict(course_d)
 	course.biome = biome
 	nav = Nav.new(course)
+	if undo != null:
+		undo.clear()
+		_bind_undo()
 	player.golfer.course = course
 	wildlife.populate()
 	grounds.reset_layout()
@@ -1504,6 +1607,8 @@ func to_dict() -> Dictionary:
 		"album": album,
 	}
 	d["stories"] = stories.to_dict()
+	if undo != null:
+		undo.clear()
 	return d
 
 

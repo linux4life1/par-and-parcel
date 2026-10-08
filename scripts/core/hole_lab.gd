@@ -170,7 +170,7 @@ static func play_shot(sim: Sim, g: Golfer, hole: Hole) -> void:
 	var b := g.ball
 	var n := 0
 	while b.moving() and n < 2400:
-		b.step(1.0 / 60.0, sim.course, Vector3.ZERO, hole.pin, true)
+		b.step(1.0 / 60.0, sim.course, Vector3.ZERO, hole.design_pin(), true)
 		n += 1
 	match b.state:
 		Ball.S.HOLED:

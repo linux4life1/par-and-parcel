@@ -36,16 +36,57 @@ var _cup_seen := {}
 ## Cup wear applied to each tile. Mowing does not clear it, so a test can
 ## see where a stationary pin piled up and a moving pin spread out.
 var cup_load := {}
+## Health with the cup's wear left out. Sprouts, keepers, putters and the
+## condition figure read this, so a cup that moves does not change a
+## decision. The real health still shows the wear.
+var bare := PackedFloat32Array()
 
 
 func _init(s: Sim) -> void:
 	sim = s
 
 
+## Health a keeper or a putter should see: the green as it would be if the
+## cup had not worn it.
+func cared_health(i: int) -> float:
+	if i >= 0 and i < bare.size():
+		return bare[i]
+	return sim.course.health[i]
+
+
+## A mower pass repaired this tile. The historical cup total is kept, and
+## the health the keeper judges is filled in by the same amount.
+func repair_tile(i: int) -> void:
+	sim.course.health[i] = minf(1.0, sim.course.health[i] + 0.9)
+	if i >= 0 and i < bare.size():
+		bare[i] = minf(1.0, bare[i] + 0.9)
+
+
+## The same nick the real turf just took, applied to the cup-free copy.
+func bare_delta(i: int, amount: float) -> void:
+	if i < 0 or i >= bare.size():
+		return
+	bare[i] = clampf(bare[i] + amount, 0.0, 1.0)
+
+
+func bare_scale(i: int, factor: float) -> void:
+	if i < 0 or i >= bare.size():
+		return
+	bare[i] = clampf(bare[i] * factor, 0.0, 1.0)
+
+
+func _ensure_bare() -> void:
+	var n := sim.course.health.size()
+	if bare.size() == n:
+		return
+	bare = sim.course.health.duplicate()
+
+
 ## The course was swapped for another. Rebuild the tile index even when the
 ## new course's revision number matches the one just thrown away.
 func reset_layout() -> void:
 	_rev = -1
+	bare = PackedFloat32Array()
 	refresh_layout()
 
 
@@ -108,6 +149,7 @@ func _mood_warning(mood: float) -> void:
 ## Called a few times a second with the sim time that has passed.
 func step(dt: float) -> void:
 	refresh_layout()
+	_ensure_bare()
 	_refresh_litter()
 	var course := sim.course
 	var n := course.w * course.h
@@ -158,15 +200,24 @@ func step(dt: float) -> void:
 		if not Defs.T_GRASS[t] or t == Defs.T.DEEP_ROUGH or (wild_rough and t == Defs.T.ROUGH):
 			continue
 		var hv := course.health[i]
+		var bv := bare[i]
 		var pv := course.pests[i]
 		var wd := course.weeds[i]
-		hv -= Defs.T_WEAR[t] * wear
+		var nick := Defs.T_WEAR[t] * wear
+		hv -= nick
+		bv -= nick
 		if drought and wv < 0.1:
 			hv -= 0.0006 * edt
+			bv -= 0.0006 * edt
 		# weeds. A landmark nearby slows the sprout, the growth and the spread.
+		# The sprout reads the cup-free health, so a moved cup does not
+		# change which tiles take a weed.
 		var calm := sim.weed_scale(i)
+		var seen := bv
+		if seen > 1.0:
+			seen = 1.0
 		if wd <= 0.0:
-			if rng.randf() < weed_p * Defs.T_WEED[t] * (0.5 + wv) * (1.5 - hv * 0.5) * calm:
+			if rng.randf() < weed_p * Defs.T_WEED[t] * (0.5 + wv) * (1.5 - seen * 0.5) * calm:
 				wd = 0.06
 		else:
 			wd = minf(1.0, wd + 0.003 * sim.skills.mult("weed_growth") * edt * calm)
@@ -181,18 +232,22 @@ func step(dt: float) -> void:
 				pv = 0.08
 		else:
 			pv = minf(1.0, pv + 0.006 * edt)
-			hv -= pv * 0.004 * edt
+			var bite := pv * 0.004 * edt
+			hv -= bite
+			bv -= bite
 			if pv > 0.7 and rng.randf() < 0.003 * edt:
 				var ni := _neighbour(i, w, n, rng)
 				if ni >= 0 and Defs.T_GRASS[course.terrain[ni]] and course.pests[ni] <= 0.0:
 					course.pests[ni] = 0.08
 		hv = clampf(hv, 0.0, 1.0)
+		bv = clampf(bv, 0.0, 1.0)
 		course.health[i] = hv
+		bare[i] = bv
 		course.weeds[i] = wd
 		course.pests[i] = pv
 		if t != Defs.T.ROUGH:
 			var wt := 3.0 if Defs.is_green(t) else 1.0
-			_acc_c += hv * (1.0 - 0.5 * wd) * (1.0 - 0.5 * pv) * wt
+			_acc_c += bv * (1.0 - 0.5 * wd) * (1.0 - 0.5 * pv) * wt
 			_acc_w += wt
 			_acc_n += 1.0
 			if wd > 0.3:
@@ -204,9 +259,10 @@ func step(dt: float) -> void:
 
 ## Extra wear on the green around each cup. A cup tires its own green every
 ## day, locked or rotating, and a hole that has been played today wears a
-## little more. Moving the pin spreads that wear; it does not add any. The
-## rate uses the same difficulty and skill multipliers as the rest of the turf.
-## `dt` is sim seconds.
+## little more. Moving the pin spreads that wear. The health the weeds and
+## the keeper read does not include it, so the spread does not change which
+## tiles they choose. The rate uses the same difficulty and skill
+## multipliers as the rest of the turf. `dt` is sim seconds.
 func wear_around_pins(dt: float) -> void:
 	var spec: Dictionary = sim.db.pins
 	var base := float(spec.get("wear", 0.0)) * dt * sim.skills.mult("wear") * sim.diff("wear")

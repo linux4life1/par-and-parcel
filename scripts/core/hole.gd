@@ -12,6 +12,12 @@ var placed := Vector3.ZERO
 var pin_spot := 0
 ## The owner asked the greenkeepers to leave this cup where it is.
 var pin_locked := false
+## A tournament is holding this pin. Play, the flag and the routing field
+## follow `pin` itself. Otherwise they stay on the placed pin, and `pin` is
+## only the day's cup.
+var pin_held := false
+## 1 when the morning's cup is waiting because someone was on the hole.
+var pin_due := -1
 var par := 4
 var length := 0.0
 ## Centreline of the hole the way it is meant to be played, tee to pin, in
@@ -118,6 +124,15 @@ func design_pin() -> Vector3:
 	if placed.length_squared() > 0.01:
 		return placed
 	return pin
+
+
+## Where the ball is holed and the flag stands. A daily cup does not move
+## this: the round stays the one a still pin would have played. A tournament
+## tuck does, for the week it is held.
+func aim_at() -> Vector3:
+	if pin_held:
+		return pin
+	return design_pin()
 
 
 func straight_length() -> float:
@@ -427,15 +442,17 @@ func field_at(course: Course, x: float, z: float, now: float = 0.0) -> float:
 	var tx := int(floor(x / Defs.TILE)) - _fx
 	var ty := int(floor(z / Defs.TILE)) - _fy
 	if tx < 0 or ty < 0 or tx >= _fw or ty >= _fh:
-		return Vector2(pin.x - x, pin.z - z).length() * 1.35 + 20.0
+		var aim := aim_at()
+		return Vector2(aim.x - x, aim.z - z).length() * 1.35 + 20.0
 	return _field[ty * _fw + tx]
 
 
 func _compute_field(course: Course) -> void:
 	_field_rev = course.revision
 	var margin := 14
+	var aim := aim_at()
 	var tt := course.tile_of(tee.x, tee.z)
-	var pt := course.tile_of(pin.x, pin.z)
+	var pt := course.tile_of(aim.x, aim.z)
 	_fx = clampi(mini(tt.x, pt.x) - margin, 0, course.w - 1)
 	_fy = clampi(mini(tt.y, pt.y) - margin, 0, course.h - 1)
 	var x1 := clampi(maxi(tt.x, pt.x) + margin, 0, course.w - 1)
@@ -590,13 +607,15 @@ func touches_water(course: Course) -> bool:
 		var p := point_along(float(k) / float(n))
 		if course.water_near(p.x, p.z, 14.0):
 			return true
-	return course.water_near(pin.x, pin.z, 14.0)
+	var end := design_pin()
+	return course.water_near(end.x, end.z, 14.0)
 
 
 func to_dict() -> Dictionary:
 	return {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
 		"placed": [placed.x, placed.y, placed.z], "pin_spot": pin_spot, "pin_locked": pin_locked,
+		"pin_due": pin_due,
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
@@ -635,6 +654,7 @@ static func from_dict(d: Dictionary) -> Hole:
 		hole.placed = hole.pin
 		hole.pin_spot = 0
 	hole.pin_locked = bool(d.get("pin_locked", false))
+	hole.pin_due = int(d.get("pin_due", -1))
 	hole.earned = float(d.get("earned", 0.0))
 	hole.payers = int(d.get("payers", 0))
 	hole.plays = int(d.get("plays", 0))

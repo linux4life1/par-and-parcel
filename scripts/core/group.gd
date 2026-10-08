@@ -118,7 +118,7 @@ func _tee_free(hole: Hole) -> bool:
 
 ## The tee-to-pin line reversed, flat, and the direction across it.
 static func tee_axes(hole: Hole) -> Array[Vector3]:
-	var back := hole.tee - hole.pin
+	var back := hole.tee - hole.aim_at()
 	back.y = 0.0
 	if back.length_squared() < 0.01:
 		back = Vector3(1, 0, 0)
@@ -287,7 +287,7 @@ func _pick_turn(hole: Hole) -> Golfer:
 	for m in members:
 		if m.done or m.phase == Golfer.P.WATCH or m.ball.moving():
 			continue
-		var d := m.ball.pos.distance_squared_to(hole.pin)
+		var d := m.ball.pos.distance_squared_to(hole.aim_at())
 		if d > bd:
 			bd = d
 			best = m
@@ -296,7 +296,7 @@ func _pick_turn(hole: Hole) -> Golfer:
 
 ## Where a golfer stands to address their ball.
 static func stance(m: Golfer, hole: Hole) -> Vector3:
-	var to := hole.pin - m.ball.pos
+	var to := hole.aim_at() - m.ball.pos
 	to.y = 0.0
 	var l := to.length()
 	if l < 0.05:
@@ -370,7 +370,7 @@ func _danger(sim: Sim, g: Golfer) -> int:
 	var hole := current_hole(sim)
 	var mine := 0.0
 	if hole != null:
-		mine = Vector2(g.pos.x - hole.pin.x, g.pos.z - hole.pin.z).length()
+		mine = Vector2(g.pos.x - hole.aim_at().x, g.pos.z - hole.aim_at().z).length()
 	var found := 0
 	for p in sim.visitors.golfers:
 		if p.group == self or p.group == null:
@@ -382,7 +382,7 @@ func _danger(sim: Sim, g: Golfer) -> int:
 		if absf(v.cross(dir)) >= 6.0 + along * 0.14:
 			continue
 		if hole != null and p.group.hole_i == hole_i and p.group.state == S.PLAY:
-			var theirs := Vector2(p.pos.x - hole.pin.x, p.pos.z - hole.pin.z).length()
+			var theirs := Vector2(p.pos.x - hole.aim_at().x, p.pos.z - hole.aim_at().z).length()
 			if theirs > mine - 6.0:
 				continue      # level with us or behind: not ours to wait for
 		if p.kind == "player" and not p.walking and p.swing_t < 0.0:

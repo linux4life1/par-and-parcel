@@ -193,6 +193,7 @@ func start(s: Sim, camera: CameraRig, first: int = 0, count: int = -1, in_tourna
 	_saved_view = {"yaw": rig.yaw, "dist": rig.target_dist, "focus": rig.focus}
 	rig.locked = true
 	sim.career.begin_round(hole_i == 0 and last_hole == sim.course.holes.size() - 1)
+	sim.playing_round = true
 	_begin_hole()
 	started.emit()
 	return true
@@ -201,6 +202,8 @@ func start(s: Sim, camera: CameraRig, first: int = 0, count: int = -1, in_tourna
 func stop() -> void:
 	if not active():
 		return
+	if sim != null:
+		sim.playing_round = false
 	# walking off mid-round forfeits whatever was at stake
 	if not match_play.is_empty():
 		_settle_match(true)
@@ -243,7 +246,7 @@ func _setup_shot() -> void:
 	var h := hole()
 	var b := g.ball
 	lie = maxi(sim.course.terrain_at(b.pos.x, b.pos.z), 0)
-	var to := Vector2(h.pin.x - b.pos.x, h.pin.z - b.pos.z)
+	var to := Vector2(h.aim_at().x - b.pos.x, h.aim_at().z - b.pos.z)
 	pin_dist = to.length()
 	aim = to.angle()
 	lie_read = Lie.read(sim, g, aim)
@@ -266,7 +269,7 @@ func _refresh_numbers() -> void:
 	var h := hole()
 	if putting:
 		max_dist = MAX_PUTT
-		var v := ShotAI.putt_speed(sim, g, g.ball.pos, h.pin, 0.3)
+		var v := ShotAI.putt_speed(sim, g, g.ball.pos, h.aim_at(), 0.3)
 		target_power = clampf(v / _putt_full_speed(), 0.0, 1.0)
 	else:
 		var full := _full_speed()
@@ -335,9 +338,9 @@ func green_read() -> String:
 		return ""
 	var b := g.ball.pos
 	var h := hole()
-	var toward := Vector2(h.pin.x - b.x, h.pin.z - b.z)
+	var toward := Vector2(h.aim_at().x - b.x, h.aim_at().z - b.z)
 	var here := Slope.read(sim.course, b.x, b.z)
-	var line := Slope.along(sim.course, b, h.pin)
+	var line := Slope.along(sim.course, b, h.aim_at())
 	return "Under the ball, %s. Along the line, %s." % [Slope.words(here, toward), Slope.words(line, toward)]
 
 
@@ -621,7 +624,7 @@ func _broadcast(b: Ball, delta: float) -> void:
 		rig.focus = rig.focus.lerp(b.pos, 1.0 - exp(-delta * 6.0))
 		return
 	var h := hole()
-	var to_pin := Vector2(h.pin.x - b.pos.x, h.pin.z - b.pos.z)
+	var to_pin := Vector2(h.aim_at().x - b.pos.x, h.aim_at().z - b.pos.z)
 	var pin_d := to_pin.length()
 	if b.state == Ball.S.FLIGHT and not _cam_cut:
 		# chase: follow the ball, drawn in as it rises, from a little higher
@@ -645,7 +648,7 @@ func _broadcast(b: Ball, delta: float) -> void:
 			rig.v_shift = 0.08
 	var k2 := 1.0 - exp(-delta * 4.0)
 	if pin_d < 60.0:
-		rig.focus = rig.focus.lerp(b.pos.lerp(h.pin, 0.4), k2)
+		rig.focus = rig.focus.lerp(b.pos.lerp(h.aim_at(), 0.4), k2)
 	else:
 		rig.focus = rig.focus.lerp(b.pos, k2)
 
@@ -730,7 +733,7 @@ func _strike() -> void:
 func _resolve() -> void:
 	var b := g.ball
 	var h := hole()
-	var away := Vector2(b.pos.x - h.pin.x, b.pos.z - h.pin.z).length()
+	var away := Vector2(b.pos.x - h.aim_at().x, b.pos.z - h.aim_at().z).length()
 	match b.state:
 		Ball.S.HOLED:
 			sim.career.shot_done(b, Defs.T.GREEN, 0.0, true)
@@ -754,7 +757,7 @@ func _resolve() -> void:
 			b.place(b.start)
 		_:
 			var t := sim.course.terrain_at(b.pos.x, b.pos.z)
-			var d := Vector2(b.pos.x - h.pin.x, b.pos.z - h.pin.z).length()
+			var d := Vector2(b.pos.x - h.aim_at().x, b.pos.z - h.aim_at().z).length()
 			if Defs.is_green(t):
 				message = "On the green, %d feet from the hole." % int(d * 3.281)
 			elif t >= 0:
@@ -950,7 +953,7 @@ func _update_preview() -> void:
 			var q := g.ball.pos.lerp(_landing, k / 20.0)
 			_path.append(sim.course.on_ground(q.x, q.z))
 	# keep the pin distance honest as the player turns
-	pin_dist = Vector2(h.pin.x - g.ball.pos.x, h.pin.z - g.ball.pos.z).length()
+	pin_dist = Vector2(h.aim_at().x - g.ball.pos.x, h.aim_at().z - g.ball.pos.z).length()
 
 
 func _draw_preview() -> void:

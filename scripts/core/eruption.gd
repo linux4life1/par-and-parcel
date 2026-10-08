@@ -94,6 +94,7 @@ func _begin() -> void:
 			var p := Vector2((i % course.w + 0.5) * Defs.TILE, (i / course.w + 0.5) * Defs.TILE)
 			if p.distance_squared_to(c) < 450.0 * 450.0:
 				course.health[i] = maxf(0.0, course.health[i] - 0.12)
+				sim.grounds.bare_delta(i, -0.12)
 	# two or three rivers of lava set off down the mountain
 	flows.clear()
 	var base := sim.rng.randf() * TAU
@@ -153,7 +154,8 @@ func _step_bombs(dt: float) -> void:
 func _protected(tx: int, ty: int) -> bool:
 	# Leave the cup and the tee markers themselves alone so a hole survives.
 	for hole in sim.course.holes:
-		var pt := sim.course.tile_of(hole.pin.x, hole.pin.z)
+		var aim := hole.aim_at()
+		var pt := sim.course.tile_of(aim.x, aim.z)
 		var tt := sim.course.tile_of(hole.tee.x, hole.tee.z)
 		if (absi(pt.x - tx) <= 1 and absi(pt.y - ty) <= 1) or (tt.x == tx and tt.y == ty):
 			return true
@@ -170,6 +172,8 @@ func _impact(p: Vector3) -> void:
 	summary.bombs = int(summary.bombs) + 1
 	var i0 := tile.y * course.w + tile.x
 	if course.hot[i0] == 0 and course.terrain[i0] != Defs.T.WATER:
+		if sim.undo != null:
+			sim.undo.clear()
 		course.guard = false
 		course.sculpt(p.x, p.z, 9.0, -1.1)
 		var burnt := false
@@ -179,7 +183,11 @@ func _impact(p: Vector3) -> void:
 					continue
 				var i := ty * course.w + tx
 				var near := absi(tx - tile.x) <= 1 and absi(ty - tile.y) <= 1
-				course.health[i] *= 0.0 if near else 0.45
+				var scorched := 0.45
+				if near:
+					scorched = 0.0
+				course.health[i] *= scorched
+				sim.grounds.bare_scale(i, scorched)
 				if not near:
 					continue
 				var o := course.objects[i]
@@ -261,6 +269,8 @@ func _advance(f: Dictionary) -> void:
 	f.steps = int(f.steps) - 1
 	if course.terrain[best] == Defs.T.WATER:
 		return
+	if sim.undo != null:
+		sim.undo.clear()
 	if course.objects[best] != 0:
 		if Defs.is_tree(course.objects[best]):
 			summary.trees = int(summary.trees) + 1
@@ -303,6 +313,8 @@ func _cool_one() -> void:
 	var i: int = fresh.pop_front()
 	if course.terrain[i] != Defs.T.WATER:
 		return
+	if sim.undo != null:
+		sim.undo.clear()
 	course.terrain[i] = Defs.T.ROCK
 	course.revision += 1
 	course.tiles_changed.emit(Rect2i(i % course.w - 1, i / course.w - 1, 3, 3))
