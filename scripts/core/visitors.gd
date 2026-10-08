@@ -232,6 +232,8 @@ func make_golfer(kind: String, base_skill: float) -> Golfer:
 		g.pace = 0.8
 	else:
 		g.set_persona(_pick_persona())
+	if kind == "public" or kind == "pro" or kind == "celebrity":
+		g.satisfaction = clampf(g.satisfaction + sim.debt_arrival(), 20.0, 90.0)
 	_equip(g)
 	set_temper(g)
 	return g

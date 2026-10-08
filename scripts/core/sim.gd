@@ -686,6 +686,14 @@ func stars() -> float:
 	return rating / 20.0
 
 
+## A golfer's first impression of a club that owes money. Nothing while the
+## balance is clear, and never drawn from the random numbers.
+func debt_arrival() -> float:
+	if economy.money >= 0.0:
+		return 0.0
+	return float(db.debt.get("arrival", -4.0))
+
+
 ## Groups arriving per second of sim time.
 func arrival_rate() -> float:
 	var pull := clampf((reputation + buzz) / 100.0, 0.0, 1.3)
