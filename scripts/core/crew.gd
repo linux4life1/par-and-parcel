@@ -245,7 +245,7 @@ func _find_job(m: Member) -> void:
 		if pests:
 			need = course.pests[i] * 3.0 if course.pests[i] > 0.05 else 0.0
 		else:
-			need = ((1.0 - sim.grounds.cared_health(i)) + course.weeds[i] * 1.3) * Defs.T_CARE[t]
+			need = ((1.0 - course.health[i]) + course.weeds[i] * 1.3) * Defs.T_CARE[t]
 		if need <= 0.1:
 			continue
 		var cx := (i % course.w + 0.5) * Defs.TILE
@@ -320,7 +320,7 @@ func _find_home_job(m: Member) -> void:
 			if pests:
 				need = course.pests[i] * 3.0 if course.pests[i] > 0.05 else 0.0
 			else:
-				need = ((1.0 - sim.grounds.cared_health(i)) + course.weeds[i] * 1.3) * Defs.T_CARE[t]
+				need = ((1.0 - course.health[i]) + course.weeds[i] * 1.3) * Defs.T_CARE[t]
 			if need <= 0.1:
 				continue
 			var dist := Vector2(cx - m.pos.x, cz - m.pos.z).length()

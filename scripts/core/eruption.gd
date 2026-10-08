@@ -94,7 +94,6 @@ func _begin() -> void:
 			var p := Vector2((i % course.w + 0.5) * Defs.TILE, (i / course.w + 0.5) * Defs.TILE)
 			if p.distance_squared_to(c) < 450.0 * 450.0:
 				course.health[i] = maxf(0.0, course.health[i] - 0.12)
-				sim.grounds.bare_delta(i, -0.12)
 	# two or three rivers of lava set off down the mountain
 	flows.clear()
 	var base := sim.rng.randf() * TAU
@@ -187,7 +186,6 @@ func _impact(p: Vector3) -> void:
 				if near:
 					scorched = 0.0
 				course.health[i] *= scorched
-				sim.grounds.bare_scale(i, scorched)
 				if not near:
 					continue
 				var o := course.objects[i]

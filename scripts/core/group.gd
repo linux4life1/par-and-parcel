@@ -181,6 +181,9 @@ func _queue(dt: float, sim: Sim) -> void:
 		return
 	var k := hole.line_index(self, hole_i)
 	if k == 0 and _tee_free(hole) and not hole.starter_holds(sim.time):
+		# The group leaving has holed out. Set a cup that was waiting
+		# before this party tees off, so they play today's cup.
+		sim.settle_pins()
 		hole.teeing_group = self
 		hole.line.erase(self)
 		_begin_hole(sim, hole)
@@ -451,6 +454,7 @@ func _finish_hole(sim: Sim, hole: Hole) -> void:
 		sim.visitors.on_hole_done(m, hole, hole_i, self)
 	sim.visitors.story_tick(self, hole_i)
 	leave_hole(hole)
+	sim.settle_pins()
 	if last_hole >= 0 and hole_i >= last_hole:
 		state = S.LEAVING
 		return

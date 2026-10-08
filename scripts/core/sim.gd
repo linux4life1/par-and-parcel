@@ -1458,11 +1458,11 @@ func hire(role_id: String) -> bool:
 
 ## Move each cup to today's spot on the green. A greenkeeper has to be on
 ## staff, and a tournament that is holding the pins is left alone. A locked
-## hole keeps its cup. The cup is set here, with the morning, even when a
-## group is still on the hole: nobody is sent to walk to it, and the ball
-## in play is aimed at the placed pin. Par and length stay on that pin. A
-## cup that actually moves drops the undo history, so the old spot cannot
-## be put back.
+## hole keeps its cup. A group already playing the hole keeps the cup it
+## teed off to: today's spot waits in pin_due and is set when that group
+## has holed out. Nobody is sent to walk the cup over. Par and length stay
+## on the placed pin. A cup that actually moves drops the undo history, so
+## the old spot cannot be put back.
 func move_pins() -> void:
 	if crew.count("greenkeeper") < 1 or tourney.pins_held():
 		return
@@ -1473,9 +1473,11 @@ func move_pins() -> void:
 		if hole.pin_locked:
 			hole.pin_due = -1
 			continue
-		# The morning sets the cup even with a group on the hole. Play
-		# follows the placed pin, so the ball they are hitting does not move.
-		if _place_cup(hole, _cup_spot(i)):
+		var spot := _cup_spot(i)
+		if _hole_busy(hole):
+			hole.pin_due = spot
+			continue
+		if _place_cup(hole, spot):
 			moved = true
 	if not moved:
 		return
@@ -1505,8 +1507,10 @@ func settle_pins() -> void:
 		_pins_moved()
 
 
+## A group has teed off and has not holed out. Parties still in line have
+## not started, so the cup can move for them.
 func _hole_busy(hole: Hole) -> bool:
-	return not hole.groups.is_empty() or hole.teeing_group != null or not hole.line.is_empty()
+	return not hole.groups.is_empty() or hole.teeing_group != null
 
 
 func _cup_spot(i: int) -> int:
@@ -1534,9 +1538,8 @@ func _place_cup(hole: Hole, spot: int) -> bool:
 func _pins_moved() -> void:
 	if undo != null:
 		undo.clear()
-	# The day's cup is not a change to how the hole plays, so the path
-	# cache and the turf index stay as they are. Bumping the revision here
-	# sent everyone to replan and reshuffled the round.
+	# The routing field watches the cup itself. Bumping the revision here
+	# would rebuild every path and reshuffle the round.
 	course.holes_changed.emit()
 
 

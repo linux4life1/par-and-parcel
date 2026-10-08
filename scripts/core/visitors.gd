@@ -854,7 +854,7 @@ func react_to_lie(g: Golfer, hole: Hole, hole_i: int) -> void:
 		if shot_len < 2.5:
 			g.feel(-1.5, "I can't believe I missed that putt.", "putt")
 			sim.sound.emit("groan", g.pos, 0.7)
-		var seen := sim.grounds.cared_health(ti)
+		var seen := course.health[ti]
 		if seen < 0.45:
 			g.feel(-1.5, "The green on hole %d is bumpy and bare." % n, "greens_bad")
 			sim.feed.say("greens_bad", g, {"hole": n})

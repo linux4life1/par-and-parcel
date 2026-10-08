@@ -231,6 +231,9 @@ func _begin_hole() -> void:
 	var h := hole()
 	group.hole_i = hole_i
 	if not h.groups.has(group):
+		# A cup that was waiting on this hole, or the one just finished,
+		# is set before the owner tees off.
+		sim.settle_pins()
 		h.groups.append(group)
 	g.begin_hole()
 	sim.career.begin_hole(h)

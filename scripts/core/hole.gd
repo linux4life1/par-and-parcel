@@ -12,11 +12,10 @@ var placed := Vector3.ZERO
 var pin_spot := 0
 ## The owner asked the greenkeepers to leave this cup where it is.
 var pin_locked := false
-## A tournament is holding this pin. Play, the flag and the routing field
-## follow `pin` itself. Otherwise they stay on the placed pin, and `pin` is
-## only the day's cup.
+## A tournament is holding this pin. The morning rotation leaves it alone.
 var pin_held := false
-## 1 when the morning's cup is waiting because someone was on the hole.
+## The morning's spot, waiting because a group is still playing the hole.
+## -1 when nothing is waiting.
 var pin_due := -1
 var par := 4
 var length := 0.0
@@ -109,6 +108,7 @@ var _fw := 0
 var _fh := 0
 var _field_rev := -1
 var _field_time := -1000.0
+var _field_cup := Vector2(-1.0e8, -1.0e8)
 # scratch heap
 var _hk := PackedFloat32Array()
 var _hv := PackedInt32Array()
@@ -126,13 +126,12 @@ func design_pin() -> Vector3:
 	return pin
 
 
-## Where the ball is holed and the flag stands. A daily cup does not move
-## this: the round stays the one a still pin would have played. A tournament
-## tuck does, for the week it is held.
+## Where the ball is holed and the flag stands: the day's cup. A group
+## already on the hole keeps the cup it teed off to, because that cup is
+## not moved until the group has holed out. Par and length stay on the
+## placed pin.
 func aim_at() -> Vector3:
-	if pin_held:
-		return pin
-	return design_pin()
+	return pin
 
 
 func straight_length() -> float:
@@ -436,7 +435,9 @@ func share(keys: Array[String]) -> float:
 
 ## Effective distance to the pin from a world position.
 func field_at(course: Course, x: float, z: float, now: float = 0.0) -> float:
-	if _field_rev != course.revision and (_field_rev < 0 or now - _field_time > 4.0):
+	var cup := Vector2(aim_at().x, aim_at().z)
+	var cup_moved := cup.distance_squared_to(_field_cup) > 0.01
+	if cup_moved or (_field_rev != course.revision and (_field_rev < 0 or now - _field_time > 4.0)):
 		_compute_field(course)
 		_field_time = now
 	var tx := int(floor(x / Defs.TILE)) - _fx
@@ -451,6 +452,7 @@ func _compute_field(course: Course) -> void:
 	_field_rev = course.revision
 	var margin := 14
 	var aim := aim_at()
+	_field_cup = Vector2(aim.x, aim.z)
 	var tt := course.tile_of(tee.x, tee.z)
 	var pt := course.tile_of(aim.x, aim.z)
 	_fx = clampi(mini(tt.x, pt.x) - margin, 0, course.w - 1)

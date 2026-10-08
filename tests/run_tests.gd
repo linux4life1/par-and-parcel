@@ -1176,7 +1176,7 @@ func _test_season() -> void:
 	check(sim.economy.history.size() == 4, "four months of books closed")
 	check(sim.feed.posts.size() > 5, "the feed fills up")
 	check(sim.grounds.condition > 0.80, "one greenkeeper keeps three holes in shape (%.0f%%)" % (sim.grounds.condition * 100.0))
-	check(sim.grounds.weed_cover < 0.03, "the weeds stay about where a course with still pins leaves them (%.1f%%)" % (sim.grounds.weed_cover * 100.0))
+	check(sim.grounds.weed_cover < 0.04, "weeds with the day's cup in play (%.1f%%)" % (sim.grounds.weed_cover * 100.0))
 	check(sim.rating >= 45.0 and sim.visitors.average_satisfaction() >= 64.0, "rating and satisfaction hold the line of a course whose pins stay put (%.0f, %.0f)" % [sim.rating, sim.visitors.average_satisfaction()])
 
 	print("-- hosting a tournament")
@@ -5108,6 +5108,7 @@ func _test_pins() -> void:
 	sim.move_pins()
 	check(hole.pin.distance_squared_to(sunday) < 0.01 and sim.pin_spot_name(hole) == "held", "a day during the tournament does not move the Sunday pin")
 	_test_pin_rules()
+	_test_cup_target()
 
 
 func _clear_of_fringe(c: Course, x: float, z: float) -> float:
@@ -5369,8 +5370,10 @@ func _test_pin_rules() -> void:
 	var waiting := left.pin
 	var keeper_before := busy.crew.members[0].state
 	busy.move_pins()
-	check(left.pin.distance_squared_to(waiting) > 1.0 and right.pin.distance_squared_to(right.placed) > 1.0 and busy.crew.members[0].state == keeper_before, "a morning move still shifts the cup with a group on the hole, and does not send the keeper")
+	check(left.pin.distance_squared_to(waiting) < 0.01 and left.pin_due >= 0 and right.pin.distance_squared_to(right.placed) > 1.0 and busy.crew.members[0].state == keeper_before, "a hole with a group on it keeps its cup for that group, and the keeper is not sent to walk")
 	left.groups.clear()
+	busy.settle_pins()
+	check(left.pin.distance_squared_to(waiting) > 1.0 and left.pin_due < 0, "once that group has holed out the waiting cup is set")
 	var shifted := left.pin
 	busy.move_pins()
 	check(left.pin.distance_squared_to(shifted) < 0.01 and left.pin.z < waiting.z - 1.0, "the same morning does not move that cup a second time")
@@ -5434,8 +5437,117 @@ func _test_pin_rules() -> void:
 	check(moved_mornings > 100, "the rotating cups left the placed pin on quiet mornings")
 	check(spread >= 2 and peaks_ok, "where the cup changes tile, the worst of those tiles took less wear than a pin that stayed put")
 	check(totals_ok, "rotating spreads the cup wear: each hole takes the same amount as when the pin stays put")
-	check(absf(still.grounds.weed_cover - turning.grounds.weed_cover) < 0.005, "rotating the pins leaves the weeds within half a point of a locked course (%.1f%% against %.1f%%)" % [still.grounds.weed_cover * 100.0, turning.grounds.weed_cover * 100.0])
-	check(absf(still.grounds.condition - turning.grounds.condition) < 0.01, "and the condition within a point (%.3f against %.3f)" % [still.grounds.condition, turning.grounds.condition])
+	print("  one seed swings: weeds %.1f%% locked against %.1f%% rotating, condition %.3f against %.3f" % [still.grounds.weed_cover * 100.0, turning.grounds.weed_cover * 100.0, still.grounds.condition, turning.grounds.condition])
+	_test_pin_seasons()
+
+
+## A slow putt from `from`, holed only if it reaches `pin`.
+func _rolls_in(course: Course, from: Vector3, pin: Vector3) -> bool:
+	var ball := Ball.new()
+	ball.place(from)
+	var delta := Vector2(pin.x - from.x, pin.z - from.z)
+	if delta.length_squared() < 0.0001:
+		return false
+	ball.launch(1.0, delta.angle(), 0.0, 0.0, 0.0, 0.0)
+	var rolls := 0
+	while ball.moving() and rolls < 500:
+		ball.step(1.0 / 60.0, course, Vector3.ZERO, pin, true)
+		rolls += 1
+	return ball.state == Ball.S.HOLED
+
+
+## Shots and putts, the hole-out and the routing field follow the day's cup.
+## A group already playing keeps the cup it teed off to until it holes out.
+func _test_cup_target() -> void:
+	print("-- putts and hole-outs use the day's cup")
+	var sim := _sim("sandbox", 41)
+	var course := sim.course
+	for corner_i in course.heights.size():
+		course.heights[corner_i] = 0.0
+	check(sim.paint(40, 50, 6, Defs.T.GREEN) > 0, "a green for the day's cup")
+	var hole := sim.add_hole(course.tile_center(40, 28), course.tile_center(40, 50))
+	check(hole != null and sim.hire("greenkeeper"), "a greenkeeper so the cup can move")
+	var layout := hole.placed
+	var card_par := hole.par
+	var card_len := hole.length
+	sim.time = Defs.DAY_SECONDS
+	sim.move_pins()
+	var cup := hole.pin
+	check(cup.distance_squared_to(layout) > 4.0 and hole.aim_at().distance_squared_to(cup) < 0.0001, "the morning cup leaves the placed pin, and aim follows it")
+	check(hole.par == card_par and is_equal_approx(hole.length, card_len), "par and length stay on the placed pin")
+	var golfer := Golfer.new()
+	golfer.putting = 0.9
+	golfer.ball.set_def(sim.db.balls[0])
+	golfer.ball.place(course.on_ground(cup.x + 2.0, cup.z))
+	var plan := ShotAI.plan(sim, golfer, hole)
+	var target: Vector3 = plan.target
+	check(plan.get("putt", false) == true and target.distance_squared_to(cup) < 0.01 and target.distance_squared_to(layout) > 1.0, "a putt aims at the day's cup")
+	check(_rolls_in(course, course.on_ground(cup.x + 0.35, cup.z), hole.aim_at()), "a putt at the day's cup holes out")
+	check(not _rolls_in(course, course.on_ground(layout.x + 0.35, layout.z), hole.aim_at()), "the same pace at the placed pin does not hole, because the cup has moved")
+	var at_cup := hole.field_at(course, cup.x, cup.z, sim.time)
+	var at_layout := hole.field_at(course, layout.x, layout.z, sim.time)
+	check(at_layout > at_cup + 1.0, "the routing field is measured to the day's cup")
+	var party := Group.new()
+	hole.groups.append(party)
+	var held := hole.pin
+	sim.time = Defs.DAY_SECONDS * 2.0
+	sim.move_pins()
+	check(hole.pin.distance_squared_to(held) < 0.01 and hole.pin_due >= 0 and hole.aim_at().distance_squared_to(held) < 0.01, "a group already on the hole keeps its cup")
+	golfer.ball.place(course.on_ground(held.x + 2.0, held.z))
+	var held_plan := ShotAI.plan(sim, golfer, hole)
+	var held_target: Vector3 = held_plan.target
+	check(held_plan.get("putt", false) == true and held_target.distance_squared_to(held) < 0.01, "that group's putt still aims at the cup it teed off to")
+	check(_rolls_in(course, course.on_ground(held.x + 0.35, held.z), hole.aim_at()), "and still holes out there")
+	hole.groups.clear()
+	sim.settle_pins()
+	check(hole.pin.distance_squared_to(held) > 1.0 and hole.pin_due < 0 and hole.aim_at().distance_squared_to(hole.pin) < 0.0001, "once the group has holed out, the waiting cup is the target")
+	check(hole.par == card_par and is_equal_approx(hole.length, card_len), "settling the cup does not change par or length")
+	var at_new := hole.field_at(course, hole.pin.x, hole.pin.z, sim.time)
+	var at_held := hole.field_at(course, held.x, held.z, sim.time)
+	check(at_held > at_new + 1.0, "the routing field is rebuilt when the cup moves")
+
+
+## One season swings by several points once shots follow the cup. The mean
+## over these seeds is the comparison: moving the cups should not push the
+## weeds or the condition by a point.
+func _test_pin_seasons() -> void:
+	print("-- eight seasons, the day's cup against a pin left where it was placed")
+	var seeds: Array[int] = [51, 7, 99, 12345, 3, 13, 21, 42]
+	var weed_sum := 0.0
+	var cond_sum := 0.0
+	for seed_value in seeds:
+		var got := _pin_season(seed_value)
+		weed_sum += got.x
+		cond_sum += got.y
+	var weed_mean := weed_sum / float(seeds.size())
+	var cond_mean := cond_sum / float(seeds.size())
+	print("  mean change weeds %+.2f points, condition %+.3f" % [weed_mean * 100.0, cond_mean])
+	check(absf(weed_mean) < 0.01, "across these seasons, moving the cups changes the weeds by under a point (%+.2f)" % (weed_mean * 100.0))
+	check(absf(cond_mean) < 0.01, "and the condition by under a point (%+.3f)" % cond_mean)
+
+
+func _pin_season(seed_value: int) -> Vector2:
+	var still := _sim("three_holes", seed_value)
+	var turning := _sim("three_holes", seed_value)
+	still.hire("greenkeeper")
+	turning.hire("greenkeeper")
+	still.hire("marshal")
+	turning.hire("marshal")
+	still.events.timer = 99999.0
+	turning.events.timer = 99999.0
+	for hole in still.course.holes:
+		hole.pin_locked = true
+	var days := 4 * Defs.DAYS_PER_MONTH
+	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
+	for _i in steps:
+		still.step(1.0 / 60.0)
+		turning.step(1.0 / 60.0)
+	var dw := turning.grounds.weed_cover - still.grounds.weed_cover
+	var dc := turning.grounds.condition - still.grounds.condition
+	print("  seed %d weeds locked %.1f%% rotating %.1f%% (change %+.1f), condition %.3f %.3f (change %+.3f)" % [seed_value, still.grounds.weed_cover * 100.0, turning.grounds.weed_cover * 100.0, dw * 100.0, still.grounds.condition, turning.grounds.condition, dc])
+	return Vector2(dw, dc)
+
+
 func _test_undo() -> void:
 	print("-- undo")
 	var sim := _sim("sandbox", 9)
