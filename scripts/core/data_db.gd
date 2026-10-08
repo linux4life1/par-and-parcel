@@ -32,6 +32,7 @@ var starter: Dictionary = {}    # how far apart the starter sends parties
 var awards: Dictionary = {}     # themed hole awards
 var slope: Dictionary = {}      # how the ground is read, and how the marks are drawn
 var debt: Dictionary = {}       # how a balance below zero meets a new arrival
+var undo: Dictionary = {}       # how many build steps can be taken back
 var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
 var feed: Dictionary = {}
@@ -72,6 +73,7 @@ func _init() -> void:
 	slope = _load("slope")
 	Slope.use(slope)
 	debt = _load("debt")
+	undo = _load("undo")
 	names = _load("names")
 	feed = _load("feed")
 

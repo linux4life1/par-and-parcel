@@ -25,6 +25,7 @@ var rng := RandomNumberGenerator.new()
 ## Next eddy number to hand a golfer. Starts at 1 in every simulation.
 var _eddy := 1
 var course: Course
+var undo: UndoLog              # build steps that Ctrl+Z can take back; not saved
 var gear: Gear
 var weather := Weather.new()
 var grounds: Grounds
@@ -145,6 +146,8 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	course = CourseGen.generate(map, rng, biome)
 	course.biome = biome
 	nav = Nav.new(course)
+	undo = UndoLog.new(self)
+	_bind_undo()
 	members = Members.new(self)
 	stories = Stories.new(self)
 	lab = HoleLab.new(self)
@@ -913,11 +916,16 @@ func touch_landmark(g: Golfer) -> bool:
 
 # ------------------------------------------------- building, with a budget
 
+func _bind_undo() -> void:
+	course.watch_edits(Callable(undo, "note_tile"), Callable(undo, "note_height"))
+
+
 ## Paint terrain with a round brush. Returns tiles changed, or -1 if broke.
 func paint(tx: int, ty: int, radius: int, t: int) -> int:
 	var unit := float(Defs.T_COST[t])
 	if not economy.can_afford(unit):
 		return -1
+	var started := undo.begin()
 	var n := course.paint(tx, ty, radius, t)
 	if n > 0:
 		economy.spend("construction", n * unit + course.clear_cost)
@@ -927,6 +935,8 @@ func paint(tx: int, ty: int, radius: int, t: int) -> int:
 			var c := course.tile_center(tx, ty)
 			for i in 2:
 				course.smooth(c.x, c.z, (radius + 1.5) * Defs.TILE, 0.5)
+	if started:
+		undo.commit()
 	return n
 
 
@@ -962,12 +972,16 @@ func place_object(tx: int, ty: int, o: int) -> int:
 	var t := course.terrain[ty * course.w + tx]
 	if Defs.is_green(t) or t == Defs.T.TEE or t == Defs.T.BUNKER:
 		return 0
+	var started := undo.begin()
+	var placed := 0
 	if course.set_object(tx, ty, o):
 		economy.spend("construction", cost)
 		if free:
 			gifts[o] = int(gifts[o]) - 1
-		return 1
-	return 0
+		placed = 1
+	if started:
+		undo.commit()
+	return placed
 
 
 ## What a home site is worth to a buyer: views, water and a good course push
@@ -1320,13 +1334,20 @@ func upgrade_clubhouse() -> bool:
 
 
 func remove_object(tx: int, ty: int) -> bool:
-	return course.set_object(tx, ty, Defs.O.NONE)
+	var started := undo.begin()
+	var cleared := course.set_object(tx, ty, Defs.O.NONE)
+	if started:
+		undo.commit()
+	return cleared
 
 
 func sculpt(mode: String, x: float, z: float, radius_m: float, amount: float) -> bool:
 	var cost := 3.0 + radius_m * 0.25
 	if not economy.can_afford(cost):
 		return false
+	var started := false
+	if mode == "raise" or mode == "lower":
+		started = undo.begin()
 	match mode:
 		"raise":
 			course.sculpt(x, z, radius_m, amount)
@@ -1337,6 +1358,8 @@ func sculpt(mode: String, x: float, z: float, radius_m: float, amount: float) ->
 		"flatten":
 			course.flatten(x, z, radius_m, amount, 0.5)
 	economy.spend("construction", cost)
+	if started:
+		undo.commit()
 	return true
 
 
@@ -1365,11 +1388,14 @@ func buy_land(tx: int, ty: int) -> int:
 func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 	if not economy.can_afford(250.0) or course.holes.size() >= hole_cap():
 		return null
+	var started := undo.begin()
 	economy.spend("construction", 250.0)
 	var hole := course.add_hole(tee, pin)
 	name_hole(hole)
 	stats.holes_built = int(stats.holes_built) + 1
 	feed.say("new_hole", null, {"hole": course.holes.size(), "score": hole.par}, true)
+	if started:
+		undo.commit()
 	return hole
 
 
@@ -1430,6 +1456,9 @@ func install_course(course_d: Dictionary) -> void:
 	course = Course.from_dict(course_d)
 	course.biome = biome
 	nav = Nav.new(course)
+	if undo != null:
+		undo.clear()
+		_bind_undo()
 	player.golfer.course = course
 	wildlife.populate()
 	grounds.reset_layout()
