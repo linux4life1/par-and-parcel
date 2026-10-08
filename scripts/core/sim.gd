@@ -366,31 +366,184 @@ func _update_rating(dt: float) -> void:
 	var pars := {}
 	var scenery := 0.0
 	for hole in course.holes:
-		if not hole.open:
-			continue
-		n += 1
-		pars[hole.par] = true
-		scenery += scenery_score(hole)
+		if hole.open:
+			n += 1
+			pars[hole.par] = true
+			scenery += scenery_score(hole)
 	if n == 0:
 		rating = 0.0
 		design = 0.0
 		reputation = move_toward(reputation, 5.0, dt * 0.05)
 		return
 	var am := visitors.amenity_counts()
-	var d := minf(n, 18.0) / 18.0 * 52.0
-	d += [0.0, 0.0, 7.0, 13.0][mini(pars.size(), 3)]
-	d += minf(int(am.drink) + int(am.snack) + crew.count("beverage"), 1) * 5.0 + minf(int(am.snack), 1) * 3.0
-	d += minf(int(am.restroom), 1) * 4.0 + minf(int(am.bench), 4) * 0.75 + minf(int(am.washer), 3) * 0.7
-	d += minf(int(am.putting), 1) * 3.0 + minf(int(am.range), 1) * 3.0 + minf(int(am.cart_barn), 1) * 2.0
-	d += minf(int(am.landmark), 1) * 3.0 + clubhouse_level * 1.2
-	d += scenery / n * 10.0
-	design = clampf(d, 0.0, 100.0)
 	resort = {}
 	for key: String in ["tennis", "hotel", "marina", "airstrip"]:
 		if int(am.get(key, 0)) > 0:
 			resort[key] = true
+	var d := 0.0
+	var lines: Array = db.accreditation.get("lines", [])
+	for item in lines:
+		if item is Dictionary:
+			d += _accredit_points(item, n, pars.size(), scenery, am)
+	design = clampf(d, 0.0, 100.0)
 	rating = clampf(0.4 * visitors.average_satisfaction() + 15.0 * grounds.condition + 0.45 * design + stories.rating_bias(), 0.0, 100.0)
 	reputation = move_toward(reputation, rating, dt * 0.04)
+
+
+## The design score, one line at a time: what the club has, what it is worth,
+## and the next thing that line wants. The points are the score. A round's
+## length is on the list and adds nothing. Nothing counts until a hole is open.
+func accreditation() -> Array[Dictionary]:
+	var n := 0
+	var pars := {}
+	var scenery := 0.0
+	for hole in course.holes:
+		if not hole.open:
+			continue
+		n += 1
+		pars[hole.par] = true
+		scenery += scenery_score(hole)
+	var am := visitors.amenity_counts()
+	var out: Array[Dictionary] = []
+	var lines: Array = db.accreditation.get("lines", [])
+	for item in lines:
+		if item is Dictionary:
+			out.append(_accredit_line(item, n, pars.size(), scenery, am))
+	return out
+
+
+func _accredit_points(line: Dictionary, n: int, kinds: int, scenery: float, am: Dictionary) -> float:
+	match str(line.get("kind", "")):
+		"holes":
+			var cap := int(line.get("cap", 18))
+			var full := float(line.get("points", 0.0))
+			return minf(float(n), float(cap)) / float(cap) * full
+		"pars":
+			var steps: Array = line.get("points", [])
+			if n == 0 or steps.is_empty():
+				return 0.0
+			return float(steps[mini(kinds, maxi(steps.size() - 1, 0))])
+		"count", "any":
+			if n == 0:
+				return 0.0
+			var cap := int(line.get("cap", 1))
+			var each := float(line.get("each", 0.0))
+			return float(mini(_accredit_have(line, am), cap)) * each
+		"clubhouse":
+			if n == 0:
+				return 0.0
+			return float(clubhouse_level) * float(line.get("each", 0.0))
+		"scenery":
+			if n == 0:
+				return 0.0
+			return scenery / float(n) * float(line.get("points", 0.0))
+		_:
+			return 0.0
+
+
+func _accredit_line(line: Dictionary, n: int, kinds: int, scenery: float, am: Dictionary) -> Dictionary:
+	var id := str(line.get("id", ""))
+	var text := str(line.get("text", ""))
+	var kind := str(line.get("kind", ""))
+	var pts := _accredit_points(line, n, kinds, scenery, am)
+	var have := 0
+	var met := false
+	var next := ""
+	var detail := ""
+	match kind:
+		"holes":
+			var cap := int(line.get("cap", 18))
+			var full := float(line.get("points", 0.0))
+			have = n
+			met = n >= cap
+			detail = "%d of %d, worth %s of %s." % [mini(n, cap), cap, _accredit_num(pts), _accredit_num(full)]
+			if n == 0:
+				next = str(line.get("next_none", ""))
+			elif not met:
+				next = str(line.get("next", ""))
+		"pars":
+			var steps: Array = line.get("points", [])
+			var top := 0.0 if steps.is_empty() else float(steps[steps.size() - 1])
+			have = kinds
+			met = n > 0 and not steps.is_empty() and kinds >= steps.size() - 1
+			var word := "No pars yet" if kinds == 0 else ("%d different par%s" % [kinds, "" if kinds == 1 else "s"])
+			detail = "%s, worth %s of %s." % [word, _accredit_num(pts), _accredit_num(top)]
+			if n > 0 and not met:
+				next = str(line.get("next", ""))
+		"count", "any":
+			var cap := int(line.get("cap", 1))
+			var each := float(line.get("each", 0.0))
+			have = _accredit_have(line, am)
+			var used := mini(have, cap)
+			var full := float(cap) * each
+			met = have >= cap
+			detail = "%d of %d, worth %s of %s." % [used, cap, _accredit_num(pts), _accredit_num(full)]
+			if n == 0 and met:
+				detail += " It counts once a hole is open."
+			elif not met:
+				next = str(line.get("next", ""))
+		"clubhouse":
+			var each := float(line.get("each", 0.0))
+			var top_level := maxi(clubhouse_levels().size() - 1, 0)
+			have = clubhouse_level
+			var full := float(top_level) * each
+			met = clubhouse_top()
+			detail = "%s, worth %s of %s." % [clubhouse_name(), _accredit_num(pts), _accredit_num(full)]
+			if n == 0 and met:
+				detail += " It counts once a hole is open."
+			elif not met:
+				next = str(line.get("next", ""))
+		"scenery":
+			var full := float(line.get("points", 0.0))
+			met = n > 0 and pts >= full - 0.05
+			detail = "Worth %s of %s." % [_accredit_num(pts), _accredit_num(full)]
+			if n > 0 and not met:
+				next = str(line.get("next", ""))
+		"pace":
+			if n == 0:
+				detail = str(line.get("next_none", ""))
+				next = detail
+			elif not course.times_complete():
+				detail = str(line.get("waiting", ""))
+				if course.round_time() > 0.0:
+					detail = "Timed holes so far add up to %s. %s" % [Defs.pace_text(course.round_time()), detail]
+				next = str(line.get("waiting", ""))
+			else:
+				var secs := course.round_time()
+				met = secs <= Defs.ROUND_LONG
+				detail = "A round takes about %s." % Defs.pace_text(secs)
+				if met:
+					detail += " " + str(line.get("done", ""))
+				else:
+					next = str(line.get("next", ""))
+					detail += " " + next
+	if met and next == "" and str(line.get("done", "")) != "" and kind != "pace":
+		detail += " " + str(line.get("done", ""))
+	elif next != "" and kind != "pace":
+		detail += " " + next
+	return {"id": id, "text": text, "detail": detail, "points": pts, "have": have, "met": met, "next": next}
+
+
+func _accredit_have(line: Dictionary, am: Dictionary) -> int:
+	var n := 0
+	if str(line.get("kind", "")) == "any":
+		var keys: Array = line.get("keys", [])
+		for key in keys:
+			n += int(am.get(str(key), 0))
+		var staff := str(line.get("staff", ""))
+		if staff != "":
+			n += crew.count(staff)
+	else:
+		n = int(am.get(str(line.get("key", "")), 0))
+	return n
+
+
+func _accredit_num(v: float) -> String:
+	if absf(v - round(v)) < 0.001:
+		return str(roundi(v))
+	if absf(v * 10.0 - round(v * 10.0)) < 0.001:
+		return "%.1f" % v
+	return "%.2f" % v
 
 
 func stars() -> float:
