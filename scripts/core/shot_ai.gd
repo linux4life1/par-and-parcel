@@ -26,7 +26,7 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 	if lie < 0:
 		lie = Defs.T.ROUGH
 	var p2 := Vector2(p.x, p.z)
-	var to_pin := Vector2(hole.pin.x - p.x, hole.pin.z - p.z)
+	var to_pin := Vector2(hole.aim_at().x - p.x, hole.aim_at().z - p.z)
 	var d := to_pin.length()
 	if Defs.is_green(lie):
 		return _plan_putt(sim, g, hole)
@@ -43,7 +43,7 @@ static func plan(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 			dists.append(r)
 	if dists.is_empty():
 		dists.append(minf(d, maxd))
-	var sig := g.spread() * Defs.T_LIE_SPREAD[lie]
+	var sig := g.spread() * Lie.terrain_spread(lie)
 	# How much trouble weighs on the choice: a thoughtful golfer plays for
 	# the fairway, a duffer aims at the flag and hopes.
 	var care := lerpf(0.55, 1.35, g.imagination)
@@ -103,8 +103,10 @@ static func _spot_cost(sim: Sim, hole: Hole, pt: Vector2, care: float = 1.0) -> 
 		return hole.field_at(course, pt.x, pt.y, sim.time) + COST_OUT * maxf(care, 0.8)
 	var f := hole.field_at(course, pt.x, pt.y, sim.time)
 	match course.terrain[i]:
-		Defs.T.WATER:
+		Defs.T.WATER, Defs.T.STREAM:
 			f += COST_WATER * maxf(care, 0.8)
+		Defs.T.WASTE:
+			f += _waste_trouble(sim) * care
 		Defs.T.BUNKER:
 			f += COST_BUNKER * care
 		Defs.T.DEEP_ROUGH:
@@ -118,6 +120,20 @@ static func _spot_cost(sim: Sim, hole: Hole, pt: Vector2, care: float = 1.0) -> 
 	if Defs.is_tree(course.objects[i]):
 		f += COST_TREE * care
 	return f
+
+
+## Used only when data/ground.json has no trouble number. The test checks
+## that it still matches the file.
+const WASTE_TROUBLE_FALLBACK := 48.0
+
+
+## What a waste area adds to a landing, from data/ground.json. It sits
+## between the rough and a bunker, and it is not priced as water.
+static func _waste_trouble(sim: Sim) -> float:
+	var row: Dictionary = sim.db.ground.get("waste", {})
+	if row.has("trouble"):
+		return float(row["trouble"])
+	return WASTE_TROUBLE_FALLBACK
 
 
 ## Penalty for trees standing in the way. A low ball pays the full price;
@@ -193,11 +209,11 @@ static func putt_speed(sim: Sim, g: Golfer, from: Vector3, to: Vector3, over: fl
 
 static func _plan_putt(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 	var p := g.ball.pos
-	var to := Vector2(hole.pin.x - p.x, hole.pin.z - p.z)
+	var to := Vector2(hole.aim_at().x - p.x, hole.aim_at().z - p.z)
 	var d := to.length()
 	var heading := to.angle()
 	var over := 0.3
-	var v := putt_speed(sim, g, p, hole.pin, over)
+	var v := putt_speed(sim, g, p, hole.aim_at(), over)
 	var read := 0.3 + 0.7 * g.putting
 	for i in 2:
 		var rest := predict_putt(sim, g, v, heading)
@@ -209,7 +225,7 @@ static func _plan_putt(sim: Sim, g: Golfer, hole: Hole) -> Dictionary:
 		var along := r.dot(to / maxf(d, 0.01))
 		var ratio := clampf((d + over) / maxf(along, 0.2), 0.5, 1.8)
 		v = lerpf(v, v * sqrt(ratio), read)
-	return {"putt": true, "ci": sim.gear.putter_i, "speed": v, "heading": heading, "dist": d, "target": hole.pin}
+	return {"putt": true, "ci": sim.gear.putter_i, "speed": v, "heading": heading, "dist": d, "target": hole.aim_at()}
 
 
 ## Swing: turn a plan into a moving ball, with human error.
@@ -265,7 +281,7 @@ static func strike(sim: Sim, g: Golfer) -> void:
 			speed = minf(speed / lerpf(1.0, sit_power, 0.75 * g.imagination), sim.gear.full_speed(g, pl.ci) * g.lie_power(lie, sim.course))
 		speed *= sit_power
 		var bs: float = brand.get("spread", 1.0)
-		var sig := g.spread() * bs * Defs.T_LIE_SPREAD[lie] * float(lr.spread) * (1.0 + blind * 0.45)
+		var sig := g.spread() * bs * Lie.terrain_spread(lie) * float(lr.spread) * (1.0 + blind * 0.45)
 		speed *= 1.0 + rng.randfn(0.0, lerpf(0.08, 0.02, g.accuracy))
 		heading += rng.randfn(0.0, sig)
 		var side := rng.randfn(0.0, lerpf(0.06, 0.01, g.accuracy)) * bs + float(lr.side)

@@ -38,6 +38,8 @@
 				"fast": "9ed072",
 				"tee": "6aa643",
 				"bunker": "d9c28a",
+				"waste": "c4ae78",
+				"stream": "123a62",
 				"water": "1a4d80",
 				"water2": "3885b3",
 				"deep": "3b5a26",
@@ -85,7 +87,9 @@
 				3,
 				6,
 				1,
-				1
+				1,
+				2,
+				2
 			],
 			"grass": [
 				0.5,
@@ -131,6 +135,8 @@
 				"fast": "9cc878",
 				"tee": "6ba247",
 				"bunker": "c9b88a",
+				"waste": "b9a67a",
+				"stream": "16344e",
 				"water": "1c3f5e",
 				"water2": "3a6f8f",
 				"deep": "6a5a5e",
@@ -178,7 +184,9 @@
 				3,
 				6,
 				1,
-				1
+				1,
+				2,
+				2
 			],
 			"grass": [
 				0.55,
@@ -224,6 +232,8 @@
 				"fast": "96d478",
 				"tee": "64ae4a",
 				"bunker": "f0e2b6",
+				"waste": "d2c098",
+				"stream": "14586f",
 				"water": "1b6a8f",
 				"water2": "49b5c9",
 				"deep": "b07d4c",
@@ -271,7 +281,9 @@
 				3,
 				6,
 				1,
-				1
+				1,
+				2,
+				2
 			],
 			"grass": [
 				0.0,
@@ -323,6 +335,8 @@
 				"fast": "88cc6a",
 				"tee": "5aa844",
 				"bunker": "2e2b2b",
+				"waste": "3a3830",
+				"stream": "4a1008",
 				"water": "5a1205",
 				"water2": "ff8a1a",
 				"deep": "2b2726",
@@ -370,7 +384,9 @@
 				9,
 				6,
 				1,
-				1
+				1,
+				2,
+				9
 			],
 			"grass": [
 				0.0,

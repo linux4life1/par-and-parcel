@@ -6,7 +6,7 @@ extends RefCounted
 signal posted(post: Dictionary)
 
 const COOLDOWN := {
-	"water_ball": 50.0, "weeds": 45.0, "pests": 45.0, "wet": 45.0, "wait": 40.0, "no_pay": 45.0, "tip": 70.0, "lucky_bounce": 40.0, "night_golf": 80.0, "too_dark": 70.0,
+	"water_ball": 50.0, "stream_ball": 50.0, "weeds": 45.0, "pests": 45.0, "wet": 45.0, "wait": 40.0, "no_pay": 45.0, "tip": 70.0, "lucky_bounce": 40.0, "night_golf": 80.0, "too_dark": 70.0,
 	"birdie": 35.0, "eagle": 5.0, "blowup": 45.0, "scenery": 50.0, "hit_victim": 4.0, "hit_hitter": 10.0,
 	"greens_bad": 50.0, "greens_good": 80.0, "thirsty": 50.0, "drink": 90.0, "rain": 60.0, "storm": 20.0,
 	"lava_ball": 40.0, "lava_bomb": 6.0, "review_good": 22.0, "window": 30.0, "animal": 60.0, "tantrum_seen": 20.0,
@@ -16,7 +16,7 @@ const MOOD := {
 	"hole_in_one": 1, "eagle": 1, "birdie": 1, "tip": 1, "lucky_bounce": 1, "night_golf": 1, "scenery": 1, "drink": 1, "review_good": 1, "greens_good": 1,
 	"celebrity_happy": 1, "news_good": 1, "tournament_pro_good": 1, "member_join": 1, "member_up": 1, "story_done": 1,
 	"home": 1, "top100": 1, "top18": 1, "snack": 1, "cart_drinks": 1, "vip_happy": 1, "animal": 1, "celebrity_home": 1,
-	"blowup": -1, "hit_victim": -1, "weeds": -1, "pests": -1, "wet": -1, "wait": -1, "no_pay": -1, "too_dark": -1,
+	"blowup": -1, "hit_victim": -1, "stream_ball": -1, "weeds": -1, "pests": -1, "wet": -1, "wait": -1, "no_pay": -1, "too_dark": -1,
 	"thirsty": -1, "review_bad": -1, "celebrity_angry": -1, "celebrity_hit": -1, "greens_bad": -1, "news_bad": -1,
 	"storm": -1, "tournament_pro_bad": -1, "staff_hit": -1, "lava_bomb": -1, "eruption": -1, "member_quit": -1,
 	"tantrum_toss": -1, "tantrum_punch": -1, "tantrum_seen": -1, "window": -1, "restroom": -1, "hungry": -1, "vip_angry": -1,

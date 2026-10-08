@@ -335,7 +335,8 @@ func _find_hole(snap: Dictionary) -> int:
 			continue
 		if not is_equal_approx(h.tee.x, float(td[0])) or not is_equal_approx(h.tee.z, float(td[2])):
 			continue
-		if not is_equal_approx(h.pin.x, float(pd[0])) or not is_equal_approx(h.pin.z, float(pd[2])):
+		var layout := h.design_pin()
+		if not is_equal_approx(layout.x, float(pd[0])) or not is_equal_approx(layout.z, float(pd[2])):
 			continue
 		return i
 	return -1
@@ -351,12 +352,19 @@ func _redo_hole(snap: Dictionary) -> void:
 	hole.par = int(snap["par"])
 	hole.length = float(snap["length"])
 	hole.open = bool(snap["open"])
+	if snap.has("cup"):
+		var cd: Array = snap["cup"]
+		hole.pin = Vector3(float(cd[0]), float(cd[1]), float(cd[2]))
+		hole.pin_spot = int(snap.get("spot", 0))
 
 
 func _snap_hole(h: Hole) -> Dictionary:
+	var layout := h.design_pin()
 	return {
 		"tee": [h.tee.x, h.tee.y, h.tee.z],
-		"pin": [h.pin.x, h.pin.y, h.pin.z],
+		"pin": [layout.x, layout.y, layout.z],
+		"cup": [h.pin.x, h.pin.y, h.pin.z],
+		"spot": h.pin_spot,
 		"name": h.name,
 		"par": h.par,
 		"length": h.length,

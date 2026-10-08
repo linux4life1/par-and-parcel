@@ -76,8 +76,8 @@ func _build(body: VBoxContainer) -> Callable:
 	grid.add_theme_constant_override("h_separation", 6)
 	grid.add_theme_constant_override("v_separation", 6)
 	body.add_child(grid)
-	for t: int in [Defs.T.FAIRWAY, Defs.T.FIRM, Defs.T.GREEN, Defs.T.FAST_GREEN, Defs.T.TEE, Defs.T.BUNKER, Defs.T.WATER, Defs.T.ROUGH, Defs.T.DEEP_ROUGH, Defs.T.PATH]:
-		var b := UIKit.button("%s   %s" % [hud.sim.terrain_name(t), Defs.money(Defs.T_COST[t])], func() -> void:
+	for t: int in [Defs.T.FAIRWAY, Defs.T.FIRM, Defs.T.GREEN, Defs.T.FAST_GREEN, Defs.T.TEE, Defs.T.BUNKER, Defs.T.WASTE, Defs.T.WATER, Defs.T.STREAM, Defs.T.ROUGH, Defs.T.DEEP_ROUGH, Defs.T.PATH]:
+		var b := UIKit.button("%s   %s" % [hud.sim.terrain_name(t), Defs.money(hud.sim.terrain_price(t))], func() -> void:
 			tools.terrain_type = t
 			tools.set_mode("terrain"))
 		b.toggle_mode = true
@@ -454,6 +454,12 @@ func _holes(body: VBoxContainer) -> Callable:
 		gap_more.add_theme_font_size_override("font_size", 12)
 		gap_more.disabled = hole.gap >= sim.starter_max()
 		gap_row.add_child(gap_more)
+		var pin_lock := UIKit.button("Unlock" if hole.pin_locked else "Lock", func() -> void:
+			var held := sim.course.holes[i]
+			held.pin_locked = not held.pin_locked
+			hud.rebuild_dock(), "Keep this hole's pin where it is. Unlock it and the greenkeepers move it each morning.")
+		pin_lock.add_theme_font_size_override("font_size", 12)
+		gap_row.add_child(pin_lock)
 		# what the hole tests
 		var tests := UIKit.hbox(6)
 		cv.add_child(tests)
@@ -528,6 +534,12 @@ func _holes(body: VBoxContainer) -> Callable:
 			if hole.plays > 0:
 				txt = "Average %.1f  ·  %d played  ·  best %d" % [hole.average_score(), hole.plays, hole.best]
 			txt += "  ·  fun %d" % int(hole.fun)
+			if hole.pin_locked:
+				txt += "\nThe pin is locked. The greenkeepers leave it."
+			elif sim.tourney.pins_held():
+				txt += "\nSunday pin, held for the tournament."
+			else:
+				txt += "\nThe pin is in the %s of the green." % sim.pin_spot_name(hole)
 			var lit := int(round(hole.lit_share(sim.course) * 100.0))
 			if hole.lit_enough(sim.course):
 				txt += "\nLit for night golf (%d%% of the hole)" % lit

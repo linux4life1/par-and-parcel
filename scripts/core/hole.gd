@@ -8,6 +8,15 @@ var pin := Vector3.ZERO
 ## Where the pin was placed. Par and length are measured to here, so the
 ## day's cup can move along the green without rewriting the card.
 var placed := Vector3.ZERO
+## 0 middle, 1 front, 2 back. The names live in data/pins.json.
+var pin_spot := 0
+## The owner asked the greenkeepers to leave this cup where it is.
+var pin_locked := false
+## A tournament is holding this pin. The morning rotation leaves it alone.
+var pin_held := false
+## The morning's spot, waiting because a group is still playing the hole.
+## -1 when nothing is waiting.
+var pin_due := -1
 var par := 4
 var length := 0.0
 ## Centreline of the hole the way it is meant to be played, tee to pin, in
@@ -67,7 +76,7 @@ const PAR_4 := 430.0
 const ROUTE_CAP := 1.6
 ## Step cost for choosing the line of play. Fairway, tee and green are cheap.
 ## Everything else is dearer, never infinite, so a carry still connects.
-const PLAY_COST: Array[float] = [3.0, 1.0, 1.0, 1.0, 4.0, 8.0, 5.0, 2.0, 6.0, 4.0, 1.0, 1.0]
+const PLAY_COST: Array[float] = [3.0, 1.0, 1.0, 1.0, 4.0, 8.0, 5.0, 2.0, 6.0, 4.0, 1.0, 1.0, 3.5, 8.0]
 const PLAY_TREE := 6.0
 var groups: Array[Group] = []   # every group currently playing the hole
 ## Parties waiting to tee off, in the order they arrived. The front of the
@@ -99,6 +108,7 @@ var _fw := 0
 var _fh := 0
 var _field_rev := -1
 var _field_time := -1000.0
+var _field_cup := Vector2(-1.0e8, -1.0e8)
 # scratch heap
 var _hk := PackedFloat32Array()
 var _hv := PackedInt32Array()
@@ -113,6 +123,14 @@ var playable := true
 func design_pin() -> Vector3:
 	if placed.length_squared() > 0.01:
 		return placed
+	return pin
+
+
+## Where the ball is holed and the flag stands: the day's cup. A group
+## already on the hole keeps the cup it teed off to, because that cup is
+## not moved until the group has holed out. Par and length stay on the
+## placed pin.
+func aim_at() -> Vector3:
 	return pin
 
 
@@ -417,21 +435,26 @@ func share(keys: Array[String]) -> float:
 
 ## Effective distance to the pin from a world position.
 func field_at(course: Course, x: float, z: float, now: float = 0.0) -> float:
-	if _field_rev != course.revision and (_field_rev < 0 or now - _field_time > 4.0):
+	var cup := Vector2(aim_at().x, aim_at().z)
+	var cup_moved := cup.distance_squared_to(_field_cup) > 0.01
+	if cup_moved or (_field_rev != course.revision and (_field_rev < 0 or now - _field_time > 4.0)):
 		_compute_field(course)
 		_field_time = now
 	var tx := int(floor(x / Defs.TILE)) - _fx
 	var ty := int(floor(z / Defs.TILE)) - _fy
 	if tx < 0 or ty < 0 or tx >= _fw or ty >= _fh:
-		return Vector2(pin.x - x, pin.z - z).length() * 1.35 + 20.0
+		var aim := aim_at()
+		return Vector2(aim.x - x, aim.z - z).length() * 1.35 + 20.0
 	return _field[ty * _fw + tx]
 
 
 func _compute_field(course: Course) -> void:
 	_field_rev = course.revision
 	var margin := 14
+	var aim := aim_at()
+	_field_cup = Vector2(aim.x, aim.z)
 	var tt := course.tile_of(tee.x, tee.z)
-	var pt := course.tile_of(pin.x, pin.z)
+	var pt := course.tile_of(aim.x, aim.z)
 	_fx = clampi(mini(tt.x, pt.x) - margin, 0, course.w - 1)
 	_fy = clampi(mini(tt.y, pt.y) - margin, 0, course.h - 1)
 	var x1 := clampi(maxi(tt.x, pt.x) + margin, 0, course.w - 1)
@@ -586,13 +609,15 @@ func touches_water(course: Course) -> bool:
 		var p := point_along(float(k) / float(n))
 		if course.water_near(p.x, p.z, 14.0):
 			return true
-	return course.water_near(pin.x, pin.z, 14.0)
+	var end := design_pin()
+	return course.water_near(end.x, end.z, 14.0)
 
 
 func to_dict() -> Dictionary:
 	return {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
-		"placed": [placed.x, placed.y, placed.z],
+		"placed": [placed.x, placed.y, placed.z], "pin_spot": pin_spot, "pin_locked": pin_locked,
+		"pin_due": pin_due,
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
@@ -626,8 +651,12 @@ static func from_dict(d: Dictionary) -> Hole:
 	if d.has("placed"):
 		var pl: Array = d.placed
 		hole.placed = Vector3(float(pl[0]), float(pl[1]), float(pl[2]))
+		hole.pin_spot = int(d.get("pin_spot", 0))
 	else:
 		hole.placed = hole.pin
+		hole.pin_spot = 0
+	hole.pin_locked = bool(d.get("pin_locked", false))
+	hole.pin_due = int(d.get("pin_due", -1))
 	hole.earned = float(d.get("earned", 0.0))
 	hole.payers = int(d.get("payers", 0))
 	hole.plays = int(d.get("plays", 0))

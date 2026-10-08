@@ -49,16 +49,19 @@ static func type_blurb(code: int) -> String:
 	return str(TYPES.get(code, TYPES[0])[1])
 
 
-## A cheap fingerprint of the ground a hole is played over.
+## A cheap fingerprint of the ground a hole is played over. The day's cup
+## is left out: moving it is not a new hole, so the test golfers are not
+## sent round again.
 func _signature(hole: Hole) -> int:
 	var c := sim.course
+	var end := hole.design_pin()
 	var a := c.tile_of(hole.tee.x, hole.tee.z)
-	var b := c.tile_of(hole.pin.x, hole.pin.z)
+	var b := c.tile_of(end.x, end.z)
 	var x0 := clampi(mini(a.x, b.x) - 9, 0, c.w - 1)
 	var x1 := clampi(maxi(a.x, b.x) + 9, 0, c.w - 1)
 	var y0 := clampi(mini(a.y, b.y) - 9, 0, c.h - 1)
 	var y1 := clampi(maxi(a.y, b.y) + 9, 0, c.h - 1)
-	var sig := int(hole.tee.x * 7.0 + hole.pin.z * 13.0)
+	var sig := int(hole.tee.x * 7.0 + end.z * 13.0)
 	for y in range(y0, y1 + 1):
 		var row := y * c.w
 		for x in range(x0, x1 + 1):
@@ -167,7 +170,7 @@ static func play_shot(sim: Sim, g: Golfer, hole: Hole) -> void:
 	var b := g.ball
 	var n := 0
 	while b.moving() and n < 2400:
-		b.step(1.0 / 60.0, sim.course, Vector3.ZERO, hole.pin, true)
+		b.step(1.0 / 60.0, sim.course, Vector3.ZERO, hole.design_pin(), true)
 		n += 1
 	match b.state:
 		Ball.S.HOLED:

@@ -75,6 +75,8 @@ func _ready() -> void:
 	_test_slope()
 	_test_debt_welcome()
 	_test_close_structure()
+	_test_waste_stream()
+	_test_pins()
 	_test_undo()
 	_test_undo_books()
 	_test_yardage()
@@ -899,6 +901,37 @@ func _test_sounds() -> void:
 		hot.visitors._step_balls(1.0 / 60.0)
 	check(hot.is_lava() and int(said.get("sizzle", 0)) >= 1 and int(said.get("splash", 0)) == 0,
 		"a ball in the lava sizzles (%d sizzles, %d splashes, ball finished %s)" % [int(said.get("sizzle", 0)), int(said.get("splash", 0)), str(drop.pos)])
+	var brook_i := -1
+	for bi in hot.course.terrain.size():
+		if hot.course.locked[bi] == 0 and hot.course.hot[bi] == 0 and hot.course.terrain[bi] != Defs.T.WATER:
+			brook_i = bi
+			break
+	check(brook_i >= 0, "the volcano has a tile that can hold a stream")
+	if brook_i >= 0:
+		hot.course.terrain[brook_i] = Defs.T.STREAM
+		var brook_said := {}
+		hot.sound.connect(func(id: String, _pos: Vector3, _power: float) -> void: brook_said[id] = int(brook_said.get(id, 0)) + 1)
+		var brook_at := hot.course.tile_center(brook_i % hot.course.w, int(brook_i / hot.course.w))
+		var brook_ball := Ball.new()
+		brook_ball.pos = Vector3(brook_at.x - 0.6, hot.course.height_at(brook_at.x, brook_at.z) + 14.0, brook_at.z)
+		brook_ball.launch(2.0, 0.0, deg_to_rad(50.0), 0.0, 0.0, 0.0)
+		brook_ball.lava = true
+		hot.visitors.track_ball(brook_ball, hot.course.holes[0])
+		for _bi in 900:
+			hot.visitors._step_balls(1.0 / 60.0)
+		check(int(brook_said.get("splash", 0)) >= 1 and int(brook_said.get("sizzle", 0)) == 0, "a ball in a volcanic stream splashes, it does not sizzle")
+		var heat := Ball.new()
+		heat.lava = true
+		var over_stream := heat._air(hot.course, brook_i, Vector3.ZERO)
+		var over_lava := heat._air(hot.course, pool, Vector3.ZERO)
+		check(over_stream.y < 0.01 and over_lava.y > 0.5, "a stream on the volcano is not hot, and the lava is")
+		hot._lot_lava = true
+		var stream_add := hot._lot_cell(brook_i)
+		hot.course.terrain[brook_i] = Defs.T.WATER
+		var lava_add := hot._lot_cell(brook_i)
+		hot.course.terrain[brook_i] = Defs.T.ROUGH
+		var rough_add := hot._lot_cell(brook_i)
+		check(is_equal_approx(stream_add, rough_add + 22.0) and is_equal_approx(lava_add, rough_add), "a lot by a volcanic stream gets the water view, and a lot by the lava does not")
 	# materials: every one a ball can hit has a sound of its own
 	var mats := []
 	for m: String in Solids.data().materials:
@@ -1175,8 +1208,9 @@ func _test_season() -> void:
 	check(sim.stats.rounds > 20, "golfers complete rounds")
 	check(sim.economy.history.size() == 4, "four months of books closed")
 	check(sim.feed.posts.size() > 5, "the feed fills up")
-	check(sim.grounds.condition > 0.5, "one greenkeeper keeps three holes in shape")
-	check(sim.visitors.average_satisfaction() > 40.0, "golfers are not miserable")
+	check(sim.grounds.condition > 0.80, "one greenkeeper keeps three holes in shape (%.0f%%)" % (sim.grounds.condition * 100.0))
+	check(sim.grounds.weed_cover < 0.04, "weeds with the day's cup in play (%.1f%%)" % (sim.grounds.weed_cover * 100.0))
+	check(sim.rating >= 45.0 and sim.visitors.average_satisfaction() >= 64.0, "rating and satisfaction hold the line of a course whose pins stay put (%.0f, %.0f)" % [sim.rating, sim.visitors.average_satisfaction()])
 
 	print("-- hosting a tournament")
 	sim.economy.money = 50000.0
@@ -1285,6 +1319,20 @@ func _test_biomes() -> void:
 		skip.step(1.0 / 60.0, lane, Vector3.ZERO, Vector3.ZERO, false)
 		n += 1
 	check(skip.state == Ball.S.WATER, "nothing skips across lava")
+	var brook_lane := _lane()
+	for bx in range(8, 12):
+		for by in 24:
+			brook_lane.terrain[by * 160 + bx] = Defs.T.STREAM
+	var hop := Ball.new()
+	hop.set_def(db.ball("skipper"))
+	hop.lava = true
+	hop.place(Vector3(10.0, 0.0, 60.0))
+	hop.launch(40.0, 0.0, deg_to_rad(6.0), 0.02, 0.0, 0.2)
+	var hopped := 0
+	while hop.moving() and hopped < 4000:
+		hop.step(1.0 / 60.0, brook_lane, Vector3.ZERO, Vector3.ZERO, false)
+		hopped += 1
+	check(hop.state != Ball.S.WATER and hop.pos.x > 60.0, "a ball can skip a stream on the volcano (finished at %.0f, %s)" % [hop.pos.x, str(hop.state)])
 
 
 func _test_land() -> void:
@@ -4237,7 +4285,8 @@ func _test_easy_and_album() -> void:
 func _test_firm() -> void:
 	print("-- firm fairway and a fast green")
 	var n := Defs.T_NAMES.size()
-	check(Defs.T.FIRM == n - 2 and Defs.T.FAST_GREEN == n - 1, "the firm fairway and the fast green sit at the end of the terrain list")
+	check(Defs.T.FIRM == 10 and Defs.T.FAST_GREEN == 11, "a firm fairway is terrain 10 and a fast green is terrain 11, so a save from before waste and streams still reads them")
+	check(Defs.T.WASTE > Defs.T.FAST_GREEN and Defs.T.STREAM > Defs.T.FAST_GREEN, "waste and streams were added after the firm fairway and the fast green")
 	var wide := true
 	var cols: Array[int] = [
 		Defs.T_COST.size(), Defs.T_CLEAR.size(), Defs.T_DECEL.size(), Defs.T_BOUNCE.size(),
@@ -5048,6 +5097,871 @@ func _test_storm_resign() -> void:
 	check(Members.strike_limit(0) == 1 and Members.strike_limit(-3) == 1, "a resign strike count below 1 is raised to 1")
 
 
+func _lie_terms(t: int) -> Dictionary:
+	var table: Dictionary = db.lies.get("lies", {})
+	var row: Dictionary = table.get(Defs.T_KEYS[t], {})
+	return {
+		"spin": float(row.get("spin", 1.0)),
+		"mishit": float(row.get("mishit", 1.0)),
+		"power": Lie.terrain_power(t),
+		"spread": Lie.terrain_spread(t),
+	}
+
+
+func _lie_penalty(t: int) -> float:
+	var terms := _lie_terms(t)
+	var spin := float(terms["spin"])
+	var mishit := float(terms["mishit"])
+	var power := float(terms["power"])
+	var spread := float(terms["spread"])
+	return (1.0 - spin) + (mishit - 1.0) + (1.0 - power) + (spread - 1.0)
+
+
+## True when the walked line steps on a stream tile that has no bridge.
+func _through_stream(course: Course, from: Vector3, route: PackedVector2Array) -> bool:
+	var pts: Array[Vector2] = [Vector2(from.x, from.z)]
+	for wp in route:
+		pts.append(wp)
+	for i in range(pts.size() - 1):
+		var a := pts[i]
+		var b := pts[i + 1]
+		var steps := int(a.distance_to(b) / 2.0) + 1
+		for s in steps + 1:
+			var at := a.lerp(b, float(s) / float(steps))
+			if course.terrain_at(at.x, at.y) != Defs.T.STREAM:
+				continue
+			var tile := course.tile_of(at.x, at.y)
+			if course.objects[tile.y * course.w + tile.x] != Defs.O.BRIDGE:
+				return true
+	return false
+
+
+func _test_waste_stream() -> void:
+	print("-- waste areas and streams")
+	var rough := _lie_terms(Defs.T.ROUGH)
+	var waste := _lie_terms(Defs.T.WASTE)
+	var bunker := _lie_terms(Defs.T.BUNKER)
+	check(float(bunker["power"]) < float(waste["power"]) and float(waste["power"]) < float(rough["power"]), "a waste lie takes less off the strike than sand and more than the rough")
+	check(float(rough["spread"]) < float(waste["spread"]) and float(waste["spread"]) < float(bunker["spread"]), "a waste lie sprays more than the rough and less than a bunker")
+	check(float(rough["mishit"]) < float(waste["mishit"]) and float(waste["mishit"]) < float(bunker["mishit"]), "a clean strike from waste is harder than the rough and easier than sand")
+	check(float(rough["spin"]) < float(waste["spin"]) and float(waste["spin"]) < float(bunker["spin"]), "waste keeps more spin than the rough and less than a bunker")
+	var rough_p := _lie_penalty(Defs.T.ROUGH)
+	var waste_p := _lie_penalty(Defs.T.WASTE)
+	var bunker_p := _lie_penalty(Defs.T.BUNKER)
+	print("   lie penalty rough %.2f, waste %.2f, bunker %.2f" % [rough_p, waste_p, bunker_p])
+	check(rough_p < waste_p and waste_p < bunker_p, "the waste penalty sits between the rough and a bunker")
+	check(is_equal_approx(Lie.terrain_power(Defs.T.WASTE), Defs.T_LIE_POWER[Defs.T.WASTE]), "the waste power in the data matches the terrain table")
+	check(is_equal_approx(Lie.terrain_spread(Defs.T.WASTE), Defs.T_LIE_SPREAD[Defs.T.WASTE]), "the waste spread in the data matches the terrain table")
+	var golfer := Golfer.new()
+	check(golfer.lie_power(Defs.T.BUNKER) < golfer.lie_power(Defs.T.WASTE) and golfer.lie_power(Defs.T.WASTE) < golfer.lie_power(Defs.T.ROUGH), "the same golfer gets less out of sand than waste, and less out of waste than the rough")
+	var waste_row: Dictionary = db.ground.get("waste", {})
+	var stream_row: Dictionary = db.ground.get("stream", {})
+	var bunker_row: Dictionary = db.ground.get("bunker", {})
+	var sim := _sim("sandbox", 6)
+	check(sim.terrain_price(Defs.T.WASTE) == int(waste_row["cost"]) and sim.terrain_price(Defs.T.WASTE) < int(bunker_row["cost"]), "a waste area costs what the data says, and less than a bunker")
+	check(sim.terrain_price(Defs.T.STREAM) == int(stream_row["cost"]) and sim.terrain_price(Defs.T.STREAM) < Defs.T_COST[Defs.T.WATER], "a stream costs what the data says, and less than a pond")
+	check(Defs.T_COST[Defs.T.WASTE] == int(waste_row["cost"]) and Defs.T_COST[Defs.T.STREAM] == int(stream_row["cost"]) and Defs.T_COST[Defs.T.BUNKER] == int(bunker_row["cost"]), "the price fallbacks in the terrain table match the data")
+	check(is_equal_approx(ShotAI.WASTE_TROUBLE_FALLBACK, float(waste_row["trouble"])), "the waste trouble fallback matches the data")
+	check(is_zero_approx(sim.terrain_care(Defs.T.WASTE)) and is_zero_approx(Defs.T_CARE[Defs.T.WASTE]) and is_zero_approx(Defs.T_WEAR[Defs.T.WASTE]), "a waste area is not raked and does not wear")
+	sim.economy.money = 5000.0
+	var purse := sim.economy.money
+	check(sim.paint(8, 8, 0, Defs.T.WASTE) == 1, "one waste tile paints")
+	check(is_equal_approx(purse - sim.economy.money, float(sim.terrain_price(Defs.T.WASTE))), "painting it charges the data price")
+	var course := sim.course
+	var y := 30
+	for tx in range(20, 40):
+		course.set_terrain(tx, y, Defs.T.FAIRWAY)
+	course.set_terrain(35, y, Defs.T.WASTE)
+	var hole := course.add_hole(course.tile_center(22, y), course.tile_center(36, y))
+	check(not hole.touches_water(course), "a waste area beside the pin is not a water hazard")
+	var spot := course.tile_center(35, y)
+	var at := Vector2(spot.x, spot.z)
+	var i := y * course.w + 35
+	course.terrain[i] = Defs.T.WASTE
+	course.revision += 1
+	var cost_waste := ShotAI._spot_cost(sim, hole, at, 1.0)
+	course.terrain[i] = Defs.T.ROUGH
+	course.revision += 1
+	var cost_rough := ShotAI._spot_cost(sim, hole, at, 1.0)
+	course.terrain[i] = Defs.T.BUNKER
+	course.revision += 1
+	var cost_bunker := ShotAI._spot_cost(sim, hole, at, 1.0)
+	course.terrain[i] = Defs.T.WATER
+	course.revision += 1
+	var cost_water := ShotAI._spot_cost(sim, hole, at, 1.0)
+	course.terrain[i] = Defs.T.STREAM
+	course.revision += 1
+	var cost_stream := ShotAI._spot_cost(sim, hole, at, 1.0)
+	check(cost_rough < cost_waste and cost_waste < cost_bunker and cost_bunker < cost_water, "landing in waste costs more than the rough and less than a bunker, and it is not priced as water")
+	check(is_equal_approx(cost_stream, cost_water), "a stream is priced like water, so the existing carry logic takes it on")
+	course.terrain[i] = Defs.T.WASTE
+	var resting := Golfer.new()
+	resting.ball.place(spot)
+	resting.strokes = 2
+	var party := Group.new()
+	party._resolve(sim, resting, hole)
+	check(resting.strokes == 2, "a ball lying in a waste area does not take a penalty stroke")
+	check(not resting.gripes.has("bunker") and not resting.gripes.has("water"), "and it is not scored as a bunker or as water")
+	var sloped := Course.new(24, 8)
+	for vy in sloped.h + 1:
+		for vx in sloped.w + 1:
+			sloped.heights[vy * (sloped.w + 1) + vx] = float(vx) * 1.5
+	var down: Array[Vector2i] = []
+	for x in range(14, 5, -1):
+		down.append(Vector2i(x, 3))
+	check(sloped.lay_stream(down) == down.size(), "a downhill drag paints every tile of the stream")
+	var descended := true
+	var prev_h := sloped.tile_center(down[0].x, down[0].y).y
+	for tile in down:
+		if sloped.terrain[tile.y * sloped.w + tile.x] != Defs.T.STREAM:
+			descended = false
+		var h := sloped.tile_center(tile.x, tile.y).y
+		if h > prev_h + 0.02:
+			descended = false
+		prev_h = h
+	check(descended, "the painted stream runs downhill")
+	check(sloped.tile_center(14, 3).y > sloped.tile_center(6, 3).y + 5.0, "drawing the stream does not flatten the slope")
+	var up: Array[Vector2i] = []
+	for x in range(6, 15):
+		up.append(Vector2i(x, 5))
+	sloped.lay_stream(up)
+	check(sloped.terrain[5 * sloped.w + 6] == Defs.T.STREAM, "the low end of an uphill drag is painted")
+	var climbed := false
+	for x in range(7, 15):
+		if sloped.terrain[5 * sloped.w + x] == Defs.T.STREAM:
+			climbed = true
+	check(not climbed, "an uphill drag refuses the higher tiles")
+	var level := Course.new(12, 4)
+	var across: Array[Vector2i] = []
+	for x in range(2, 8):
+		across.append(Vector2i(x, 1))
+	check(level.lay_stream(across) == across.size(), "a stream also runs across level ground")
+	sim.economy.money = 8000.0
+	var drag := sim.course
+	var row := 70
+	for vx in range(70, 76):
+		drag.heights[row * (drag.w + 1) + vx] = float(vx - 70) * 2.0
+		drag.heights[(row + 1) * (drag.w + 1) + vx] = float(vx - 70) * 2.0
+	var climb: Array[Vector2i] = []
+	for x in range(70, 74):
+		climb.append(Vector2i(x, row))
+	check(drag.tile_center(71, row).y > drag.tile_center(70, row).y + 0.5, "the next tile of the drag is uphill")
+	sim.stream_drag_begin()
+	for step_i in climb.size():
+		var seg: Array[Vector2i] = []
+		if step_i == 0:
+			seg.append(climb[step_i])
+		else:
+			seg = Course.tile_line(climb[step_i - 1], climb[step_i])
+		sim.paint_stream(seg)
+	var uphill_ok := drag.terrain[row * drag.w + 70] == Defs.T.STREAM
+	for x in range(71, 74):
+		if drag.terrain[row * drag.w + x] == Defs.T.STREAM:
+			uphill_ok = false
+	check(uphill_ok, "dragging uphill, one move at a time, paints only the first tile")
+	var low := row + 2
+	for vx in range(70, 76):
+		drag.heights[low * (drag.w + 1) + vx] = float(75 - vx) * 2.0
+		drag.heights[(low + 1) * (drag.w + 1) + vx] = float(75 - vx) * 2.0
+	var fall: Array[Vector2i] = []
+	for x in range(70, 74):
+		fall.append(Vector2i(x, low))
+	check(drag.tile_center(71, low).y < drag.tile_center(70, low).y - 0.5, "the next tile of the drag is downhill")
+	sim.stream_drag_begin()
+	for step_down in fall.size():
+		var seg_down: Array[Vector2i] = []
+		if step_down == 0:
+			seg_down.append(fall[step_down])
+		else:
+			seg_down = Course.tile_line(fall[step_down - 1], fall[step_down])
+		sim.paint_stream(seg_down)
+	var downhill_ok := true
+	for tile in fall:
+		if drag.terrain[tile.y * drag.w + tile.x] != Defs.T.STREAM:
+			downhill_ok = false
+	check(downhill_ok, "dragging downhill, one move at a time, paints every tile")
+	var dip := row + 4
+	for vy in [dip, dip + 1]:
+		drag.heights[vy * (drag.w + 1) + 70] = 4.0
+		drag.heights[vy * (drag.w + 1) + 71] = 4.0
+		drag.heights[vy * (drag.w + 1) + 72] = 12.0
+		drag.heights[vy * (drag.w + 1) + 73] = -8.0
+	var kink: Array[Vector2i] = [Vector2i(70, dip), Vector2i(71, dip), Vector2i(72, dip)]
+	check(drag.tile_center(71, dip).y > drag.tile_center(70, dip).y + 0.5 and drag.tile_center(72, dip).y < drag.tile_center(70, dip).y - 0.5, "after a rise the drag drops below the last accepted tile")
+	sim.stream_drag_begin()
+	for step_dip in kink.size():
+		var seg_dip: Array[Vector2i] = []
+		if step_dip == 0:
+			seg_dip.append(kink[step_dip])
+		else:
+			seg_dip = Course.tile_line(kink[step_dip - 1], kink[step_dip])
+		sim.paint_stream(seg_dip)
+	check(drag.terrain[dip * drag.w + 70] == Defs.T.STREAM and drag.terrain[dip * drag.w + 71] != Defs.T.STREAM and drag.terrain[dip * drag.w + 72] == Defs.T.STREAM, "a tile refused for being higher stays refused, and a lower tile after it is painted")
+	var by := 48
+	for ty in range(by - 1, by + 2):
+		for tx in range(36, 48):
+			course.set_terrain(tx, ty, Defs.T.FAIRWAY)
+		course.set_terrain(40, ty, Defs.T.STREAM)
+		for vx in range(36, 49):
+			course.heights[ty * (course.w + 1) + vx] = 0.0
+			course.heights[(ty + 1) * (course.w + 1) + vx] = 0.0
+	var player := Golfer.new()
+	var tee := course.tile_center(39, by)
+	player.ball.place(tee)
+	player.ball.launch(8.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+	var steps := 0
+	while player.ball.moving() and steps < 4000:
+		player.ball.step(1.0 / 60.0, course, Vector3.ZERO, Vector3.ZERO, false)
+		steps += 1
+	check(player.ball.state == Ball.S.WATER, "a ball that reaches a stream is in the penalty")
+	player.strokes = 1
+	var played := Hole.new()
+	played.par = 4
+	played.tee = course.tile_center(36, by)
+	played.pin = course.tile_center(46, by)
+	party._resolve(sim, player, played)
+	check(player.strokes == 2, "a ball in a stream adds a penalty stroke")
+	check(player.thoughts.size() > 0 and str(player.thoughts[-1]["text"]).find("stream") >= 0, "the golfer calls it a stream")
+	var stream_post: Dictionary = sim.feed.posts[-1]
+	var stream_text := str(stream_post.get("text", ""))
+	check(str(stream_post.get("kind", "")) == "stream_ball" and stream_text.find("stream") >= 0 and stream_text.find("pond") < 0, "the feed uses the stream lines, not the pond lines")
+	check(course.terrain_at(player.ball.pos.x, player.ball.pos.z) != Defs.T.STREAM, "the drop is back on dry land")
+	check(player.ball.pos.distance_to(tee) < 25.0, "and the drop is nearby")
+	var a := course.tile_center(40, 40)
+	var b := course.tile_center(60, 40)
+	for ty in range(10, 71):
+		course.terrain[ty * course.w + 50] = Defs.T.STREAM
+		course.objects[ty * course.w + 50] = 0
+	for ty in range(36, 45):
+		for tx in range(38, 63):
+			if course.terrain[ty * course.w + tx] != Defs.T.STREAM:
+				course.terrain[ty * course.w + tx] = Defs.T.ROUGH
+			if tx != 50:
+				course.objects[ty * course.w + tx] = 0
+	course.revision += 1
+	check(not sim.nav.clear_line(a, b), "a stream blocks the straight walk")
+	var around := sim.nav.path(a, b)
+	check(not _through_stream(course, a, around), "without a bridge the walk stays out of the water")
+	sim.economy.money = 5000.0
+	check(sim.place_object(50, 40, Defs.O.BRIDGE) == 1, "a bridge can be built on a stream")
+	check(sim.place_object(45, 40, Defs.O.BRIDGE) == 0, "and still not on dry land")
+	check(sim.place_object(35, y, Defs.O.BRIDGE) == 0, "nor on a waste area")
+	var crossed := sim.nav.path(a, b)
+	check(not _through_stream(course, a, crossed), "with a bridge the walk still stays out of the water")
+	var walker := Golfer.new()
+	walker.pos = a
+	var walked := 0
+	var used := false
+	var wet_feet := false
+	while not walker.travel(b, 1.0 / 60.0, sim, walker.walk_speed()) and walked < 8000:
+		var ti := course.index_at(walker.pos.x, walker.pos.z)
+		if ti >= 0 and course.terrain[ti] == Defs.T.STREAM:
+			if course.objects[ti] == Defs.O.BRIDGE:
+				used = true
+			else:
+				wet_feet = true
+		walked += 1
+	check(walker.pos.distance_to(b) < 1.0 and used and not wet_feet, "a walker crosses on the bridge and not through the stream")
+	var fresh := _sim("three_holes", 2)
+	var pars: Array[int] = []
+	var lens: Array[float] = []
+	for old in fresh.course.holes:
+		pars.append(old.par)
+		lens.append(old.length)
+	var loaded := Sim.from_dict(db, fresh.to_dict(), gear)
+	var same := loaded.course.holes.size() == pars.size()
+	for k in pars.size():
+		if loaded.course.holes[k].par != pars[k] or not is_equal_approx(loaded.course.holes[k].length, lens[k]):
+			same = false
+	check(same, "an old save keeps every hole's par and length")
+	var stray := 0
+	for cell in loaded.course.terrain:
+		if cell == Defs.T.WASTE or cell == Defs.T.STREAM:
+			stray += 1
+	check(stray == 0, "an old save has no waste or stream until someone paints them")
+	fresh.course.set_terrain(12, 12, Defs.T.WASTE)
+	for x in range(14, 20):
+		fresh.course.terrain[14 * fresh.course.w + x] = Defs.T.STREAM
+	var round := Sim.from_dict(db, fresh.to_dict(), gear)
+	check(round.course.terrain[12 * round.course.w + 12] == Defs.T.WASTE, "a waste area survives a save")
+	var kept := true
+	for x in range(14, 20):
+		if round.course.terrain[14 * round.course.w + x] != Defs.T.STREAM:
+			kept = false
+	check(kept, "a stream survives a save")
+	var tee_box := _sim("sandbox", 11)
+	tee_box.economy.money = 5000.0
+	check(tee_box.paint(20, 20, 0, Defs.T.STREAM) == 1, "a stream tile for the tee")
+	check(tee_box.paint(22, 20, 0, Defs.T.WATER) == 1, "a pond tile for the tee")
+	var tee_tool := BuildTools.new()
+	tee_tool.sim = tee_box
+	var tee_notes: Array[String] = []
+	tee_box.toast.connect(func(text: String, _kind: String) -> void: tee_notes.append(text))
+	tee_tool._click_hole(tee_box.course.tile_center(20, 20))
+	tee_tool._click_hole(tee_box.course.tile_center(22, 20))
+	check(tee_tool._tee == null and tee_box.course.terrain_at(tee_box.course.tile_center(20, 20).x, tee_box.course.tile_center(20, 20).z) == Defs.T.STREAM, "a tee cannot be placed on a stream")
+	check(tee_notes.size() == 2 and tee_notes[0].find("stream") >= 0 and tee_notes[1].find("water") >= 0, "the refusal names the stream and the water")
+	tee_tool.free()
+	check(round.course.holes.size() == pars.size(), "saving the new ground does not drop the old holes")
+	var back := _sim("sandbox", 19)
+	var bw := back.course.w
+	var stream_i := 30 * bw + 30
+	var waste_i := 30 * bw + 32
+	back.course.terrain[stream_i] = Defs.T.ROUGH
+	back.course.objects[stream_i] = 0
+	back.course.terrain[waste_i] = Defs.T.ROUGH
+	back.course.objects[waste_i] = 0
+	var cash := back.economy.money
+	var stream_cost := float(back.terrain_price(Defs.T.STREAM))
+	check(back.paint(30, 30, 0, Defs.T.STREAM) == 1 and back.undo.can_undo() and is_equal_approx(cash - back.economy.money, stream_cost), "a single stream tile opens an undo step and charges the stream cost")
+	check(back.undo.undo() and int(back.course.terrain[stream_i]) != Defs.T.STREAM and is_equal_approx(back.economy.money, cash), "undo refunds exactly the stream cost")
+	check(back.undo.redo() and int(back.course.terrain[stream_i]) == Defs.T.STREAM and is_equal_approx(back.economy.money, cash - stream_cost), "redo charges the stream cost again")
+	var after := back.economy.money
+	var waste_cost := float(back.terrain_price(Defs.T.WASTE))
+	check(back.paint(32, 30, 0, Defs.T.WASTE) == 1 and is_equal_approx(after - back.economy.money, waste_cost), "a waste tile charges the waste cost")
+	check(back.undo.undo() and int(back.course.terrain[waste_i]) != Defs.T.WASTE and is_equal_approx(back.economy.money, after), "undo refunds exactly the waste cost")
+	check(back.undo.redo() and int(back.course.terrain[waste_i]) == Defs.T.WASTE and is_equal_approx(back.economy.money, after - waste_cost), "redo charges the waste cost again")
+	# One drag is one stroke: begin, several paint_stream calls, then commit.
+	var batch := _sim("sandbox", 23)
+	batch.economy.money = 8000.0
+	var bc := batch.course
+	var stream_y := 50
+	for bx in range(40, 46):
+		bc.heights[stream_y * (bc.w + 1) + bx] = 0.0
+		bc.heights[(stream_y + 1) * (bc.w + 1) + bx] = 0.0
+	var batch_n := 4
+	for sx in range(40, 40 + batch_n):
+		bc.terrain[stream_y * bc.w + sx] = Defs.T.ROUGH
+		bc.objects[stream_y * bc.w + sx] = 0
+	var batch_cash := batch.economy.money
+	var batch_unit := float(batch.terrain_price(Defs.T.STREAM))
+	var batch_steps := batch.undo.steps()
+	check(batch.undo.begin(), "a stream drag opens one stroke")
+	batch.stream_drag_begin()
+	var painted := 0
+	for sx in range(40, 40 + batch_n):
+		var one: Array[Vector2i] = [Vector2i(sx, stream_y)]
+		painted += batch.paint_stream(one)
+	batch.undo.commit()
+	var batch_sum := batch_unit * float(batch_n)
+	var batch_all := true
+	for sx in range(40, 40 + batch_n):
+		if int(bc.terrain[stream_y * bc.w + sx]) != Defs.T.STREAM:
+			batch_all = false
+	check(painted == batch_n and batch_all and batch.undo.steps() == batch_steps + 1 and is_equal_approx(batch_cash - batch.economy.money, batch_sum), "several stream tiles in one drag are one step and cost the sum")
+	check(batch.undo.undo() and is_equal_approx(batch.economy.money, batch_cash), "undo of that drag refunds the sum exactly")
+	var batch_back := true
+	for sx in range(40, 40 + batch_n):
+		if int(bc.terrain[stream_y * bc.w + sx]) == Defs.T.STREAM:
+			batch_back = false
+	check(batch_back, "undo of that drag takes the stream off")
+	check(batch.undo.redo() and is_equal_approx(batch.economy.money, batch_cash - batch_sum), "redo of that drag charges the sum again")
+	var batch_on := true
+	for sx in range(40, 40 + batch_n):
+		if int(bc.terrain[stream_y * bc.w + sx]) != Defs.T.STREAM:
+			batch_on = false
+	check(batch_on, "redo of that drag paints the stream again")
+
+
+func _test_pins() -> void:
+	print("-- rotating pins")
+	var sim := _sim("sandbox", 41)
+	var c := sim.course
+	check(sim.paint(40, 50, 6, Defs.T.GREEN) > 0, "a green big enough for three pin spots")
+	var hole := sim.add_hole(c.tile_center(40, 28), c.tile_center(40, 50))
+	check(hole != null, "a hole is laid out on that green")
+	if hole == null:
+		return
+	var placed := hole.pin
+	var par := hole.par
+	var length := hole.length
+	sim.time = Defs.DAY_SECONDS
+	sim.move_pins()
+	check(hole.pin.distance_squared_to(placed) < 0.01 and hole.pin_spot == 0, "with no greenkeeper the pin stays where it was placed")
+	check(sim.hire("greenkeeper"), "a greenkeeper is hired")
+	sim.move_pins()
+	check(hole.pin.z < placed.z - 1.0 and Defs.is_green(c.terrain_at(hole.pin.x, hole.pin.z)), "the next day the cup moves toward the tee and stays on the green")
+	check(hole.par == par and is_equal_approx(hole.length, length) and hole.placed.distance_squared_to(placed) < 0.01, "par and length stay on the placed pin")
+	check(sim.pin_spot_name(hole) == "front", "the day's spot is the front")
+	var keeper: Crew.Member = sim.crew.members[0]
+	c.weeds.fill(0.0)
+	c.health.fill(1.0)
+	keeper.pos = hole.pin
+	keeper.state = 0
+	keeper.timer = 0.0
+	sim.crew.step(0.05)
+	check(keeper.state == 0 and keeper.target_i < 0, "the morning move does not send the greenkeeper to the cup")
+	var under := c.tile_of(hole.pin.x, hole.pin.z)
+	var ui := under.y * c.w + under.x
+	var far := 10 * c.w + 10
+	c.terrain[far] = Defs.T.GREEN
+	c.health[ui] = 1.0
+	c.health[far] = 1.0
+	sim.grounds.wear_around_pins(1000.0)
+	var cup_expect := float(db.pins.get("wear", 0.0)) * 1000.0
+	check(cup_expect > 0.0 and c.health[ui] < c.health[far] - cup_expect * 0.5 and is_equal_approx(c.health[far], 1.0), "the green around the cup wears and a green far away does not")
+	var saved := Sim.from_dict(db, JSON.parse_string(JSON.stringify(sim.to_dict())), gear)
+	var loaded: Hole = saved.course.holes[0]
+	check(loaded.pin.distance_squared_to(hole.pin) < 0.01 and loaded.placed.distance_squared_to(hole.placed) < 0.01 and loaded.pin_spot == hole.pin_spot, "a save keeps the day's cup and the placed pin")
+	var raw := hole.to_dict()
+	raw.erase("placed")
+	raw.erase("pin_spot")
+	var old := Hole.from_dict(raw)
+	check(old.placed.distance_squared_to(old.pin) < 0.01 and old.pin_spot == 0 and not old.pin_locked, "an older save, with no placed pin, treats the cup as the middle and leaves it unlocked")
+	sim.time = Defs.DAY_SECONDS * 2.0
+	sim.move_pins()
+	check(hole.pin.z > placed.z + 1.0 and hole.pin_spot == 2, "the day after, the cup is past the placed pin")
+	sim.time = Defs.DAY_SECONDS * 3.0
+	sim.move_pins()
+	check(hole.pin.distance_squared_to(placed) < 0.25 and hole.pin_spot == 0, "on the third day the cup is back in the middle")
+	var held := hole.pin
+	sim.tourney.apply_setup("stern")
+	var sunday := hole.pin
+	check(sunday.distance_squared_to(held) > 0.25, "the stern setup tucks the pin for Sunday")
+	sim.time = Defs.DAY_SECONDS * 4.0
+	sim.move_pins()
+	check(hole.pin.distance_squared_to(sunday) < 0.01 and sim.pin_spot_name(hole) == "held", "a day during the tournament does not move the Sunday pin")
+	_test_pin_rules()
+	_test_cup_target()
+
+
+func _clear_of_fringe(c: Course, x: float, z: float) -> float:
+	var best := 1000.0
+	var t := c.tile_of(x, z)
+	for dy in range(-3, 4):
+		for dx in range(-3, 4):
+			var tx := t.x + dx
+			var ty := t.y + dy
+			if not c.in_bounds(tx, ty) or Defs.is_green(c.terrain[ty * c.w + tx]):
+				continue
+			var x0 := float(tx) * Defs.TILE
+			var z0 := float(ty) * Defs.TILE
+			var nearest_x := clampf(x, x0, x0 + Defs.TILE)
+			var nearest_z := clampf(z, z0, z0 + Defs.TILE)
+			best = minf(best, Vector2(x - nearest_x, z - nearest_z).length())
+	return best
+
+
+func _cup_drop(seed_value: int, level: int, wear_bonus: float) -> float:
+	var sim := _sim("sandbox", seed_value)
+	sim.hire("greenkeeper")
+	sim.set_difficulty(level)
+	if not is_zero_approx(wear_bonus):
+		sim.skills.set_extra({"wear": wear_bonus})
+	sim.paint(40, 50, 4, Defs.T.GREEN)
+	var hole := sim.add_hole(sim.course.tile_center(40, 28), sim.course.tile_center(40, 50))
+	var at := sim.course.tile_of(hole.pin.x, hole.pin.z)
+	var i := at.y * sim.course.w + at.x
+	sim.course.health[i] = 1.0
+	sim.grounds.wear_around_pins(1000.0)
+	return 1.0 - sim.course.health[i]
+
+
+func _locked_cup_drop(sibling: bool) -> float:
+	var sim := _sim("sandbox", 47)
+	sim.paint(40, 50, 4, Defs.T.GREEN)
+	var hole := sim.add_hole(sim.course.tile_center(40, 28), sim.course.tile_center(40, 50))
+	hole.pin_locked = true
+	if sibling:
+		sim.paint(100, 50, 4, Defs.T.GREEN)
+		var other := sim.add_hole(sim.course.tile_center(100, 28), sim.course.tile_center(100, 50))
+		other.pin_locked = false
+	var at := sim.course.tile_of(hole.pin.x, hole.pin.z)
+	var i := at.y * sim.course.w + at.x
+	sim.course.health[i] = 1.0
+	sim.grounds.wear_around_pins(1000.0)
+	return 1.0 - sim.course.health[i]
+
+
+func _played_cup_drop(played: bool) -> float:
+	var sim := _sim("sandbox", 60)
+	sim.paint(40, 50, 4, Defs.T.GREEN)
+	var hole := sim.add_hole(sim.course.tile_center(40, 28), sim.course.tile_center(40, 50))
+	var at := sim.course.tile_of(hole.pin.x, hole.pin.z)
+	var i := at.y * sim.course.w + at.x
+	sim.course.health[i] = 1.0
+	sim.grounds.wear_around_pins(1.0)
+	sim.course.health[i] = 1.0
+	if played:
+		hole.plays = 4
+	sim.grounds.wear_around_pins(1000.0)
+	return 1.0 - sim.course.health[i]
+
+
+## Cup wear on the middle, front and back tiles of one hole.
+func _spot_loads(sim: Sim, hi: int) -> Array[float]:
+	var spec: Dictionary = sim.db.pins
+	var front_m := float(spec.get("front", 6.0))
+	var back_m := float(spec.get("back", 6.0))
+	var edge_m := float(spec.get("edge", 2.0))
+	var slope_max := float(spec.get("slope", 4.0))
+	var out: Array[float] = [0.0, 0.0, 0.0]
+	var c := sim.course
+	var hole: Hole = c.holes[hi]
+	for spot in 3:
+		var cup := c.day_cup(hole, spot, front_m, back_m, edge_m, slope_max)
+		var at := c.tile_of(cup.x, cup.z)
+		var i := at.y * c.w + at.x
+		out[spot] = float(sim.grounds.cup_load.get(i, 0.0))
+	return out
+
+
+func _test_pin_rules() -> void:
+	print("-- pin rules")
+	var edge := float(db.pins.get("edge", 2.0))
+	var slope_max := float(db.pins.get("slope", 4.0))
+	var front_m := float(db.pins.get("front", 6.0))
+	var locked := _sim("sandbox", 42)
+	var lc := locked.course
+	check(locked.paint(40, 50, 6, Defs.T.GREEN) > 0, "a green for the lock")
+	var hold := locked.add_hole(lc.tile_center(40, 28), lc.tile_center(40, 50))
+	check(locked.hire("greenkeeper"), "a greenkeeper for the lock")
+	locked.time = Defs.DAY_SECONDS
+	hold.pin_locked = true
+	var kept := hold.pin
+	var kept_spot := hold.pin_spot
+	locked.move_pins()
+	check(hold.pin.distance_squared_to(kept) < 0.01 and hold.pin_spot == kept_spot, "a locked hole keeps its pin")
+	var filed := hold.to_dict()
+	check(bool(filed.get("pin_locked", false)), "the lock is stored with the hole")
+	var brought := Hole.from_dict(filed)
+	check(brought.pin_locked, "the lock loads back")
+	filed.erase("pin_locked")
+	check(not Hole.from_dict(filed).pin_locked, "an old save, with no lock stored, loads unlocked")
+	hold.pin_locked = false
+	var sheet := YardageCard.new(db.yardage)
+	sheet.ensure(lc, hold)
+	var sheet_draws := sheet.draws
+	var sheet_path := sheet.path_metres
+	var sheet_flag := sheet.pin_px
+	locked.move_pins()
+	sheet.ensure(lc, hold)
+	check(hold.pin.z < kept.z - 1.0, "an unlocked hole moves its pin")
+	check(sheet.draws == sheet_draws + 1 and is_equal_approx(sheet.path_metres, hold.length) and is_equal_approx(sheet.path_metres, sheet_path) and sheet.pin_px.distance_to(sheet_flag) > 2.0, "the yardage line stays on the placed pin and the flag follows the day's cup")
+	var narrow := _sim("sandbox", 43)
+	var nc := narrow.course
+	var pin_tile := Vector2i(40, 50)
+	check(narrow.paint(pin_tile.x, pin_tile.y, 0, Defs.T.GREEN) == 1, "a green one tile wide")
+	var tight := narrow.add_hole(nc.tile_center(40, 28), nc.tile_center(pin_tile.x, pin_tile.y))
+	check(narrow.hire("greenkeeper"), "a greenkeeper for the narrow green")
+	narrow.time = Defs.DAY_SECONDS
+	narrow.move_pins()
+	var gap := _clear_of_fringe(nc, tight.pin.x, tight.pin.z)
+	check(Defs.is_green(nc.terrain_at(tight.pin.x, tight.pin.z)) and gap + 0.01 >= edge, "a narrow green keeps the cup the margin inside the edge")
+	var steep := _sim("sandbox", 44)
+	var sc := steep.course
+	check(steep.paint(40, 50, 6, Defs.T.GREEN) > 0, "a green with a tier")
+	var tier := steep.add_hole(sc.tile_center(40, 28), sc.tile_center(40, 50))
+	var py := 50
+	for vx in range(34, 47):
+		var vi := (py - 1) * (sc.w + 1) + vx
+		sc.heights[vi] = sc.heights[vi] + 2.0
+	var home := tier.placed
+	var away := Vector3(home.x - tier.tee.x, 0.0, home.z - tier.tee.z).normalized()
+	var asked := home - away * front_m
+	var asked_grade := float(Slope.read(sc, asked.x, asked.z)["percent"])
+	check(steep.hire("greenkeeper"), "a greenkeeper for the tier")
+	steep.time = Defs.DAY_SECONDS
+	steep.move_pins()
+	var cup_grade := float(Slope.read(sc, tier.pin.x, tier.pin.z)["percent"])
+	check(asked_grade > slope_max and cup_grade <= slope_max and tier.pin.distance_to(home) + 0.5 < front_m, "a steep front tier is skipped for a flatter spot")
+	var split := _sim("sandbox", 55)
+	var sp := split.course
+	check(split.paint(40, 50, 2, Defs.T.GREEN) > 0, "a green with a gap and a far lobe")
+	var lobe := split.add_hole(sp.tile_center(40, 28), sp.tile_center(40, 50))
+	for gx in range(38, 43):
+		sp.terrain[51 * sp.w + gx] = Defs.T.FAIRWAY
+	for gy in range(53, 58):
+		for gx in range(38, 43):
+			if sp.in_bounds(gx, gy):
+				sp.terrain[gy * sp.w + gx] = Defs.T.GREEN
+	var stopped := sp.day_cup(lobe, 2, 6.0, 20.0, 0.0, 100.0)
+	var stopped_at := sp.tile_of(stopped.x, stopped.z)
+	check(Defs.is_green(sp.terrain_at(sp.tile_center(40, 54).x, sp.tile_center(40, 54).z)) and stopped_at.y <= 50, "a gap off the green stops the cup walk before the far lobe")
+	var bare := _sim("sandbox", 45)
+	bare.paint(40, 50, 4, Defs.T.GREEN)
+	var bare_hole := bare.add_hole(bare.course.tile_center(40, 28), bare.course.tile_center(40, 50))
+	var bare_at := bare.course.tile_of(bare_hole.pin.x, bare_hole.pin.z)
+	var bare_i := bare_at.y * bare.course.w + bare_at.x
+	bare.course.health[bare_i] = 1.0
+	bare.time = Defs.DAY_SECONDS
+	var bare_pin := bare_hole.pin
+	bare.move_pins()
+	bare.grounds.wear_around_pins(1000.0)
+	var bare_expect := float(db.pins.get("wear", 0.0)) * 1000.0
+	check(bare_hole.pin.distance_squared_to(bare_pin) < 0.01 and bare_expect > 0.0 and bare.course.health[bare_i] < 1.0 - bare_expect * 0.5, "with no greenkeeper the pin stays put and the cup still wears the green")
+	var plain := _cup_drop(46, 2, 0.0)
+	var scaled := _cup_drop(46, 3, -0.3)
+	var hard := _sim("sandbox", 1)
+	hard.set_difficulty(3)
+	var want := 0.7 * hard.diff("wear")
+	var rate_expect := float(db.pins.get("wear", 0.0)) * 1000.0
+	check(rate_expect > 0.0 and plain > rate_expect * 0.5 and scaled < plain and is_equal_approx(scaled / plain, want), "cup wear follows the difficulty and the skill wear multipliers")
+	var alone := _locked_cup_drop(false)
+	var beside := _locked_cup_drop(true)
+	check(rate_expect > 0.0 and alone > rate_expect * 0.5 and is_equal_approx(alone, beside), "a locked cup wears the same whether or not another hole is unlocked (%.3f and %.3f)" % [alone, beside])
+	var calm := _played_cup_drop(false)
+	var busy_cup := _played_cup_drop(true)
+	check(rate_expect > 0.0 and calm > rate_expect * 0.5 and busy_cup > calm * 1.4 and busy_cup < calm * 1.6, "a hole that was played today wears its cup harder (%.3f against %.3f)" % [busy_cup, calm])
+	var weeded := _sim("sandbox", 53)
+	var wc := weeded.course
+	check(weeded.paint(40, 50, 6, Defs.T.GREEN) > 0, "a green beside a weedy patch")
+	var weed_hole := weeded.add_hole(wc.tile_center(40, 28), wc.tile_center(40, 50))
+	check(weeded.hire("greenkeeper"), "a greenkeeper choosing between weeds and a cup")
+	weeded.time = Defs.DAY_SECONDS
+	weeded.move_pins()
+	var cup_at := wc.tile_of(weed_hole.pin.x, weed_hole.pin.z)
+	var rough_x := cup_at.x + 3
+	var rough_y := cup_at.y
+	var rough_i := rough_y * wc.w + rough_x
+	wc.terrain[rough_i] = Defs.T.ROUGH
+	wc.weeds[rough_i] = 0.45
+	wc.health[rough_i] = 1.0
+	var chooser: Crew.Member = weeded.crew.members[0]
+	chooser.pos = wc.tile_center(rough_x, rough_y)
+	chooser.state = 0
+	chooser.timer = 0.0
+	weeded.crew.step(0.05)
+	check(chooser.target_i == rough_i, "the morning move does not send the keeper to the cup, so the weedy patch is the job")
+	var twin := _sim("three_holes", 48)
+	check(twin.hire("greenkeeper"), "a greenkeeper on the saved course")
+	twin.time = Defs.DAY_SECONDS * 2.0
+	var blob := JSON.stringify(twin.to_dict())
+	var one := Sim.from_dict(db, JSON.parse_string(blob), gear)
+	var two := Sim.from_dict(db, JSON.parse_string(blob), gear)
+	one.move_pins()
+	two.move_pins()
+	var matched := one.course.holes.size() > 1 and one.course.holes.size() == two.course.holes.size()
+	for n in one.course.holes.size():
+		if one.course.holes[n].pin.distance_squared_to(two.course.holes[n].pin) > 0.0001:
+			matched = false
+	check(matched, "two games loaded from the same save, on the same day, put every cup in the same place")
+	var aged := _sim("three_holes", 49)
+	var raw: Dictionary = aged.to_dict()
+	var course_d: Dictionary = raw["course"]
+	var hs: Array = course_d["holes"]
+	var pars: Array[int] = []
+	var lengths: Array[float] = []
+	for i in hs.size():
+		var hd: Dictionary = hs[i]
+		pars.append(int(hd["par"]))
+		lengths.append(float(hd["length"]))
+		hd.erase("placed")
+		hd.erase("pin_spot")
+		hd.erase("pin_locked")
+	var loaded := Sim.from_dict(db, raw, gear)
+	check(loaded.hire("greenkeeper"), "a greenkeeper for the old save")
+	var old_ok := loaded.course.holes.size() == pars.size()
+	for ni in loaded.course.holes.size():
+		var old_hole := loaded.course.holes[ni]
+		if old_hole.pin_locked or old_hole.pin_spot != 0 or old_hole.placed.distance_squared_to(old_hole.pin) > 0.01:
+			old_ok = false
+	check(old_ok, "a full old save, with no placed pin, loads unlocked and treats each cup as the middle")
+	for day_n in 4:
+		loaded.time = float(day_n + 1) * Defs.DAY_SECONDS
+		loaded.move_pins()
+	var card_ok := true
+	for nj in loaded.course.holes.size():
+		var card_hole := loaded.course.holes[nj]
+		if card_hole.par != pars[nj] or not is_equal_approx(card_hole.length, lengths[nj]):
+			card_ok = false
+	check(card_ok, "a few days with a greenkeeper leave the old save's par and length unchanged")
+	var busy := _sim("sandbox", 50)
+	var bc := busy.course
+	check(busy.paint(30, 40, 6, Defs.T.GREEN) > 0 and busy.paint(90, 40, 6, Defs.T.GREEN) > 0, "two greens")
+	var left := busy.add_hole(bc.tile_center(30, 18), bc.tile_center(30, 40))
+	var right := busy.add_hole(bc.tile_center(90, 18), bc.tile_center(90, 40))
+	check(busy.hire("greenkeeper"), "a greenkeeper for both cups")
+	busy.time = Defs.DAY_SECONDS
+	busy.move_pins()
+	check(left.pin.z < left.placed.z - 1.0 and right.pin.distance_squared_to(right.placed) > 1.0, "a quiet day moves both cups, and does not post a walking job")
+	left.pin = left.placed
+	right.pin = right.placed
+	left.pin_spot = 0
+	right.pin_spot = 0
+	var party := Group.new()
+	left.groups.append(party)
+	var waiting := left.pin
+	var keeper_before := busy.crew.members[0].state
+	busy.move_pins()
+	check(left.pin.distance_squared_to(waiting) < 0.01 and left.pin_due >= 0 and right.pin.distance_squared_to(right.placed) > 1.0 and busy.crew.members[0].state == keeper_before, "a hole with a group on it keeps its cup for that group, and the keeper is not sent to walk")
+	left.groups.clear()
+	busy.settle_pins()
+	check(left.pin.distance_squared_to(waiting) > 1.0 and left.pin_due < 0, "once that group has holed out the waiting cup is set")
+	var shifted := left.pin
+	busy.move_pins()
+	check(left.pin.distance_squared_to(shifted) < 0.01 and left.pin.z < waiting.z - 1.0, "the same morning does not move that cup a second time")
+	var notes: Array[String] = []
+	busy.toast.connect(func(text: String, _kind: String) -> void: notes.append(text))
+	left.pin = left.placed
+	right.pin = right.placed
+	left.pin_spot = 0
+	right.pin_spot = 0
+	busy.time = float(Defs.DAYS_PER_MONTH) * Defs.DAY_SECONDS
+	busy.move_pins()
+	check(notes.size() == 1, "the pin note comes once a month")
+	notes.clear()
+	busy.time = float(Defs.DAYS_PER_MONTH + 1) * Defs.DAY_SECONDS
+	busy.move_pins()
+	check(notes.is_empty(), "a day that is not the end of the month stays quiet")
+	var still := _sim("three_holes", 51)
+	var turning := _sim("three_holes", 51)
+	check(still.hire("greenkeeper") and turning.hire("greenkeeper"), "greenkeepers for a season of pins")
+	check(still.hire("marshal") and turning.hire("marshal"), "marshals so the round keeps moving")
+	still.events.timer = 99999.0
+	turning.events.timer = 99999.0
+	for hole in still.course.holes:
+		hole.pin_locked = true
+	var days := 4 * Defs.DAYS_PER_MONTH
+	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
+	var moved_mornings := 0
+	var prev_day := turning.day()
+	for _i in steps:
+		still.step(1.0 / 60.0)
+		turning.step(1.0 / 60.0)
+		var now := turning.day()
+		if now != prev_day:
+			prev_day = now
+			for hole in turning.course.holes:
+				if hole.pin.distance_squared_to(hole.placed) > 1.0:
+					moved_mornings += 1
+	var spread := 0
+	var totals_ok := true
+	var peaks_ok := true
+	for hi in still.course.holes.size():
+		var locked_spots := _spot_loads(still, hi)
+		var turning_spots := _spot_loads(turning, hi)
+		var locked_sum := locked_spots[0] + locked_spots[1] + locked_spots[2]
+		var turning_sum := turning_spots[0] + turning_spots[1] + turning_spots[2]
+		var hole_load := maxf(locked_sum, turning_sum)
+		if absf(locked_sum - turning_sum) > hole_load * 0.15:
+			totals_ok = false
+		var locked_peak := maxf(locked_spots[0], maxf(locked_spots[1], locked_spots[2]))
+		var turning_peak := maxf(turning_spots[0], maxf(turning_spots[1], turning_spots[2]))
+		var spots_used := 0
+		for amount in turning_spots:
+			if amount > hole_load * 0.12:
+				spots_used += 1
+		if spots_used >= 2:
+			spread += 1
+			if turning_peak > locked_peak * 0.9:
+				peaks_ok = false
+		print("  hole %d cup wear locked %.3f rotating %.3f (peak %.3f against %.3f)" % [hi + 1, locked_sum, turning_sum, turning_peak, locked_peak])
+	print("  condition locked %.3f rotating %.3f, weeds %.3f %.3f" % [still.grounds.condition, turning.grounds.condition, still.grounds.weed_cover, turning.grounds.weed_cover])
+	check(moved_mornings > 100, "the rotating cups left the placed pin on quiet mornings")
+	check(spread >= 2 and peaks_ok, "where the cup changes tile, the worst of those tiles took less wear than a pin that stayed put")
+	check(totals_ok, "rotating spreads the cup wear: each hole takes the same amount as when the pin stays put")
+	print("  one seed swings: weeds %.1f%% locked against %.1f%% rotating, condition %.3f against %.3f" % [still.grounds.weed_cover * 100.0, turning.grounds.weed_cover * 100.0, still.grounds.condition, turning.grounds.condition])
+	_test_pin_seasons()
+
+
+## A slow putt from `from`, holed only if it reaches `pin`.
+func _rolls_in(course: Course, from: Vector3, pin: Vector3) -> bool:
+	var ball := Ball.new()
+	ball.place(from)
+	var delta := Vector2(pin.x - from.x, pin.z - from.z)
+	if delta.length_squared() < 0.0001:
+		return false
+	ball.launch(1.0, delta.angle(), 0.0, 0.0, 0.0, 0.0)
+	var rolls := 0
+	while ball.moving() and rolls < 500:
+		ball.step(1.0 / 60.0, course, Vector3.ZERO, pin, true)
+		rolls += 1
+	return ball.state == Ball.S.HOLED
+
+
+## Shots and putts, the hole-out and the routing field follow the day's cup.
+## A group already playing keeps the cup it teed off to until it holes out.
+func _test_cup_target() -> void:
+	print("-- putts and hole-outs use the day's cup")
+	var sim := _sim("sandbox", 41)
+	var course := sim.course
+	for corner_i in course.heights.size():
+		course.heights[corner_i] = 0.0
+	check(sim.paint(40, 50, 6, Defs.T.GREEN) > 0, "a green for the day's cup")
+	var hole := sim.add_hole(course.tile_center(40, 28), course.tile_center(40, 50))
+	check(hole != null and sim.hire("greenkeeper"), "a greenkeeper so the cup can move")
+	var layout := hole.placed
+	var card_par := hole.par
+	var card_len := hole.length
+	sim.time = Defs.DAY_SECONDS
+	sim.move_pins()
+	var cup := hole.pin
+	check(cup.distance_squared_to(layout) > 4.0 and hole.aim_at().distance_squared_to(cup) < 0.0001, "the morning cup leaves the placed pin, and aim follows it")
+	check(hole.par == card_par and is_equal_approx(hole.length, card_len), "par and length stay on the placed pin")
+	var golfer := Golfer.new()
+	golfer.putting = 0.9
+	golfer.ball.set_def(sim.db.balls[0])
+	golfer.ball.place(course.on_ground(cup.x + 2.0, cup.z))
+	var plan := ShotAI.plan(sim, golfer, hole)
+	var target: Vector3 = plan.target
+	check(plan.get("putt", false) == true and target.distance_squared_to(cup) < 0.01 and target.distance_squared_to(layout) > 1.0, "a putt aims at the day's cup")
+	check(_rolls_in(course, course.on_ground(cup.x + 0.35, cup.z), hole.aim_at()), "a putt at the day's cup holes out")
+	check(not _rolls_in(course, course.on_ground(layout.x + 0.35, layout.z), hole.aim_at()), "the same pace at the placed pin does not hole, because the cup has moved")
+	var at_cup := hole.field_at(course, cup.x, cup.z, sim.time)
+	var at_layout := hole.field_at(course, layout.x, layout.z, sim.time)
+	check(at_layout > at_cup + 1.0, "the routing field is measured to the day's cup")
+	var party := Group.new()
+	hole.groups.append(party)
+	var held := hole.pin
+	sim.time = Defs.DAY_SECONDS * 2.0
+	sim.move_pins()
+	check(hole.pin.distance_squared_to(held) < 0.01 and hole.pin_due >= 0 and hole.aim_at().distance_squared_to(held) < 0.01, "a group already on the hole keeps its cup")
+	golfer.ball.place(course.on_ground(held.x + 2.0, held.z))
+	var held_plan := ShotAI.plan(sim, golfer, hole)
+	var held_target: Vector3 = held_plan.target
+	check(held_plan.get("putt", false) == true and held_target.distance_squared_to(held) < 0.01, "that group's putt still aims at the cup it teed off to")
+	check(_rolls_in(course, course.on_ground(held.x + 0.35, held.z), hole.aim_at()), "and still holes out there")
+	hole.groups.clear()
+	sim.settle_pins()
+	check(hole.pin.distance_squared_to(held) > 1.0 and hole.pin_due < 0 and hole.aim_at().distance_squared_to(hole.pin) < 0.0001, "once the group has holed out, the waiting cup is the target")
+	check(hole.par == card_par and is_equal_approx(hole.length, card_len), "settling the cup does not change par or length")
+	var at_new := hole.field_at(course, hole.pin.x, hole.pin.z, sim.time)
+	var at_held := hole.field_at(course, held.x, held.z, sim.time)
+	check(at_held > at_new + 1.0, "the routing field is rebuilt when the cup moves")
+
+
+## One season swings by several points once shots follow the cup. The mean
+## over these seeds is the comparison: moving the cups should not push the
+## weeds or the condition by a point.
+func _test_pin_seasons() -> void:
+	print("-- eight seasons, the day's cup against a pin left where it was placed")
+	var seeds: Array[int] = [51, 7, 99, 12345, 3, 13, 21, 42]
+	var weed_sum := 0.0
+	var cond_sum := 0.0
+	for seed_value in seeds:
+		var got := _pin_season(seed_value)
+		weed_sum += got.x
+		cond_sum += got.y
+	var weed_mean := weed_sum / float(seeds.size())
+	var cond_mean := cond_sum / float(seeds.size())
+	print("  mean change weeds %+.2f points, condition %+.3f" % [weed_mean * 100.0, cond_mean])
+	check(absf(weed_mean) < 0.01, "across these seasons, moving the cups changes the weeds by under a point (%+.2f)" % (weed_mean * 100.0))
+	check(absf(cond_mean) < 0.01, "and the condition by under a point (%+.3f)" % cond_mean)
+
+
+func _pin_season(seed_value: int) -> Vector2:
+	var still := _sim("three_holes", seed_value)
+	var turning := _sim("three_holes", seed_value)
+	still.hire("greenkeeper")
+	turning.hire("greenkeeper")
+	still.hire("marshal")
+	turning.hire("marshal")
+	still.events.timer = 99999.0
+	turning.events.timer = 99999.0
+	for hole in still.course.holes:
+		hole.pin_locked = true
+	var days := 4 * Defs.DAYS_PER_MONTH
+	var steps := int(float(days) * Defs.DAY_SECONDS * 60.0)
+	for _i in steps:
+		still.step(1.0 / 60.0)
+		turning.step(1.0 / 60.0)
+	var dw := turning.grounds.weed_cover - still.grounds.weed_cover
+	var dc := turning.grounds.condition - still.grounds.condition
+	print("  seed %d weeds locked %.1f%% rotating %.1f%% (change %+.1f), condition %.3f %.3f (change %+.3f)" % [seed_value, still.grounds.weed_cover * 100.0, turning.grounds.weed_cover * 100.0, dw * 100.0, still.grounds.condition, turning.grounds.condition, dc])
+	return Vector2(dw, dc)
+
+
 func _test_undo() -> void:
 	print("-- undo")
 	var sim := _sim("sandbox", 9)
@@ -5493,16 +6407,43 @@ func _test_undo_books() -> void:
 	if flag != null:
 		var cup := flag.pin
 		tucked.tourney.apply_setup("stern")
+		var sunday := flag.pin
 		cash = tucked.economy.money
-		check(flag.pin.distance_squared_to(cup) > 0.25 and not tucked.undo.can_undo() and not tucked.undo.undo() and is_equal_approx(tucked.economy.money, cash) and tucked.course.holes.find(flag) >= 0, "a tournament pin move drops the history and the hole stays")
+		check(sunday.distance_squared_to(cup) > 0.25 and not tucked.undo.can_undo() and not tucked.undo.undo() and flag.pin.distance_squared_to(sunday) < 0.01 and is_equal_approx(tucked.economy.money, cash) and tucked.course.holes.find(flag) >= 0, "a tournament pin move drops the history, the hole stays, and the old cup does not come back")
+	var spun := _sim("sandbox", 41)
+	check(spun.paint(40, 50, 6, Defs.T.GREEN) > 0, "a green whose cup will rotate")
+	var daily := spun.add_hole(spun.course.tile_center(40, 28), spun.course.tile_center(40, 50))
+	check(daily != null and spun.undo.can_undo(), "the rotating hole starts as a step")
+	if daily != null:
+		var home_cup := daily.pin
+		var home_par := daily.par
+		var home_len := daily.length
+		check(spun.hire("greenkeeper"), "a greenkeeper to move that cup")
+		spun.time = Defs.DAY_SECONDS
+		spun.move_pins()
+		var now_cup := daily.pin
+		var cash_spin := spun.economy.money
+		check(now_cup.distance_squared_to(home_cup) > 1.0 and not spun.undo.can_undo() and not spun.undo.undo() and daily.pin.distance_squared_to(now_cup) < 0.01 and daily.par == home_par and is_equal_approx(daily.length, home_len) and is_equal_approx(spun.economy.money, cash_spin) and spun.course.holes.find(daily) >= 0, "a rotation pin move drops the history and cannot bring the old cup back")
 	var stuck := _sim("sandbox", 30)
 	var moved_hole := stuck.add_hole(stuck.course.tile_center(60, 70), stuck.course.tile_center(60, 40))
 	check(moved_hole != null, "a hole can be laid out and then have its pin moved")
 	if moved_hole != null:
+		var layout := moved_hole.placed
+		var card_par := moved_hole.par
+		var card_len := moved_hole.length
+		var entry: Dictionary = stuck.undo.past[stuck.undo.past.size() - 1]
+		var snap: Dictionary = entry["hole"]
+		var recorded := Vector3(layout.x, layout.y, layout.z - 4.0)
+		snap["cup"] = [recorded.x, recorded.y, recorded.z]
+		snap["spot"] = 1
 		moved_hole.pin.x += 6.0
 		cash = stuck.economy.money
-		check(not stuck.undo.undo() and not stuck.undo.can_undo() and is_equal_approx(stuck.economy.money, cash) and stuck.course.holes.find(moved_hole) >= 0, "a pin that no longer matches does not leave undo stuck")
-	check(not stuck.undo.undo(), "there is no step left refusing")
+		check(stuck.undo.undo() and stuck.course.holes.is_empty() and is_equal_approx(stuck.economy.money, cash + 250.0), "undo finds the hole by its layout pin and refunds it")
+		check(stuck.undo.redo() and stuck.course.holes.size() == 1, "redo puts the hole back")
+		var back: Hole = stuck.course.holes[0]
+		check(back.placed.distance_squared_to(layout) < 0.01 and back.pin.distance_squared_to(recorded) < 0.01 and back.pin_spot == 1 and back.par == card_par and is_equal_approx(back.length, card_len) and is_equal_approx(stuck.economy.money, cash), "redo restores the layout pin and the day's cup, and par and length stay the same")
+		check(stuck.undo.undo() and stuck.course.holes.is_empty(), "the same step can be taken back again")
+	check(not stuck.undo.can_undo() and not stuck.undo.undo(), "there is no step left refusing")
 func _test_yardage() -> void:
 	print("-- yardage card")
 	var sim := _sim("sandbox", 8)
@@ -5546,12 +6487,18 @@ func _test_yardage() -> void:
 	var fly_px := book.image.get_pixel(sx, sy)
 	var nub_px := nub.image.get_pixel(sx, int(round(nub.pin_px.y)) - 3)
 	check(sy >= 0 and fly_px.is_equal_approx(pin_col) and not nub_px.is_equal_approx(pin_col), "the flag length in the yardage file is what gets drawn")
+	var home_path := book.path_metres
+	var home_flag := book.pin_px
 	drawn = book.draws
 	var moved_pin := c.tile_center(42, 48)
 	hole.pin = c.on_ground(moved_pin.x, moved_pin.z)
 	hole.update_metrics(c)
 	book.ensure(c, hole)
-	check(book.draws == drawn + 1, "moving the pin redraws the card")
+	var flag_at := int(round(book.pin_px.y)) - 2
+	var flag_px := Color.BLACK
+	if flag_at >= 0 and flag_at < book.image.get_height():
+		flag_px = book.image.get_pixel(int(round(book.pin_px.x)), flag_at)
+	check(book.draws == drawn + 1 and is_equal_approx(book.path_metres, home_path) and is_equal_approx(book.path_metres, hole.length) and book.pin_px.distance_to(home_flag) > 2.0 and flag_px.is_equal_approx(pin_col), "moving the day's cup redraws the card: the line stays on the placed pin and the flag follows the cup")
 	drawn = book.draws
 	var moved_tee := c.tile_center(40, 16)
 	hole.tee = c.on_ground(moved_tee.x, moved_tee.z)

@@ -847,17 +847,18 @@ func react_to_lie(g: Golfer, hole: Hole, hole_i: int) -> void:
 	if ti < 0:
 		return
 	var t: int = course.terrain[ti]
-	var d := Vector2(b.pos.x - hole.pin.x, b.pos.z - hole.pin.z).length()
+	var d := Vector2(b.pos.x - hole.aim_at().x, b.pos.z - hole.aim_at().z).length()
 	var was_putt: bool = g.plan.get("putt", false)
 	var shot_len: float = g.plan.get("dist", 0.0)
 	if was_putt:
 		if shot_len < 2.5:
 			g.feel(-1.5, "I can't believe I missed that putt.", "putt")
 			sim.sound.emit("groan", g.pos, 0.7)
-		if course.health[ti] < 0.45:
+		var seen := course.health[ti]
+		if seen < 0.45:
 			g.feel(-1.5, "The green on hole %d is bumpy and bare." % n, "greens_bad")
 			sim.feed.say("greens_bad", g, {"hole": n})
-		elif course.health[ti] > 0.92 and sim.rng.randf() < 0.15:
+		elif seen > 0.92 and sim.rng.randf() < 0.15:
 			g.feel(0.8, "These greens roll beautifully.", "greens")
 			sim.feed.say("greens_good", g, {"hole": n})
 	else:
@@ -1009,7 +1010,7 @@ func _judge_design(g: Golfer, hole: Hole, n: int) -> void:
 		g.last_kind = hole.kind
 	g.last_par = hole.par
 	# a long climb takes it out of anyone on foot
-	var climb := hole.pin.y - hole.tee.y
+	var climb := hole.aim_at().y - hole.tee.y
 	if climb > 9.0 and not (g.group != null and g.group.has_cart):
 		g.fatigue += 0.12
 		g.feel(-0.8, "Hole %d is a steep walk." % n, "tired")
@@ -1035,10 +1036,10 @@ func _breather_heavy() -> bool:
 func track_ball(b: Ball, hole: Hole) -> void:
 	var i := balls.find(b)
 	if i >= 0:
-		pins[i] = hole.pin
+		pins[i] = hole.aim_at()
 	else:
 		balls.append(b)
-		pins.append(hole.pin)
+		pins.append(hole.aim_at())
 
 
 ## A group is teeing off in the dark on a hole with no lights. They play it
@@ -1118,7 +1119,7 @@ func _step_balls(dt: float) -> void:
 				sim.wildlife.startle(b.pos)
 				var lt := course.terrain_at(b.pos.x, b.pos.z)
 				var what := "land_soft"
-				if lt == Defs.T.BUNKER or lt == Defs.T.ASH:
+				if lt == Defs.T.BUNKER or lt == Defs.T.ASH or lt == Defs.T.WASTE:
 					what = "land_sand"
 				elif lt == Defs.T.PATH or lt == Defs.T.ROCK:
 					what = "land_hard"
@@ -1128,7 +1129,9 @@ func _step_balls(dt: float) -> void:
 			Ball.E.TREE:
 				sim.sound.emit("leaves", b.pos, 0.8)
 			Ball.E.WATER:
-				sim.sound.emit("sizzle" if sim.is_lava() else "splash", b.pos, 1.0)
+				var sunk := course.terrain_at(b.pos.x, b.pos.z)
+				var molten := sim.is_lava() and sunk != Defs.T.STREAM
+				sim.sound.emit("sizzle" if molten else "splash", b.pos, 1.0)
 			Ball.E.OOB:
 				sim.sound.emit("oob", b.pos, 1.0)
 				sim.popup.emit(b.pos, "Out of bounds", "bad")

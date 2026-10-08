@@ -245,7 +245,7 @@ func _find_job(m: Member) -> void:
 		if pests:
 			need = course.pests[i] * 3.0 if course.pests[i] > 0.05 else 0.0
 		else:
-			need = ((1.0 - course.health[i]) + course.weeds[i] * 1.3) * Defs.T_CARE[t]
+			need = ((1.0 - course.health[i]) + course.weeds[i] * 1.3) * sim.terrain_care(t)
 		if need <= 0.1:
 			continue
 		var cx := (i % course.w + 0.5) * Defs.TILE
@@ -320,7 +320,7 @@ func _find_home_job(m: Member) -> void:
 			if pests:
 				need = course.pests[i] * 3.0 if course.pests[i] > 0.05 else 0.0
 			else:
-				need = ((1.0 - course.health[i]) + course.weeds[i] * 1.3) * Defs.T_CARE[t]
+				need = ((1.0 - course.health[i]) + course.weeds[i] * 1.3) * sim.terrain_care(t)
 			if need <= 0.1:
 				continue
 			var dist := Vector2(cx - m.pos.x, cz - m.pos.z).length()
@@ -447,7 +447,7 @@ func _finish_job(m: Member) -> void:
 		_clear_mess(course, i)
 		return
 	var tx := i % course.w
-	var ty := i / course.w
+	var ty := int(i / course.w)
 	var reach := 2      # a mower pass or a treatment covers a five by five patch
 	for y in range(ty - reach, ty + reach + 1):
 		for x in range(tx - reach, tx + reach + 1):
@@ -457,7 +457,7 @@ func _finish_job(m: Member) -> void:
 			if m.role.id == "exterminator":
 				course.pests[j] = 0.0
 			elif Defs.T_GRASS[course.terrain[j]]:
-				course.health[j] = minf(1.0, course.health[j] + 0.9)
+				sim.grounds.repair_tile(j)
 				course.weeds[j] = 0.0
 
 
