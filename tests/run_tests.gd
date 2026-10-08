@@ -5418,6 +5418,46 @@ func _test_waste_stream() -> void:
 	check(back.paint(32, 30, 0, Defs.T.WASTE) == 1 and is_equal_approx(after - back.economy.money, waste_cost), "a waste tile charges the waste cost")
 	check(back.undo.undo() and int(back.course.terrain[waste_i]) != Defs.T.WASTE and is_equal_approx(back.economy.money, after), "undo refunds exactly the waste cost")
 	check(back.undo.redo() and int(back.course.terrain[waste_i]) == Defs.T.WASTE and is_equal_approx(back.economy.money, after - waste_cost), "redo charges the waste cost again")
+	# One drag is one stroke: begin, several paint_stream calls, then commit.
+	var batch := _sim("sandbox", 23)
+	batch.economy.money = 8000.0
+	var bc := batch.course
+	var stream_y := 50
+	for bx in range(40, 46):
+		bc.heights[stream_y * (bc.w + 1) + bx] = 0.0
+		bc.heights[(stream_y + 1) * (bc.w + 1) + bx] = 0.0
+	var batch_n := 4
+	for sx in range(40, 40 + batch_n):
+		bc.terrain[stream_y * bc.w + sx] = Defs.T.ROUGH
+		bc.objects[stream_y * bc.w + sx] = 0
+	var batch_cash := batch.economy.money
+	var batch_unit := float(batch.terrain_price(Defs.T.STREAM))
+	var batch_steps := batch.undo.steps()
+	check(batch.undo.begin(), "a stream drag opens one stroke")
+	batch.stream_drag_begin()
+	var painted := 0
+	for sx in range(40, 40 + batch_n):
+		var one: Array[Vector2i] = [Vector2i(sx, stream_y)]
+		painted += batch.paint_stream(one)
+	batch.undo.commit()
+	var batch_sum := batch_unit * float(batch_n)
+	var batch_all := true
+	for sx in range(40, 40 + batch_n):
+		if int(bc.terrain[stream_y * bc.w + sx]) != Defs.T.STREAM:
+			batch_all = false
+	check(painted == batch_n and batch_all and batch.undo.steps() == batch_steps + 1 and is_equal_approx(batch_cash - batch.economy.money, batch_sum), "several stream tiles in one drag are one step and cost the sum")
+	check(batch.undo.undo() and is_equal_approx(batch.economy.money, batch_cash), "undo of that drag refunds the sum exactly")
+	var batch_back := true
+	for sx in range(40, 40 + batch_n):
+		if int(bc.terrain[stream_y * bc.w + sx]) == Defs.T.STREAM:
+			batch_back = false
+	check(batch_back, "undo of that drag takes the stream off")
+	check(batch.undo.redo() and is_equal_approx(batch.economy.money, batch_cash - batch_sum), "redo of that drag charges the sum again")
+	var batch_on := true
+	for sx in range(40, 40 + batch_n):
+		if int(bc.terrain[stream_y * bc.w + sx]) != Defs.T.STREAM:
+			batch_on = false
+	check(batch_on, "redo of that drag paints the stream again")
 
 
 func _test_undo() -> void:
