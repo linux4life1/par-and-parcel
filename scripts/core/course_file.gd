@@ -36,9 +36,77 @@ static func parse(text: String) -> Dictionary:
 	if not (d.get("course") is Dictionary):
 		return {}
 	var course: Dictionary = d.course
-	if int(course.get("w", 0)) < 2 or not (course.get("holes") is Array):
+	if not _course_safe(course):
 		return {}
 	return d
+
+
+## A course the game can build: a map no bigger than the ones it makes,
+## a two-number clubhouse, and every layer the same size as a new course
+## of that width and height. Locked and hot are checked only when the file
+## carries them, and a locked layer without its hot layer is refused,
+## because loading reads both.
+static func _course_safe(course: Dictionary) -> bool:
+	var w := int(course.get("w", 0))
+	var h := int(course.get("h", 0))
+	var limit := _map_limit()
+	if w < 2 or h < 2 or w > limit or h > limit:
+		return false
+	if not (course.get("holes") is Array):
+		return false
+	if not _two_numbers(course.get("clubhouse", null)):
+		return false
+	var tiles := w * h
+	if not _bytes(course.get("heights", ""), (w + 1) * (h + 1) * 4):
+		return false
+	if not _bytes(course.get("terrain", ""), tiles):
+		return false
+	if not _bytes(course.get("objects", ""), tiles):
+		return false
+	for key in ["wet", "health", "weeds", "pests"]:
+		if not _bytes(course.get(str(key), ""), tiles * 4):
+			return false
+	if course.has("locked"):
+		if not course.has("hot") or not _bytes(course.get("locked", ""), tiles) or not _bytes(course.get("hot", ""), tiles):
+			return false
+	elif course.has("hot") and not _bytes(course.get("hot", ""), tiles):
+		return false
+	return true
+
+
+static func _two_numbers(v: Variant) -> bool:
+	if not (v is Array):
+		return false
+	var pair: Array = v
+	if pair.size() != 2:
+		return false
+	return _number(pair[0]) and _number(pair[1])
+
+
+static func _number(v: Variant) -> bool:
+	return v is int or v is float
+
+
+static func _bytes(v: Variant, n: int) -> bool:
+	if typeof(v) != TYPE_STRING:
+		return false
+	var s := str(v)
+	if s.length() > n * 2 + 8:
+		return false
+	return Marshalls.base64_to_raw(s).size() == n
+
+
+## The widest map a scenario lays out. A shared course bigger than that
+## is not one this game made.
+static func _map_limit() -> int:
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/scenarios.json"))
+	var limit := 0
+	if parsed is Dictionary:
+		for scen in parsed.get("scenarios", []):
+			if scen is Dictionary:
+				var map: Dictionary = scen.get("map", {})
+				limit = maxi(limit, maxi(int(map.get("w", 0)), int(map.get("h", 0))))
+	return limit
 
 
 ## A file name made of the course's name, with anything unsafe left out.

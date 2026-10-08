@@ -3663,3 +3663,12 @@ func _test_course_file() -> void:
 	player_d.erase("skin")
 	var older := Sim.from_dict(db, kept, gear)
 	check(older.player.golfer.name == "You" and older.player.golfer.shirt.is_equal_approx(Color("f5f5f5")), "an older save, with no name or kit stored, still loads")
+	var short: Dictionary = pack.duplicate(true)
+	var short_course: Dictionary = short.course
+	var terrain := Marshalls.base64_to_raw(str(short_course.terrain))
+	short_course.terrain = Marshalls.raw_to_base64(terrain.slice(0, terrain.size() - 1))
+	check(CourseFile.parse(JSON.stringify(short)).is_empty(), "a course with a truncated terrain is refused")
+	var missing: Dictionary = pack.duplicate(true)
+	var missing_course: Dictionary = missing.course
+	missing_course.erase("health")
+	check(CourseFile.parse(JSON.stringify(missing)).is_empty(), "a course missing a layer is refused")
