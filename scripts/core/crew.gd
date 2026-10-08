@@ -340,16 +340,19 @@ func _find_home_job(m: Member) -> void:
 ## Litter and a broken window, nearest first. The whole map, no dice.
 func _find_porter_job(m: Member) -> void:
 	var course := sim.course
-	var show := float(sim.db.litter.get("show", 0.45))
+	var spec: Dictionary = sim.db.litter
+	var show := float(spec.get("show", 0.45))
+	var window := float(spec.get("window", 1.0))
+	var reach := float(spec.get("score_reach", 400.0))
 	var n := course.w * course.h
 	var best := -1
-	var best_score := 0.05
+	var best_score := float(spec.get("score_floor", 0.05))
 	for i in n:
 		if _claimed.has(i):
 			continue
 		var mess := 0.0
 		if course.repair[i] != 0:
-			mess = 1.0
+			mess = window
 		elif course.litter[i] >= show:
 			mess = course.litter[i]
 		else:
@@ -359,7 +362,7 @@ func _find_porter_job(m: Member) -> void:
 		if not _in_home(m, Vector3(cx, 0.0, cz)):
 			continue
 		var dist := Vector2(cx - m.pos.x, cz - m.pos.z).length()
-		var score := mess - dist / 400.0
+		var score := mess - dist / reach
 		if score > best_score:
 			best_score = score
 			best = i

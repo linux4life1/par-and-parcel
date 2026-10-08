@@ -1,11 +1,14 @@
 {
-  "_about": "Litter gathers on the tiles around a drink stand, snack bar, restroom, vending machine or bar. rate is added per second on each tile of that 3 by 3. A litter bin within bin_radius metres cuts new litter to bin_cut of the rate and absorbs existing litter at absorb per second. Golfers complain once a tile reaches show. mood is the satisfaction change. patch is how many tiles out from the messy spot a porter clears, taking clean off each tile (1 clears a 3 by 3).",
-  "rate": 0.02,
+  "_about": "Litter is left when a drink stand, snack bar, restroom, vending machine or bar serves someone. per_sale is added to each tile of the 3 by 3 around that stand. sources names those objects, the same names as the build menu. A litter bin within bin_radius metres cuts that new litter to bin_cut of per_sale. It does not pick up what is already on the grass; a porter does. Golfers complain once a tile reaches show, including when they are served at a stand that has already reached it. mood is the satisfaction change. patch is how many tiles out from the messy spot a porter clears, taking clean off each tile (1 clears a 3 by 3). score_floor is the worst job a porter will walk to, score_reach is how fast distance counts against a job, and window is how a broken window scores against litter.",
+  "sources": ["Drink stand", "Snack bar", "Restroom", "Vending machine", "Bar"],
+  "per_sale": 0.16,
   "bin_cut": 0.12,
   "bin_radius": 22.0,
-  "absorb": 0.4,
   "show": 0.45,
   "mood": -1.5,
   "clean": 1.0,
-  "patch": 1
+  "patch": 1,
+  "score_floor": 0.05,
+  "score_reach": 400.0,
+  "window": 1.0
 }

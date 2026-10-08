@@ -27,6 +27,10 @@ var _acc_pest := 0.0
 var _acc_wet := 0.0
 var _warned_at := -1000.0   # sim time the owner was last told about unrest and weeds
 var _acc_all := 0.0
+var _litter_rev := -1
+var _litter_ready := false
+var _bins: Array[Vector2] = []
+var _source_at := {}
 
 
 func _init(s: Sim) -> void:
@@ -185,60 +189,66 @@ func step(dt: float) -> void:
 				_acc_pest += 1.0
 
 
-## Cups and wrappers around a stand, a bar or a restroom. Once per step,
-## on the real time that passed, and never from the game's random numbers.
-func _litter(dt: float) -> void:
-	var spec: Dictionary = sim.db.litter
-	var rate := float(spec.get("rate", 0.02)) * dt
-	var cut := float(spec.get("bin_cut", 0.12))
-	var radius := float(spec.get("bin_radius", 22.0))
-	var absorb := float(spec.get("absorb", 0.4)) * dt
-	var show := float(spec.get("show", 0.45))
+## Keep the bin and source lists current. Rebuilt only when an object moves,
+## so a step does not walk the whole map.
+func _litter(_dt: float) -> void:
+	_refresh_litter()
+
+
+func _refresh_litter() -> void:
 	var course := sim.course
-	var n := course.w * course.h
-	var r2 := radius * radius
-	var bins: Array[Vector2] = []
-	var sources := PackedInt32Array()
-	for i in n:
-		var o: int = course.objects[i]
-		if o == Defs.O.BIN:
-			bins.append(Vector2((i % course.w + 0.5) * Defs.TILE, (int(i / course.w) + 0.5) * Defs.TILE))
-		elif o == Defs.O.DRINK_STAND or o == Defs.O.SNACK_BAR or o == Defs.O.RESTROOM or o == Defs.O.VENDING or o == Defs.O.BAR:
-			sources.append(i)
-	for s in sources.size():
-		var si: int = sources[s]
-		var sx := si % course.w
-		var sy := int(si / course.w)
-		var near := _bin_near(bins, Vector2((sx + 0.5) * Defs.TILE, (sy + 0.5) * Defs.TILE), r2)
-		var add := rate * (cut if near else 1.0)
-		if add <= 0.0:
-			continue
-		for oy in range(-1, 2):
-			for ox in range(-1, 2):
-				var x := sx + ox
-				var y := sy + oy
-				if not course.in_bounds(x, y):
-					continue
-				var i := y * course.w + x
-				_set_litter(i, course.litter[i] + add, show)
-	if absorb <= 0.0 or bins.is_empty():
+	if _litter_ready and _litter_rev == course.revision:
 		return
-	var reach := int(ceil(radius / Defs.TILE))
-	for b: Vector2 in bins:
-		var bx := int(b.x / Defs.TILE)
-		var by := int(b.y / Defs.TILE)
-		for oy in range(-reach, reach + 1):
-			for ox in range(-reach, reach + 1):
-				var x := bx + ox
-				var y := by + oy
-				if not course.in_bounds(x, y):
-					continue
-				var cx := (x + 0.5) * Defs.TILE
-				var cz := (y + 0.5) * Defs.TILE
-				if Vector2(cx, cz).distance_squared_to(b) > r2:
-					continue
-				var i := y * course.w + x
-				_set_litter(i, course.litter[i] - absorb, show)
+	_litter_ready = true
+	_litter_rev = course.revision
+	_bins.clear()
+	_source_at = {}
+	var want := {}
+	for name in sim.db.litter.get("sources", []):
+		var id := Defs.O_NAMES.find(str(name))
+		if id > 0:
+			want[id] = true
+	for i in course.objects.size():
+		if _shut(course, i):
+			continue
+		var o := int(course.objects[i])
+		if o == Defs.O.BIN:
+			_bins.append(Vector2((i % course.w + 0.5) * Defs.TILE, (int(i / course.w) + 0.5) * Defs.TILE))
+		elif want.has(o):
+			_source_at[i] = true
+
+
+func _shut(course: Course, i: int) -> bool:
+	if not course.has_method("is_closed"):
+		return false
+	return bool(course.call("is_closed", i))
+
+
+## One sale at a stand. The 3 by 3 around it picks up a little litter. A bin
+## nearby cuts that new litter. It does not take up what is already there.
+func drop_litter(tile: int) -> void:
+	_refresh_litter()
+	var course := sim.course
+	if not _source_at.has(tile):
+		return
+	var spec: Dictionary = sim.db.litter
+	var add := float(spec.get("per_sale", 0.16))
+	if add <= 0.0:
+		return
+	var radius := float(spec.get("bin_radius", 22.0))
+	var sx := tile % course.w
+	var sy := int(tile / course.w)
+	if _bin_near(_bins, Vector2((sx + 0.5) * Defs.TILE, (sy + 0.5) * Defs.TILE), radius * radius):
+		add *= float(spec.get("bin_cut", 0.12))
+	var show := float(spec.get("show", 0.45))
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
+			var x := sx + ox
+			var y := sy + oy
+			if not course.in_bounds(x, y):
+				continue
+			var i := y * course.w + x
+			_set_litter(i, course.litter[i] + add, show)
 
 
 func _bin_near(bins: Array[Vector2], p: Vector2, r2: float) -> bool:

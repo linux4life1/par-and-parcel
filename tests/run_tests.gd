@@ -4125,6 +4125,19 @@ func _test_length_scale() -> void:
 	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")
 
 
+func _sell_at(sim: Sim, tile: int, n: int) -> void:
+	for _i in n:
+		var g := Golfer.new()
+		g.thirst = 1.0
+		g.persona = {}
+		g.satisfaction = 70.0
+		g.course = sim.course
+		var gr := Group.new()
+		gr.members.append(g)
+		gr.stop = {"kind": "drink", "tile": tile}
+		sim.visitors.serve(gr, "drink")
+
+
 func _test_litter() -> void:
 	print("-- litter and bins")
 	var sim := _sim("three_holes", 6)
@@ -4148,11 +4161,28 @@ func _test_litter() -> void:
 	var ti := spot.y * c.w + spot.x
 	var show := float(sim.db.litter.get("show", 0.45))
 	sim.grounds.step(30.0)
-	check(c.litter[ti] >= show, "half a minute at a stand leaves litter you can see (%.2f)" % c.litter[ti])
+	check(c.litter[ti] == 0.0, "an unused stand stays clean")
+	_sell_at(sim, ti, 3)
+	check(c.litter[ti] >= show, "three sales at a stand leave litter you can see (%.2f)" % c.litter[ti])
+	c.litter.fill(0.0)
+	var noticed := Golfer.new()
+	noticed.thirst = 1.0
+	noticed.persona = {}
+	noticed.satisfaction = 80.0
+	noticed.course = c
+	c.litter[ti] = show + 0.1
+	var messy := Group.new()
+	messy.members.append(noticed)
+	messy.stop = {"kind": "drink", "tile": ti}
+	sim.visitors.serve(messy, "drink")
+	check(float(noticed.gripes.get("litter", 0.0)) < -1.0, "a golfer served at a littered stand minds it")
 	c.litter.fill(0.0)
 	check(sim.place_object(spot.x + 2, spot.y, Defs.O.BIN) == 1, "a bin goes up two tiles away")
+	_sell_at(sim, ti, 3)
+	check(c.litter[ti] < show, "the bin keeps those same three sales from showing (%.2f)" % c.litter[ti])
+	var piled := c.litter[ti]
 	sim.grounds.step(30.0)
-	check(c.litter[ti] < show, "the bin keeps that same half minute from showing (%.2f)" % c.litter[ti])
+	check(is_equal_approx(c.litter[ti], piled), "the bin does not pick the litter up off the grass")
 	c.litter.fill(0.0)
 	c.litter[ti] = 0.8
 	c.weeds[ti] = 0.0
@@ -4183,9 +4213,12 @@ func _test_litter() -> void:
 	check(clean.litter[ti] == 0.0 and clean.repair[ti] == 0, "an older save without those layers loads clean")
 	var house := Vector2i(-1, -1)
 	for y in c.h:
-		for x in c.w:
+		for x in range(c.w - 1):
 			var i: int = y * c.w + x
+			var beside: int = i + 1
 			if i == ti or c.locked[i] != 0 or c.objects[i] != 0 or c.hot[i] != 0 or c.terrain[i] != Defs.T.ROUGH:
+				continue
+			if c.locked[beside] != 0 or c.objects[beside] != 0 or c.hot[beside] != 0:
 				continue
 			house = Vector2i(x, y)
 			break
@@ -4193,8 +4226,10 @@ func _test_litter() -> void:
 			break
 	check(house.x >= 0 and c.set_object(house.x, house.y, Defs.O.HOUSE), "a house stands on another rough tile")
 	var wi := house.y * c.w + house.x
+	var grass := wi + 1
 	var ball := Ball.new()
-	ball.pos = c.tile_center(house.x, house.y)
+	ball.pos = c.tile_center(house.x + 1, house.y)
+	ball.hit_tile = wi
 	ball.hit_mat = "wall"
 	ball.hit_speed = 20.0
 	ball.hit_obj = Defs.O.HOUSE
@@ -4204,7 +4239,17 @@ func _test_litter() -> void:
 		if c.repair[wi] != 0:
 			smashed = true
 			break
-	check(smashed, "a hard shot into a house can break a window")
+	check(smashed and c.repair[grass] == 0, "a hard shot into a house marks the building's tile, not the grass beside it")
 	porter.target_i = wi
 	sim.crew._finish_job(porter)
 	check(c.repair[wi] == 0, "the porter boards it")
+	if c.has_method("set_closed"):
+		c.litter.fill(0.0)
+		check(bool(c.call("set_closed", spot.x, spot.y, true)), "the stand can be switched off")
+		_sell_at(sim, ti, 3)
+		check(c.litter[ti] == 0.0, "a closed stand does not make litter")
+		check(bool(c.call("set_closed", spot.x, spot.y, false)), "the stand opens again")
+		c.litter.fill(0.0)
+		check(bool(c.call("set_closed", spot.x + 2, spot.y, true)), "the bin can be switched off")
+		_sell_at(sim, ti, 3)
+		check(c.litter[ti] >= show, "a closed bin does not cut new litter")
