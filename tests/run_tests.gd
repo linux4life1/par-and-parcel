@@ -4363,3 +4363,18 @@ func _test_storm_resign() -> void:
 		if int(row.strikes) != 0:
 			kept = false
 	check(loaded.members.count() == mem.count() and kept, "an older save, with no strikes stored, loads with none")
+	mem.resign_strikes = 3
+	var patient := sim.visitors.make_golfer("public", 0.5)
+	var card := mem.enroll(patient, true)
+	for _n in 2:
+		var visit := mem.make_golfer(card)
+		visit.holes_played = 2
+		visit.satisfaction = 20.0
+		mem.on_depart(visit)
+	check(mem.roster.has(card) and int(card.strikes) == 2, "two strikes keep a member when three are allowed")
+	var last := mem.make_golfer(card)
+	last.holes_played = 2
+	last.satisfaction = 20.0
+	mem.on_depart(last)
+	check(not mem.roster.has(card), "the third strike resigns them")
+	check(Members.strike_limit(0) == 1 and Members.strike_limit(-3) == 1, "a resign strike count below 1 is raised to 1")
