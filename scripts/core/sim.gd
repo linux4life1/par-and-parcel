@@ -893,7 +893,10 @@ func hire(role_id: String) -> bool:
 func to_dict() -> Dictionary:
 	var staff := []
 	for m in crew.members:
-		staff.append(m.role.id)
+		if m.has_home:
+			staff.append({"role": m.role.id, "home": [m.home.x, m.home.y, m.home.z]})
+		else:
+			staff.append(m.role.id)
 	# The event itself is not saved. A mid-event save must not leave the
 	# tucked pins, the fast greens or the thick rough behind.
 	var course_d := course.to_dict()
@@ -974,8 +977,15 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	for k: String in hosted:
 		sim.tourney.hosted[k] = int(hosted[k])
 	sim.weather.kind = int(d.get("weather", 0))
-	for role_id: String in d.get("staff", []):
-		sim.crew.hire(role_id)
+	for entry in d.get("staff", []):
+		if entry is String:
+			sim.crew.hire(str(entry))
+		elif entry is Dictionary:
+			var row: Dictionary = entry
+			var hired := sim.crew.hire(str(row.get("role", "")))
+			var hv: Array = row.get("home", [])
+			if hired != null and hv.size() >= 3:
+				sim.crew.station(hired, Vector3(float(hv[0]), float(hv[1]), float(hv[2])))
 	sim.grounds.refresh_layout()
 	# After everything that drew on the blank game's dice, so play continues
 	# from the save and not from the clock.
