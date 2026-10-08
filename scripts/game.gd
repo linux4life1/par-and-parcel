@@ -10,6 +10,7 @@ signal volume_changed()
 const STEP := 1.0 / 60.0
 const SAVE_FILE := "user://save.json"
 const TEST_SAVE_FILE := "user://save_test.json"   # screenshot and test runs never touch the real slot
+const SHARED_DIR := "user://shared"               # courses shared from the menu, not saved games
 var SAVE_PATH := SAVE_FILE
 const SETTINGS_PATH := "user://settings.cfg"
 ## Graphics presets, lightest first. See Main._apply_quality.
@@ -350,6 +351,56 @@ func save_game() -> bool:
 		return false
 	f.store_string(JSON.stringify(sim.to_dict()))
 	f.close()
+	return true
+
+
+## Write this course out as a file a friend can play. Returns the path, or ""
+## if it could not be written. The club's money is not in the file.
+func share_course() -> String:
+	if sim == null:
+		return ""
+	DirAccess.make_dir_recursive_absolute(SHARED_DIR)
+	var path := SHARED_DIR.path_join(CourseFile.file_name(sim.course_name) + ".ppcourse")
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return ""
+	f.store_string(CourseFile.text_of(sim))
+	f.close()
+	return path
+
+
+func shared_courses() -> Array[String]:
+	var out: Array[String] = []
+	var dir := DirAccess.open(SHARED_DIR)
+	if dir == null:
+		return out
+	dir.list_dir_begin()
+	var fn := dir.get_next()
+	while fn != "":
+		if not dir.current_is_dir() and fn.ends_with(".ppcourse"):
+			out.append(fn)
+		fn = dir.get_next()
+	dir.list_dir_end()
+	out.sort()
+	return out
+
+
+## Start a new club on a shared course, and take the current pro along.
+func play_shared(file_name: String) -> bool:
+	var text := FileAccess.get_file_as_string(SHARED_DIR.path_join(file_name))
+	var pack := CourseFile.parse(text)
+	if pack.is_empty():
+		return false
+	var pro := {}
+	if sim != null:
+		pro = CourseFile.pro_of(sim)
+	var next := CourseFile.host(db, pack, pro, gear)
+	next.set_difficulty(difficulty)
+	sim = next
+	_acc = 0.0
+	speed = 1
+	paused = false
+	sim_changed.emit()
 	return true
 
 

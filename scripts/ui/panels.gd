@@ -620,7 +620,24 @@ func _golfer(body: VBoxContainer) -> Callable:
 	var sim := hud.sim
 	var car := sim.career
 	var sk := sim.skills
-	body.add_child(UIKit.para("Skill points build your golfer. You earn them by playing your own course: a medal for your best score on each hole, challenges met, good full rounds, and golfer levels.", 13))
+	body.add_child(UIKit.para("Skill points build your golfer. You earn them by playing your own course: a medal for your best score on each hole, challenges met, good full rounds, and golfer levels. The name and the kit go with you when you play a shared course.", 13))
+	var g := sim.player.golfer
+	var name_row := UIKit.hbox(8)
+	body.add_child(name_row)
+	name_row.add_child(UIKit.label("Name", 14, UIKit.MUTED))
+	var name_edit := LineEdit.new()
+	name_edit.text = g.name
+	name_edit.custom_minimum_size = Vector2(160, 0)
+	name_edit.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_edit.tooltip_text = "What your golfer is called"
+	name_edit.text_changed.connect(func(t: String) -> void: g.name = t)
+	name_edit.text_submitted.connect(func(_t: String) -> void: name_edit.release_focus())
+	name_row.add_child(name_edit)
+	var kit := UIKit.hbox(8)
+	body.add_child(kit)
+	_kit_swatch(kit, g, "shirt", "Shirt")
+	_kit_swatch(kit, g, "pants", "Trousers")
+	_kit_swatch(kit, g, "hat", "Hat")
 	var lv := UIKit.hbox()
 	body.add_child(lv)
 	var lv_label := UIKit.label("", 15)
@@ -745,6 +762,38 @@ func _golfer(body: VBoxContainer) -> Callable:
 			(row[2] as ProgressBar).visible = not met
 			(row[3] as Label).text = "Done" if met else "+%d" % int(c.points)
 			(row[3] as Label).add_theme_color_override("font_color", UIKit.GOOD if met else UIKit.GOLD)
+
+
+## A coloured square that steps through the colours golfers already wear.
+func _kit_swatch(row: HBoxContainer, g: Golfer, field: String, caption: String) -> void:
+	var palette: Array[Color] = Golfer.SHIRTS
+	if field == "pants":
+		palette = Golfer.PANTS
+	elif field == "hat":
+		var hats: Array[Color] = []
+		for c: Color in Golfer.SHIRTS:
+			hats.append(c)
+		hats.append(Color(0, 0, 0, 0))
+		palette = hats
+	var box := UIKit.vbox(2)
+	row.add_child(box)
+	var sw := ColorRect.new()
+	sw.custom_minimum_size = Vector2(36, 22)
+	var current: Color = g.get(field)
+	sw.color = current
+	box.add_child(sw)
+	var b := UIKit.button(caption, func() -> void:
+		var now: Color = g.get(field)
+		var at := -1
+		for i in palette.size():
+			if palette[i].is_equal_approx(now):
+				at = i
+				break
+		var next: Color = palette[(at + 1) % palette.size()]
+		g.set(field, next)
+		sw.color = next, "Change the %s" % caption.to_lower())
+	b.custom_minimum_size = Vector2(88, 28)
+	box.add_child(b)
 
 
 ## Ten pips that fill as an attribute rises.

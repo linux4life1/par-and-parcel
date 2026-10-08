@@ -62,6 +62,7 @@ func _ready() -> void:
 	_test_landmarks()
 	_test_accreditation()
 	_test_station()
+	_test_course_file()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -3476,3 +3477,50 @@ func _test_accreditation() -> void:
 	stuffed.clubhouse_level = 80
 	stuffed._update_rating(0.0)
 	check(_design_sum(stuffed) > 100.0 and is_equal_approx(stuffed.design, 100.0), "past the top, the lines still add up and the score stops at 100")
+
+
+## A shared course is the ground and the holes. The pro travels; the club does not.
+func _test_course_file() -> void:
+	print("-- sharing a course")
+	var sim := _sim("three_holes", 5)
+	sim.economy.money = 999999.0
+	sim.course_name = "Ace's North-9!"
+	sim.clubhouse_level = 1
+	sim.paint(40, 30, 2, Defs.T.GREEN)
+	sim.paint(40, 60, 1, Defs.T.TEE)
+	var added := sim.add_hole(sim.course.tile_center(40, 60), sim.course.tile_center(40, 30))
+	check(added != null and sim.course.holes.size() == 4, "the course being shared has four holes")
+	check(sim.crew.hire("greenkeeper") != null and sim.crew.members.size() == 1, "a greenkeeper is on the staff")
+	var visitor := sim.visitors.make_golfer("public", 0.5)
+	var joined := sim.members.enroll(visitor)
+	check(not joined.is_empty() and sim.members.count() == 1, "a member has joined")
+	check(sim.player.buy("woods", "pinpoint"), "the pro buys a set of woods")
+	check(sim.career.raise("power"), "the pro spends a point on power")
+	sim.player.golfer.name = "Ace"
+	sim.player.golfer.shirt = Color("c62828")
+	sim.player.golfer.pants = Color("1e3a5f")
+	sim.player.golfer.hat = Color("43a047")
+	sim.skills.xp["golfer"] = 40
+	sim.skills.level["golfer"] = 3
+	var text := CourseFile.text_of(sim)
+	check(not text.contains("999999"), "the shared file does not carry the club's money")
+	var pack := CourseFile.parse(text)
+	check(str(pack.get("kind", "")) == "ppcourse" and pack.get("course") is Dictionary, "the file reads back as a shared course")
+	check(str(pack.get("name", "")) == "Ace's North-9!" and str(pack.get("biome", "")) == str(sim.biome.get("id", "")), "the name and the biome travel with the ground")
+	check(CourseFile.file_name("Ace's North-9!") == "Aces North-9", "a file name keeps letters, digits, spaces and hyphens")
+	check(CourseFile.file_name("  !!!  ") == "course", "a name with nothing safe in it becomes course")
+	check(CourseFile.parse(JSON.stringify(sim.to_dict())).is_empty(), "a saved game is not a shared course")
+	check(CourseFile.parse("nope").is_empty(), "nonsense is not a shared course")
+	var pin: Vector3 = sim.course.holes[0].pin
+	var hosted := CourseFile.host(db, pack, CourseFile.pro_of(sim), gear)
+	check(is_equal_approx(hosted.economy.money, 30000.0), "the new club starts with a new game's purse")
+	check(hosted.crew.members.is_empty() and hosted.members.count() == 0, "staff and members stay at home")
+	check(hosted.course.holes.size() == 4 and hosted.course.holes[0].pin.distance_to(pin) < 0.05, "every hole comes across, pin included")
+	check(hosted.player.golfer.name == "Ace", "the pro's name comes along")
+	check(hosted.career.level("power") == 1 and int(hosted.skills.points.get("golfer", -1)) == 0, "the pro's power comes along, and the spent point stays spent")
+	check(int(hosted.skills.xp.get("golfer", 0)) == 40 and int(hosted.skills.level.get("golfer", 0)) == 3, "golfer experience comes along")
+	check(hosted.player.golfer.shirt.is_equal_approx(Color("c62828")) and hosted.player.golfer.pants.is_equal_approx(Color("1e3a5f")) and hosted.player.golfer.hat.is_equal_approx(Color("43a047")), "the kit comes along")
+	check(str(hosted.player.equipped.get("woods", "")) == "pinpoint", "the bag comes along")
+	check(hosted.clubhouse_level == 1 and hosted.clubhouse_level == hosted.level_for_holes(hosted.course.holes.size()), "four holes arrive with the clubhouse that allows them")
+	var fresh := CourseFile.host(db, pack, {}, gear)
+	check(fresh.player.golfer.name == "You" and fresh.career.level("power") == 0, "with no pro along, a new golfer plays")
