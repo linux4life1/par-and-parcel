@@ -894,12 +894,27 @@ func to_dict() -> Dictionary:
 	var staff := []
 	for m in crew.members:
 		staff.append(m.role.id)
+	# The event itself is not saved. A mid-event save must not leave the
+	# tucked pins, the fast greens or the thick rough behind.
+	var course_d := course.to_dict()
+	if not tourney._pin_home.is_empty():
+		course_d["green_decel"] = 1.0
+		course_d["rough_power"] = 1.0
+		var hs: Array = course_d.get("holes", [])
+		for i in course.holes.size():
+			var hole: Hole = course.holes[i]
+			if i >= hs.size() or not tourney._pin_home.has(hole):
+				continue
+			var pin: Vector3 = tourney._pin_home[hole]
+			var hd: Dictionary = hs[i]
+			hd["pin"] = [pin.x, pin.y, pin.z]
+			hs[i] = hd
 	var d := {
 		"version": 1, "scenario": scenario.def.get("id", "free_play"), "status": scenario.status,
 		"name": course_name, "time": time, "clock": clock, "career": career.to_dict(), "money": economy.money, "rating": rating, "reputation": reputation,
 		"buzz": buzz, "stats": stats, "recent": visitors.recent, "staff": staff, "skills": skills.to_dict(),
 		"player": player.to_dict(), "hosted": tourney.hosted, "history": economy.history,
-		"weather": weather.kind, "course": course.to_dict(), "biome": str(biome.get("id", "lush")),
+		"weather": weather.kind, "course": course_d, "biome": str(biome.get("id", "lush")),
 		"members": members.to_list(), "clubhouse": clubhouse_level, "homes": homes, "gifts": gifts,
 		"feats": feats.done, "rivals": rivals, "best_rank": best_rank, "land_credits": land_credits, "debt_years": debt_years,
 		"difficulty": difficulty, "rng_seed": str(rng.seed), "rng_state": str(rng.state),
