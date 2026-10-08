@@ -54,6 +54,7 @@ func _ready() -> void:
 	_test_club_life()
 	_test_gallery()
 	_test_dogleg()
+	_test_hole_preview()
 	_test_mood_map()
 	_test_draft_hole()
 	_test_pace()
@@ -2607,7 +2608,7 @@ func _test_dogleg() -> void:
 	var searches := laid._preview_searches
 	laid.hover = Vector3(pin.x + 0.4, pin.y, pin.z + 0.4)
 	laid._update_preview()
-	check(laid._preview_searches == searches, "the throttle doesn't recompute when the tile is unchanged")
+	check(laid._preview_searches == searches, "the search isn't repeated on the same tile")
 	var hole := sim.add_hole(tee, pin)
 	check(dog_par == hole.par and is_equal_approx(dog_len, hole.length), "the dogleg preview is the par and length the hole gets (%d, %.1f m)" % [dog_par, dog_len])
 	var chord := hole.straight_length()
@@ -2696,6 +2697,89 @@ func _test_dogleg() -> void:
 	sim.refresh_hole_lines()
 	check(hole.par == 3 and hole.length <= Hole.PAR_3, "painting the corner fairway shortens the hole to a par 3 (%d yd)" % Defs.yards(hole.length))
 	check(int(hole.tally.get("1", 0)) == 1, "the 4 already recorded becomes a bogey on the new par")
+
+
+func _test_hole_preview() -> void:
+	print("-- the hole preview")
+	var sim := _sim("sandbox", 6)
+	var c := sim.course
+	var sx := 70
+	for ty in range(20, 81):
+		var i := ty * c.w + sx
+		c.terrain[i] = Defs.T.FAIRWAY
+		c.objects[i] = 0
+	c.terrain[80 * c.w + sx] = Defs.T.TEE
+	c.terrain[20 * c.w + sx] = Defs.T.GREEN
+	var tee := c.tile_center(sx, 80)
+	var pin := c.tile_center(sx, 20)
+	var straight: Dictionary = Hole.measure(c, tee, pin)
+	check(bool(straight.playable) and int(straight.par) == 4, "a straight hole is playable, and this one is a par 4")
+	var tools := BuildTools.new()
+	tools.sim = sim
+	tools.mode = "hole"
+	tools._tee = tee
+	tools.hover = pin
+	tools._update_preview()
+	check(not tools.preview_warn, "a normal par 4 is not a warning")
+	var short_pin := c.tile_center(sx, 70)
+	c.terrain[70 * c.w + sx] = Defs.T.GREEN
+	var brief: Dictionary = Hole.measure(c, tee, short_pin)
+	var short_m := float(sim.db.preview.get("short_metres", 90.0))
+	check(bool(brief.playable) and float(brief.length) < short_m, "a ten-tile hole is playable and under the short line (%.0f m)" % float(brief.length))
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools.hover = short_pin
+	tools._update_preview()
+	check(tools.preview_warn, "a hole shorter than the data's short line is a warning")
+	var lost := Vector3(-30.0, 0.0, tee.z)
+	var missed: Dictionary = Hole.measure(c, tee, lost)
+	check(not bool(missed.playable), "a pin the route cannot reach is not playable")
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools.hover = lost
+	tools._update_preview()
+	check(tools.preview_warn, "an unplayable path is a warning")
+	for y in range(0, 42):
+		for x in range(0, 48):
+			var wi := y * c.w + x
+			c.terrain[wi] = Defs.T.WATER
+			c.objects[wi] = 0
+	for y in range(2, 21):
+		c.terrain[y * c.w + 5] = Defs.T.FAIRWAY
+		c.terrain[y * c.w + 25] = Defs.T.FAIRWAY
+	for x in range(5, 26):
+		c.terrain[2 * c.w + x] = Defs.T.FAIRWAY
+	c.terrain[20 * c.w + 5] = Defs.T.TEE
+	c.terrain[20 * c.w + 25] = Defs.T.GREEN
+	var bend_tee := c.tile_center(5, 20)
+	var bend_pin := c.tile_center(25, 20)
+	var detour: Dictionary = Hole.measure(c, bend_tee, bend_pin)
+	check(not bool(detour.playable), "a detour longer than the route cap is not playable (%.0f m against a %.0f m line)" % [float(detour.length), Vector2(bend_pin.x - bend_tee.x, bend_pin.z - bend_tee.z).length()])
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools._tee = bend_tee
+	tools.hover = bend_pin
+	tools._update_preview()
+	check(tools.preview_warn, "that detour is a warning too")
+	var every := maxi(int(sim.db.preview.get("throttle_frames", 1)), 1)
+	tools._preview_frame = 0
+	tools._preview_due = 0
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools._tee = tee
+	tools.hover = pin
+	var before := tools._preview_searches
+	tools._update_preview(true)
+	check(tools._preview_searches == before + 1, "the first paced look searches")
+	var mid := tools._preview_searches
+	tools._preview_frame = tools._preview_due - 1
+	tools.hover = short_pin
+	tools._update_preview(true)
+	check(tools._preview_searches == mid, "a paced look on a new tile does not search before the throttle has passed")
+	tools._preview_frame = tools._preview_due
+	tools._update_preview(true)
+	check(tools._preview_searches == mid + 1, "a paced look searches once the throttle has passed (%d frames)" % every)
+	tools.free()
 
 
 func _test_mood_map() -> void:

@@ -104,7 +104,6 @@ var _pop_key := 0.0
 ## True when the line of play reached the pin and is not a detour. The
 ## preview reads this. It is not stored: the route is measured again on load.
 var playable := true
-var _linked := true
 
 
 func straight_length() -> float:
@@ -132,14 +131,16 @@ static func par_for(metres: float) -> int:
 ## those rounds were scored against, and the same shift is applied on load.
 func update_metrics(course: Course) -> void:
 	var before := par
-	route = _route(course)
+	var found: Dictionary = _route(course)
+	var line: PackedVector2Array = found.line
+	route = line
 	var straight := straight_length()
 	var walked := _polyline_length(route)
 	if walked < straight:
 		walked = straight
 	# A route longer than ROUTE_CAP times the straight line is a detour, not
 	# the hole. The length is capped, and the preview treats that as unplayable.
-	playable = _linked
+	playable = bool(found.reached)
 	if straight > 1.0 and walked > straight * ROUTE_CAP:
 		playable = false
 		walked = straight * ROUTE_CAP
@@ -180,15 +181,18 @@ func _polyline_length(pts: PackedVector2Array) -> float:
 
 ## Cheapest 8-connected tile path from tee to pin, then pulled tight wherever
 ## the straight segment stays on fairway, tee, green or cart path with no trees.
-func _route(course: Course) -> PackedVector2Array:
+## `reached` is false when the pin is not a tile the path could stand on.
+func _route(course: Course) -> Dictionary:
 	var a := Vector2(tee.x, tee.z)
 	var b := Vector2(pin.x, pin.z)
+	var chord := PackedVector2Array([a, b])
 	if a.distance_to(b) < 1.0 or _segment_clear(course, a, b):
-		_linked = true
-		return PackedVector2Array([a, b])
+		return {"line": chord, "reached": true}
 	var margin := 18
 	var tt := course.tile_of(tee.x, tee.z)
 	var pt := course.tile_of(pin.x, pin.z)
+	if not course.in_bounds(tt.x, tt.y) or not course.in_bounds(pt.x, pt.y):
+		return {"line": chord, "reached": false}
 	var fx := clampi(mini(tt.x, pt.x) - margin, 0, course.w - 1)
 	var fy := clampi(mini(tt.y, pt.y) - margin, 0, course.h - 1)
 	var x1 := clampi(maxi(tt.x, pt.x) + margin, 0, course.w - 1)
@@ -243,8 +247,7 @@ func _route(course: Course) -> PackedVector2Array:
 					parent[ni] = cur
 					_heap_push(nd, ni)
 	if dist[goal] == INF:
-		_linked = false
-		return PackedVector2Array([a, b])
+		return {"line": chord, "reached": false}
 	var chain: Array[int] = []
 	var guard := 0
 	var walk := goal
@@ -255,8 +258,7 @@ func _route(course: Course) -> PackedVector2Array:
 		walk = parent[walk]
 		guard += 1
 	if chain.is_empty() or chain[chain.size() - 1] != start:
-		_linked = false
-		return PackedVector2Array([a, b])
+		return {"line": chord, "reached": false}
 	chain.reverse()
 	var pts := PackedVector2Array()
 	pts.append(a)
@@ -267,8 +269,7 @@ func _route(course: Course) -> PackedVector2Array:
 		var center := course.tile_center(tx, ty)
 		pts.append(Vector2(center.x, center.z))
 	pts.append(b)
-	_linked = true
-	return _smooth(course, pts)
+	return {"line": _smooth(course, pts), "reached": true}
 
 
 func _play_cost(course: Course, tx: int, ty: int) -> float:

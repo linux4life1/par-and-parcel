@@ -39,6 +39,7 @@ var _ribbon_mesh: ImmediateMesh
 var _ribbon_mat: StandardMaterial3D
 var _tag_layer: CanvasLayer
 var _tag: Label
+var _tag_ink := Color(0, 0, 0, 0)
 
 
 func _ready() -> void:
@@ -179,10 +180,13 @@ func _process(delta: float) -> void:
 	_preview_frame += 1
 	if mode == "hole" and _tee != null and hover != null:
 		_update_preview(true)
+	elif mode == "hole" and hover == null:
+		if _ribbon != null:
+			_ribbon.visible = false
+		_hide_tag()
 	elif _ribbon != null and mode != "hole":
 		_ribbon.visible = false
-		if _tag != null:
-			_tag.visible = false
+		_hide_tag()
 	if _down and mode == "sculpt" and hover != null:
 		_tick -= delta
 		if _tick <= 0.0:
@@ -332,6 +336,8 @@ func _update_preview(paced: bool = false) -> void:
 	if sim == null or _tee == null or hover == null:
 		_preview_text = ""
 		_hide_tag()
+		if _ribbon != null:
+			_ribbon.visible = false
 		return
 	var p: Vector3 = hover
 	var tile := sim.course.tile_of(p.x, p.z)
@@ -387,8 +393,11 @@ func _place_tag() -> void:
 		return
 	var book := _preview_book()
 	var ink := _ink(book, "warn_colour" if preview_warn else "colour", Color(0.97, 0.45, 0.4) if preview_warn else Color(0.93, 0.96, 0.93))
-	_tag.text = _preview_text
-	_tag.add_theme_color_override("font_color", ink)
+	if _tag.text != _preview_text:
+		_tag.text = _preview_text
+	if not _tag_ink.is_equal_approx(ink):
+		_tag.add_theme_color_override("font_color", ink)
+		_tag_ink = ink
 	_tag.visible = _preview_text != ""
 	var origin := vp.get_mouse_position() + Vector2(float(book.get("offset_x", 18.0)), float(book.get("offset_y", -32.0)))
 	var bounds := vp.get_visible_rect().size
