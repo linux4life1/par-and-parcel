@@ -1,0 +1,7 @@
+{
+	"_about": "The tee a hole was laid out on is the back tee. Middle and forward are extra, each on a tee box and on the line of play, and each closer to the green than the tee behind it. Par and length stay on the back tee. A golfer's handicap is round(lerp(36, -3, skill)). Skill below forward_below is about a 20 handicap and plays the forward tee; below middle_below is about a 9 and plays the middle; the rest play the back. A missing set falls back to the next tee back, never a tee further forward. on_line is how far, in metres, a new tee may sit off the line of play. price is what placing one costs.",
+	"price": 100,
+	"on_line": 3.0,
+	"forward_below": 0.40,
+	"middle_below": 0.70
+}

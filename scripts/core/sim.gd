@@ -1500,6 +1500,33 @@ func add_hole(tee: Vector3, pin: Vector3) -> Hole:
 	return hole
 
 
+func tee_price() -> float:
+	return float(db.tees.get("price", 0.0))
+
+
+## Place a middle or forward tee on a hole that is already laid out. An empty
+## string means it is down; otherwise the reason it was refused.
+func place_tee(hole: Hole, which: String, at: Vector3) -> String:
+	var tile := course.tile_of(at.x, at.z)
+	var pos := course.tile_center(tile.x, tile.y)
+	var why := hole.refuse_tee(course, which, pos, float(db.tees.get("on_line", 3.0)))
+	if why != "":
+		return why
+	var price := tee_price()
+	if not economy.can_afford(price):
+		return "You can't afford that."
+	var started := undo.begin()
+	if price > 0.0:
+		economy.spend("construction", price)
+		undo.note_charge(price)
+	hole.write_tee(which, pos)
+	undo.note_tee(hole, which, pos, hole.metres_of(which))
+	course.revision += 1
+	if started:
+		undo.commit()
+	return ""
+
+
 func remove_hole(i: int) -> void:
 	if i < 0 or i >= course.holes.size():
 		return
