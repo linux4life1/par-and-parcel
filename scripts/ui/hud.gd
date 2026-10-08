@@ -246,7 +246,7 @@ func _build_toolbar() -> void:
 	var items := [
 		["build", "Build", "Paint terrain, shape the land, place scenery (B)"],
 		["holes", "Holes", "Hole list and green fees (H)"],
-		["staff", "Staff", "Hire greenkeepers, exterminators and marshals"],
+		["staff", "Staff", "Hire greenkeepers, exterminators, marshals and a porter"],
 		["money", "Finances", "Income and costs"],
 		["members", "Members", "The club's members, their tiers, and what each one wants"],
 		["tournaments", "Tournaments", "Host events for prize money"],
@@ -1425,6 +1425,10 @@ func _tile_info(p: Vector3) -> String:
 			s += "  ·  weeds %d%%" % int(c.weeds[i] * 100.0)
 		if c.pests[i] > 0.05:
 			s += "  ·  pests"
+	if c.litter[i] > 0.05:
+		s += "  ·  litter %d%%" % int(c.litter[i] * 100.0)
+	if c.repair[i] != 0:
+		s += "  ·  broken window"
 	return s
 
 

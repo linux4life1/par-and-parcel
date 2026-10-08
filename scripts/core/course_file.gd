@@ -53,6 +53,8 @@ static func parse(text: String) -> Dictionary:
 ## carries them, and a locked layer without its hot layer is refused,
 ## because loading reads both. Closed and open_month are checked the same
 ## way when the file carries them: a bad byte string would break the load.
+## Litter is one float per tile. Repair is one byte per tile. A shared
+## course keeps both only when they are that size.
 static func _course_safe(course: Dictionary) -> bool:
 	var w := int(course.get("w", 0))
 	var h := int(course.get("h", 0))
@@ -83,6 +85,10 @@ static func _course_safe(course: Dictionary) -> bool:
 	if course.has("closed") and not _bytes(course.get("closed", ""), tiles):
 		return false
 	if course.has("open_month") and not _bytes(course.get("open_month", ""), tiles):
+		return false
+	if course.has("litter") and not _bytes(course.get("litter", ""), tiles * 4):
+		return false
+	if course.has("repair") and not _bytes(course.get("repair", ""), tiles):
 		return false
 	if course.has("volcanoes"):
 		var vols: Variant = course.get("volcanoes", [])
