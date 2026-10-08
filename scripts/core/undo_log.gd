@@ -95,8 +95,9 @@ func commit() -> void:
 	var charged := float(_open["charged"])
 	var gifts: Dictionary = _open["used"]
 	var built := int(sim.stats.get("holes_built", 0)) - int(_open["built"])
+	var have_turn := _open.has("turn_mark")
 	var have_tee := _open.has("tee_set")
-	if not any and not hole_added and is_zero_approx(charged) and gifts.is_empty() and built == 0 and not have_tee:
+	if not any and not hole_added and is_zero_approx(charged) and gifts.is_empty() and built == 0 and not have_turn and not have_tee:
 		_open = {}
 		return
 	var entry := {
@@ -108,6 +109,8 @@ func commit() -> void:
 	}
 	if hole_added:
 		entry["hole"] = _snap_hole(c.holes[c.holes.size() - 1])
+	if have_turn:
+		entry["turn_mark"] = _open["turn_mark"]
 	if have_tee:
 		entry["tee_set"] = _open["tee_set"]
 	past.append(entry)
@@ -155,6 +158,20 @@ func note_gift(o: int) -> void:
 	used[o] = int(used.get(o, 0)) + 1
 
 
+## A turning point placed during this stroke. Undo takes the stake off and
+## refunds the charge; redo puts the same spot back.
+func note_turn(hole: Hole, at: Vector3) -> void:
+	if not _stroking:
+		return
+	var layout := hole.design_pin()
+	_open["turn_mark"] = {
+		"name": hole.name,
+		"tee": [hole.tee.x, hole.tee.y, hole.tee.z],
+		"pin": [layout.x, layout.y, layout.z],
+		"at": [at.x, at.y, at.z],
+	}
+
+
 ## A middle or forward tee placed during this stroke. Undo removes it and
 ## refunds the charge; redo puts the same spot back.
 func note_tee(hole: Hole, which: String, at: Vector3, metres: float) -> void:
@@ -176,7 +193,7 @@ func undo() -> bool:
 		return false
 	var e: Dictionary = past[past.size() - 1]
 	past.remove_at(past.size() - 1)
-	if not _intact(e, false) or (e.has("hole") and _find_hole(e["hole"]) < 0) or (e.has("tee_set") and _find_hole(e["tee_set"]) < 0):
+	if not _intact(e, false) or (e.has("hole") and _find_hole(e["hole"]) < 0) or (e.has("turn_mark") and _find_hole(e["turn_mark"]) < 0) or (e.has("tee_set") and _find_hole(e["tee_set"]) < 0):
 		clear()
 		return false
 	if not _apply(e, false):
@@ -219,7 +236,7 @@ func _intact(e: Dictionary, forward: bool) -> bool:
 		var rec: Dictionary = heights[key]
 		if not is_equal_approx(c.heights[vi], float(rec[side])):
 			return false
-	return _tee_intact(e, forward)
+	return _turn_intact(e, forward) and _tee_intact(e, forward)
 
 
 func _blocked() -> bool:
@@ -335,14 +352,33 @@ func _apply(e: Dictionary, forward: bool) -> bool:
 			var at := _find_hole(e["hole"])
 			if at >= 0:
 				sim.remove_hole(at)
+	if not _apply_turn(e, forward):
+		applying = false
+		return false
 	if not _apply_tee(e, forward):
 		applying = false
 		return false
 	_books(e, forward)
-	if x1 >= 0 or hx1 >= 0 or e.has("hole") or e.has("tee_set"):
+	if x1 >= 0 or hx1 >= 0 or e.has("hole") or e.has("turn_mark") or e.has("tee_set"):
 		c.revision += 1
 	applying = false
 	return true
+
+
+func _turn_intact(e: Dictionary, forward: bool) -> bool:
+	if not e.has("turn_mark"):
+		return true
+	var snap: Dictionary = e["turn_mark"]
+	var at := _find_hole(snap)
+	if at < 0:
+		return false
+	var hole := sim.course.holes[at]
+	var ad: Array = snap["at"]
+	var pos := Vector3(float(ad[0]), float(ad[1]), float(ad[2]))
+	var there := hole.has_turn(pos)
+	if forward:
+		return not there
+	return there
 
 
 func _tee_intact(e: Dictionary, forward: bool) -> bool:
@@ -360,6 +396,26 @@ func _tee_intact(e: Dictionary, forward: bool) -> bool:
 	if forward:
 		return not hole.has_tee(which)
 	return hole.has_tee(which) and Vector2(cur.x - recorded.x, cur.z - recorded.z).length_squared() < 0.05
+
+
+func _apply_turn(e: Dictionary, forward: bool) -> bool:
+	if not e.has("turn_mark"):
+		return true
+	var snap: Dictionary = e["turn_mark"]
+	var at := _find_hole(snap)
+	if at < 0:
+		return false
+	var hole := sim.course.holes[at]
+	var ad: Array = snap["at"]
+	var pos := Vector3(float(ad[0]), float(ad[1]), float(ad[2]))
+	if forward:
+		if hole.has_turn(pos):
+			return false
+		hole.add_turn(pos)
+	else:
+		if not hole.remove_turn(pos):
+			return false
+	return true
 
 
 func _apply_tee(e: Dictionary, forward: bool) -> bool:

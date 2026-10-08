@@ -12,7 +12,7 @@ var terrain: TerrainView
 var rig: CameraRig
 var world: WorldView
 var enabled := true
-var mode := ""                 # "", terrain, sculpt, object, bulldoze, hole
+var mode := ""                 # "", terrain, sculpt, object, bulldoze, hole, turn
 var station_for: Crew.Member = null   # the next ground click is their post
 var terrain_type: int = Defs.T.FAIRWAY
 var brush := 1                 # radius in tiles
@@ -25,6 +25,7 @@ var _last_tile := Vector2i(-999, -999)
 var _tick := 0.0
 var _level := 0.0
 var _tee: Variant = null
+var _turn_hole := -1
 ## When set, the hole tool places this set on an existing hole instead of a new one.
 var _tee_hole := -1
 var _tee_which := ""
@@ -89,6 +90,7 @@ func set_mode(m: String) -> void:
 		station_for = null
 	_down = false
 	_tee = null
+	_turn_hole = -1
 	_tee_hole = -1
 	_tee_which = ""
 	_preview_tile = Vector2i(-999, -999)
@@ -107,6 +109,13 @@ func set_mode(m: String) -> void:
 	_last_tile = Vector2i(-999, -999)
 	if terrain != null:
 		terrain.material.set_shader_parameter("grid_alpha", 1.0 if m != "" else 0.0)
+	tool_changed.emit()
+
+
+## The next clicks mark turning points on this hole.
+func arm_turn(hole_i: int) -> void:
+	set_mode("turn")
+	_turn_hole = hole_i
 	tool_changed.emit()
 
 
@@ -160,6 +169,8 @@ func hint() -> String:
 				body = "Click where the tee goes."
 			else:
 				body = "Now click a green to place the pin. %s" % _preview_text
+		"turn":
+			body = "Click the line of play where the hole changes direction. %s a stake." % Defs.money(sim.turn_price())
 		"land":
 			if sim.land_credits > 0:
 				body = "Click a greyed-out parcel to claim it. The county owes you %d." % sim.land_credits
@@ -307,7 +318,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		_tick = 0.0
 		var p: Vector3 = hover
 		_level = p.y
-		if mode == "hole":
+		if mode == "turn":
+			_down = false
+			_click_turn(p)
+		elif mode == "hole":
 			_down = false
 			if _tee_which == "" and sim.course.holes.size() >= sim.hole_cap():
 				_warn("The %s allows %d holes. Upgrade the clubhouse (Build, Clubhouse) to lay out more." % [sim.clubhouse_name().to_lower(), sim.hole_cap()])
@@ -509,6 +523,18 @@ func _show_route(pts: PackedVector2Array) -> void:
 		_ribbon_mesh.surface_add_vertex(Vector3(p.x - side.x, y, p.y - side.y))
 	_ribbon_mesh.surface_end()
 	_ribbon.visible = true
+
+
+func _click_turn(p: Vector3) -> void:
+	if _turn_hole < 0 or _turn_hole >= sim.course.holes.size():
+		set_mode("")
+		return
+	var hole := sim.course.holes[_turn_hole]
+	var why := sim.place_turn(hole, p)
+	if why != "":
+		sim.toast.emit(why, "bad")
+		return
+	sim.toast.emit("Turning point marked. %s" % hole.turn_line(), "good")
 
 
 func _click_hole(p: Vector3) -> void:
