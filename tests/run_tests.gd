@@ -65,6 +65,7 @@ func _ready() -> void:
 	_test_station()
 	_test_comments()
 	_test_course_file()
+	_test_length_scale()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2524,7 +2525,7 @@ func _expert(sim: Sim) -> Golfer:
 	var g := Golfer.new()
 	g.kind = "lab"
 	g.skill = 0.82
-	g.power = lerpf(0.74, 1.06, 0.82)
+	g.power = Members.power_at(0.82, sim.members.progress)
 	g.accuracy = 0.82
 	g.imagination = 0.9
 	g.putting = 0.55
@@ -3729,3 +3730,38 @@ func _test_course_file() -> void:
 	var hosted_plain := CourseFile.host(db, crowned, {}, gear, 9)
 	var back_h := hosted_plain.course.holes[1]
 	check(back_h.award == "" and back_h.plays == 0, "hole 1 comes back with no award, 0 plays and no themes")
+	var no_tee: Dictionary = pack.duplicate(true)
+	var no_tee_holes: Array = no_tee.course.holes
+	var no_tee_h: Dictionary = no_tee_holes[0]
+	no_tee_h.erase("tee")
+	check(CourseFile.parse(JSON.stringify(no_tee)).is_empty(), "a hole missing its tee is refused")
+	var off: Dictionary = pack.duplicate(true)
+	var off_course: Dictionary = off.course
+	var off_holes: Array = off_course.holes
+	var off_h: Dictionary = off_holes[0]
+	off_h["pin"] = [float(off_course.w) * Defs.TILE + 5.0, 0.0, 10.0]
+	check(CourseFile.parse(JSON.stringify(off)).is_empty(), "a pin outside the map is refused")
+
+
+func _test_length_scale() -> void:
+	print("-- one length scale")
+	var sim := _sim("three_holes", 2)
+	var progress: Dictionary = sim.members.progress
+	var lo := float(progress.get("power_floor", -1.0))
+	var hi := float(progress.get("power_cap", -1.0))
+	check(is_equal_approx(Members.power_at(0.0, progress), lo) and is_equal_approx(Members.power_at(1.0, progress), hi), "a new golfer's length comes from the progression data")
+	var shifted := progress.duplicate()
+	shifted["power_floor"] = 0.5
+	shifted["power_cap"] = 1.2
+	check(is_equal_approx(Members.power_at(0.0, shifted), 0.5) and is_equal_approx(Members.power_at(1.0, shifted), 1.2) and is_equal_approx(Members.power_share(1.2, shifted), 1.0), "a change in the progression data is the length scale")
+	var card := roundi(clampf(Members.power_share(Members.power_at(0.4, progress), progress), 0.0, 1.0) * 100.0)
+	check(card == 40, "the golfer card reads the same scale")
+	var rolled := Golfer.new()
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 11
+	rolled.roll_stats(0.5, dice, {"power_floor": 2.0, "power_cap": 2.0})
+	check(rolled.power >= 1.94 and rolled.power <= 2.06, "a flat length scale still leaves room for the small roll")
+	sim.members.progress["power_floor"] = 1.5
+	sim.members.progress["power_cap"] = 1.8
+	var lab_g := sim.lab._test_golfer(HoleLab.CLASSES[0])
+	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")

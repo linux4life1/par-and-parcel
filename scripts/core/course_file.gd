@@ -67,7 +67,7 @@ static func _course_safe(course: Dictionary) -> bool:
 	var limit := _map_limit()
 	if w < 2 or h < 2 or w > limit or h > limit:
 		return false
-	if not (course.get("holes") is Array):
+	if not _holes_safe(course.get("holes", null), w, h):
 		return false
 	if not _two_numbers(course.get("clubhouse", null)):
 		return false
@@ -87,6 +87,39 @@ static func _course_safe(course: Dictionary) -> bool:
 	elif course.has("hot") and not _bytes(course.get("hot", ""), tiles):
 		return false
 	return true
+
+
+## Each hole needs a tee and a pin of three numbers, standing on the map.
+## x runs across the width and z down the height. A missing tee, or a pin
+## off the map, is refused rather than breaking the load.
+static func _holes_safe(v: Variant, w: int, h: int) -> bool:
+	if not (v is Array):
+		return false
+	var holes: Array = v
+	var x_max := float(w) * Defs.TILE
+	var z_max := float(h) * Defs.TILE
+	for hole in holes:
+		if not (hole is Dictionary):
+			return false
+		var hd: Dictionary = hole
+		if not _spot(hd.get("tee", null), x_max, z_max):
+			return false
+		if not _spot(hd.get("pin", null), x_max, z_max):
+			return false
+	return true
+
+
+static func _spot(v: Variant, x_max: float, z_max: float) -> bool:
+	if not (v is Array):
+		return false
+	var p: Array = v
+	if p.size() != 3:
+		return false
+	if not (_number(p[0]) and _number(p[1]) and _number(p[2])):
+		return false
+	var x := float(p[0])
+	var z := float(p[2])
+	return x >= 0.0 and x <= x_max and z >= 0.0 and z <= z_max
 
 
 static func _two_numbers(v: Variant) -> bool:
