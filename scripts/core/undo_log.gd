@@ -61,7 +61,7 @@ func begin() -> bool:
 		"tiles": {},
 		"heights": {},
 		"holes": sim.course.holes.size(),
-		"gifts": _copy_gifts(sim.gifts),
+		"used": {},
 		"built": int(sim.stats.get("holes_built", 0)),
 	}
 	return true
@@ -93,7 +93,7 @@ func commit() -> void:
 			height_rec[vi] = {"before": was, "after": now}
 	var hole_added := c.holes.size() > int(_open["holes"])
 	var charged := float(_open["charged"])
-	var gifts := _gifts_used(_open["gifts"], _copy_gifts(sim.gifts))
+	var gifts: Dictionary = _open["used"]
 	var built := int(sim.stats.get("holes_built", 0)) - int(_open["built"])
 	if not any and not hole_added and is_zero_approx(charged) and gifts.is_empty() and built == 0:
 		_open = {}
@@ -141,6 +141,15 @@ func note_charge(amount: float) -> void:
 	if not _stroking or amount <= 0.0:
 		return
 	_open["charged"] = float(_open["charged"]) + amount
+
+
+## A free placement this stroke actually spent. A gift that arrives while the
+## stroke is open is not part of the step.
+func note_gift(o: int) -> void:
+	if not _stroking:
+		return
+	var used: Dictionary = _open["used"]
+	used[o] = int(used.get(o, 0)) + 1
 
 
 func undo() -> bool:
@@ -239,7 +248,14 @@ func _apply(e: Dictionary, forward: bool) -> bool:
 		c.objects[i] = new_o
 		c.closed[i] = int(dest["closed"])
 		c.open_month[i] = int(dest["open_month"])
-		if int(c.repair[i]) == int(from["repair"]):
+		if not forward and new_o == 0 and prev_o != 0:
+			# The building is gone, so the empty tile carries no broken window.
+			# The mark stays on the step: redo puts the building back still broken.
+			var mark := int(c.repair[i])
+			if mark != int(from["repair"]):
+				from["repair"] = mark
+			c.repair[i] = 0
+		elif int(c.repair[i]) == int(from["repair"]):
 			c.repair[i] = int(dest["repair"])
 		if is_equal_approx(float(c.litter[i]), float(from["litter"])):
 			var litter := float(dest["litter"])
@@ -390,23 +406,3 @@ func _tile_same(a: Dictionary, b: Dictionary) -> bool:
 	return int(a["terrain"]) == int(b["terrain"]) and int(a["object"]) == int(b["object"]) and int(a["closed"]) == int(b["closed"]) and int(a["open_month"]) == int(b["open_month"]) and int(a["repair"]) == int(b["repair"]) and is_equal_approx(float(a["wet"]), float(b["wet"])) and is_equal_approx(float(a["health"]), float(b["health"])) and is_equal_approx(float(a["weeds"]), float(b["weeds"])) and is_equal_approx(float(a["pests"]), float(b["pests"])) and is_equal_approx(float(a["litter"]), float(b["litter"]))
 
 
-func _copy_gifts(src: Dictionary) -> Dictionary:
-	var out := {}
-	for k in src:
-		out[int(k)] = int(src[k])
-	return out
-
-
-## Gifts the step consumed. A positive count was used up.
-func _gifts_used(before: Dictionary, after: Dictionary) -> Dictionary:
-	var seen := {}
-	for k in before:
-		seen[int(k)] = true
-	for k in after:
-		seen[int(k)] = true
-	var used := {}
-	for k in seen:
-		var d := int(before.get(k, 0)) - int(after.get(k, 0))
-		if d != 0:
-			used[int(k)] = d
-	return used

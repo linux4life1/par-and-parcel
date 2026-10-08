@@ -5393,7 +5393,9 @@ func _test_undo_books() -> void:
 	yc.litter[stand] = 0.85
 	check(yard.remove_object(34, 34) and int(yc.objects[stand]) == 0 and int(yc.repair[stand]) == 0, "bulldozing the stand clears its window mark")
 	check(yard.undo.undo() and int(yc.objects[stand]) == Defs.O.DRINK_STAND and int(yc.repair[stand]) == 1 and is_equal_approx(yc.litter[stand], 0.85), "undoing the bulldoze does not fix the window, and the litter stays")
-	check(yard.undo.undo() and int(yc.objects[stand]) == 0 and int(yc.repair[stand]) == 1 and is_equal_approx(yc.litter[stand], 0.85), "undoing the stand leaves the litter that built up")
+	check(yard.undo.undo() and int(yc.objects[stand]) == 0 and int(yc.repair[stand]) == 0 and is_equal_approx(yc.litter[stand], 0.85), "undoing the stand leaves the litter, and no window mark on the empty tile")
+	check(yard.undo.redo() and int(yc.objects[stand]) == Defs.O.DRINK_STAND and int(yc.repair[stand]) == 1 and is_equal_approx(yc.litter[stand], 0.85), "redo brings the stand back with the window still broken")
+	check(yard.undo.undo() and int(yc.objects[stand]) == 0 and int(yc.repair[stand]) == 0, "taking the stand away again clears the empty tile")
 	var house := 36 * yc.w + 36
 	yc.terrain[house] = Defs.T.ROUGH
 	yc.objects[house] = 0
@@ -5402,7 +5404,7 @@ func _test_undo_books() -> void:
 	check(yard.place_object(36, 36, Defs.O.HOUSE) == 1, "a house goes up")
 	yc.repair[house] = 1
 	yc.litter[house] = 0.7
-	check(yard.undo.undo() and int(yc.objects[house]) == 0 and int(yc.repair[house]) == 1 and is_equal_approx(yc.litter[house], 0.7), "undoing the house leaves the broken window and the litter")
+	check(yard.undo.undo() and int(yc.objects[house]) == 0 and int(yc.repair[house]) == 0 and is_equal_approx(yc.litter[house], 0.7), "undoing the house clears the window mark and leaves the litter")
 	check(yard.undo.redo() and int(yc.objects[house]) == Defs.O.HOUSE and int(yc.repair[house]) == 1 and is_equal_approx(yc.litter[house], 0.7), "redo brings the house back with the window still broken and the litter still there")
 	var drag := _sim("sandbox", 24)
 	var dc := drag.course
@@ -5416,13 +5418,34 @@ func _test_undo_books() -> void:
 	mid = drag.economy.money
 	check(drag.undo.undo(), "the drag can be taken back")
 	check(is_equal_approx(drag.economy.money, mid + price) and is_equal_approx(float(drag.economy.expense.get("wages", 0.0)), 1000.0), "undo after a bill during the drag refunds only the paint")
+	var lift := _sim("sandbox", 31)
+	check(lift.undo.begin(), "a drag for two raises")
+	before = lift.economy.money
+	var spot := lift.course.tile_center(16, 16)
+	check(lift.sculpt("raise", spot.x, spot.z, 8.0, 0.4) and lift.sculpt("raise", spot.x, spot.z, 8.0, 0.4), "the drag raises the ground twice")
+	var both := before - lift.economy.money
+	lift.undo.commit()
+	mid = lift.economy.money
+	check(lift.undo.undo() and is_equal_approx(lift.economy.money, mid + both), "undo refunds both raise costs")
+	check(lift.undo.redo() and is_equal_approx(lift.economy.money, mid), "redo spends both raise costs again")
+	var gifted := _sim("sandbox", 32)
+	var gc2 := gifted.course
+	var oak := 14 * gc2.w + 14
+	gc2.terrain[oak] = Defs.T.ROUGH
+	gc2.objects[oak] = 0
+	gifted.gifts[Defs.O.OAK] = 1
+	check(gifted.undo.begin(), "a drag that spends a gift")
+	check(gifted.place_object(14, 14, Defs.O.OAK) == 1 and int(gifted.gifts.get(Defs.O.OAK, 0)) == 0, "the drag places the gifted tree")
+	gifted.gifts[Defs.O.LANDMARK] = int(gifted.gifts.get(Defs.O.LANDMARK, 0)) + 1
+	gifted.undo.commit()
+	check(gifted.undo.undo() and int(gc2.objects[oak]) == 0 and int(gifted.gifts.get(Defs.O.OAK, 0)) == 1 and int(gifted.gifts.get(Defs.O.LANDMARK, 0)) == 1, "undo returns the gift the stroke used, and keeps the one awarded during the drag")
 	var sale := _sim("sandbox", 25)
 	var sc2 := sale.course
 	var lot := 28 * sc2.w + 28
 	sc2.terrain[lot] = Defs.T.ROUGH
 	sc2.objects[lot] = 0
 	check(sale.place_object(28, 28, Defs.O.HOME_SITE) == 1, "a home site can be marked")
-	var buyer := {"name": "Pat", "home": false, "handle": "Pat"}
+	var buyer := {"name": "Sosuke Aizen", "home": false, "handle": "SosukeAizen"}
 	var sold := sale.economy.money
 	var fees_in := float(sale.economy.income.get("real_estate", 0.0))
 	var homes_n := sale.homes

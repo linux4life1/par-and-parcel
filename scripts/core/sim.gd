@@ -982,6 +982,7 @@ func place_object(tx: int, ty: int, o: int) -> int:
 		undo.note_charge(cost)
 		if free:
 			gifts[o] = int(gifts[o]) - 1
+			undo.note_gift(o)
 		placed = 1
 	if started:
 		undo.commit()
@@ -1368,8 +1369,9 @@ func sculpt(mode: String, x: float, z: float, radius_m: float, amount: float) ->
 		"flatten":
 			course.flatten(x, z, radius_m, amount, 0.5)
 	economy.spend("construction", cost)
-	if started:
+	if mode == "raise" or mode == "lower":
 		undo.note_charge(cost)
+	if started:
 		undo.commit()
 	return true
 
