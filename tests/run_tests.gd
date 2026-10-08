@@ -64,6 +64,7 @@ func _ready() -> void:
 	_test_accreditation()
 	_test_station()
 	_test_comments()
+	_test_course_file()
 	_test_easy_and_album()
 	_test_firm()
 	_test_lights_gap_awards()
@@ -2972,6 +2973,14 @@ func _test_setup() -> void:
 		if loaded.course.holes[i].pin.distance_to(homes[i]) >= 0.05:
 			pins_back = false
 	check(is_equal_approx(loaded.course.green_decel, 1.0) and is_equal_approx(loaded.course.rough_power, 1.0) and pins_back, "a save during the event puts the greens, the rough and every pin back")
+	var shared := CourseFile.parse(CourseFile.text_of(sim))
+	var shared_course: Dictionary = shared.course
+	var played := CourseFile.host(db, shared, gear)
+	var shared_home := true
+	for i in played.course.holes.size():
+		if played.course.holes[i].pin.distance_to(homes[i]) >= 0.05:
+			shared_home = false
+	check(is_equal_approx(float(shared_course.get("green_decel", -1.0)), 1.0) and is_equal_approx(float(shared_course.get("rough_power", -1.0)), 1.0) and shared_home and is_equal_approx(played.course.green_decel, 1.0) and is_equal_approx(played.course.rough_power, 1.0), "a course shared during the event is the one the members play")
 	var saved: Dictionary = JSON.parse_string(JSON.stringify(c.to_dict()))
 	saved.erase("green_decel")
 	saved.erase("rough_power")
@@ -3644,6 +3653,231 @@ func _test_comments() -> void:
 	sim._end_month(96)
 	var quiet: Dictionary = sim.economy.history[-1]
 	check(not quiet.has("satisfaction"), "a month with no golfers draws no satisfaction point")
+
+## A shared course is the ground and the holes. The pro travels; the club does not.
+func _test_course_file() -> void:
+	print("-- sharing a course")
+	var sim := _sim("three_holes", 5)
+	sim.economy.money = 999999.0
+	sim.course_name = "Ace's North-9!"
+	sim.clubhouse_level = 1
+	sim.paint(40, 30, 2, Defs.T.GREEN)
+	sim.paint(40, 60, 1, Defs.T.TEE)
+	var added := sim.add_hole(sim.course.tile_center(40, 60), sim.course.tile_center(40, 30))
+	check(added != null and sim.course.holes.size() == 4, "the course being shared has four holes")
+	check(sim.crew.hire("greenkeeper") != null and sim.crew.members.size() == 1, "a greenkeeper is on the staff")
+	var visitor := sim.visitors.make_golfer("public", 0.5)
+	var joined := sim.members.enroll(visitor)
+	check(not joined.is_empty() and sim.members.count() == 1, "a member has joined")
+	check(sim.player.buy("woods", "pinpoint"), "the pro buys a set of woods")
+	check(sim.career.raise("power"), "the pro spends a point on power")
+	sim.player.golfer.name = "Ace"
+	sim.player.golfer.shirt = Color("c62828")
+	sim.player.golfer.pants = Color("1e3a5f")
+	sim.player.golfer.hat = Color("43a047")
+	sim.skills.xp["golfer"] = 40
+	sim.skills.level["golfer"] = 3
+	var text := CourseFile.text_of(sim)
+	check(not text.contains("999999"), "the shared file does not carry the club's money")
+	var pack := CourseFile.parse(text)
+	check(str(pack.get("kind", "")) == "ppcourse" and pack.get("course") is Dictionary, "the file reads back as a shared course")
+	check(str(pack.get("name", "")) == "Ace's North-9!" and str(pack.get("biome", "")) == str(sim.biome.get("id", "")), "the name and the biome travel with the ground")
+	check(CourseFile.file_name("Ace's North-9!") == "Aces North-9", "a file name keeps letters, digits, spaces and hyphens")
+	check(CourseFile.file_name("  !!!  ") == "course", "a name with nothing safe in it becomes course")
+	check(CourseFile.parse(JSON.stringify(sim.to_dict())).is_empty(), "a saved game is not a shared course")
+	check(CourseFile.parse("nope").is_empty(), "nonsense is not a shared course")
+	var pin: Vector3 = sim.course.holes[0].pin
+	var hosted := CourseFile.host(db, pack, gear)
+	var book := CareerBook.pack(sim)
+	book["money"] = 0.0
+	CareerBook.apply(hosted, book)
+	check(is_equal_approx(hosted.economy.money, 30000.0), "the new club starts with a new game's purse")
+	check(hosted.crew.members.is_empty() and hosted.members.count() == 0, "staff and members stay at home")
+	check(hosted.course.holes.size() == 4 and hosted.course.holes[0].pin.distance_to(pin) < 0.05, "every hole comes across, pin included")
+	check(hosted.player.golfer.name == "Ace", "the pro's name comes along")
+	check(hosted.career.level("power") == 1 and int(hosted.skills.points.get("golfer", -1)) == 0, "the pro's power comes along, and the spent point stays spent")
+	check(int(hosted.skills.xp.get("golfer", 0)) == 40 and int(hosted.skills.level.get("golfer", 0)) == 3, "golfer experience comes along")
+	check(hosted.player.golfer.shirt.is_equal_approx(Color("c62828")) and hosted.player.golfer.pants.is_equal_approx(Color("1e3a5f")) and hosted.player.golfer.hat.is_equal_approx(Color("43a047")), "the kit comes along")
+	check(str(hosted.player.equipped.get("woods", "")) == "pinpoint", "the bag comes along")
+	check(hosted.clubhouse_level == 1 and hosted.clubhouse_level == hosted.level_for_holes(hosted.course.holes.size()), "four holes arrive with the clubhouse that allows them")
+	var fresh := CourseFile.host(db, pack, gear)
+	check(fresh.player.golfer.name == "You" and fresh.career.level("power") == 0, "with no pro along, a new golfer plays")
+	sim.player.golfer.hat = Color(0, 0, 0, 0)
+	var bare := CourseFile.host(db, pack, gear)
+	var bare_book := CareerBook.pack(sim)
+	bare_book["money"] = 0.0
+	CareerBook.apply(bare, bare_book)
+	check(bare.player.golfer.name == "Ace" and bare.player.golfer.hat.a < 0.01, "a pro with no hat arrives without one")
+	var kept: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var loaded := Sim.from_dict(db, kept, gear)
+	check(loaded.player.golfer.name == "Ace" and loaded.player.golfer.shirt.is_equal_approx(Color("c62828")) and loaded.player.golfer.hat.a < 0.01 and loaded.player.golfer.course == loaded.course, "a save keeps the pro's name and kit, including no hat")
+	var player_d: Dictionary = kept.player
+	player_d.erase("name")
+	player_d.erase("shirt")
+	player_d.erase("pants")
+	player_d.erase("hat")
+	player_d.erase("skin")
+	var older := Sim.from_dict(db, kept, gear)
+	check(older.player.golfer.name == "You" and older.player.golfer.shirt.is_equal_approx(Color("f5f5f5")), "an older save, with no name or kit stored, still loads")
+	var short: Dictionary = pack.duplicate(true)
+	var short_course: Dictionary = short.course
+	var terrain := Marshalls.base64_to_raw(str(short_course.terrain))
+	short_course.terrain = Marshalls.raw_to_base64(terrain.slice(0, terrain.size() - 1))
+	check(CourseFile.parse(JSON.stringify(short)).is_empty(), "a course with a truncated terrain is refused")
+	var missing: Dictionary = pack.duplicate(true)
+	var missing_course: Dictionary = missing.course
+	missing_course.erase("health")
+	check(CourseFile.parse(JSON.stringify(missing)).is_empty(), "a course missing a layer is refused")
+	var one := CourseFile.host(db, pack, gear)
+	var two := CourseFile.host(db, pack, gear)
+	check(one.rng.seed != two.rng.seed, "two clubs started on a shared course do not roll the same dice")
+	var pinned := CourseFile.host(db, pack, gear, 7)
+	check(pinned.rng.seed == 7, "a test can still pin the dice")
+	sim.course.holes[1].award = "top100"
+	sim.course.holes[1].plays = 40
+	var crowned := CourseFile.pack(sim)
+	var slim_holes: Array = crowned.course.holes
+	var slim_h: Dictionary = slim_holes[1]
+	check(slim_h.has("tee") and slim_h.has("pin") and slim_h.has("par") and slim_h.has("gap") and not slim_h.has("award") and not slim_h.has("plays") and not slim_h.has("themes") and not slim_h.has("earned") and not slim_h.has("comments"), "the shared file keeps the hole, not its history or its awards")
+	var hosted_plain := CourseFile.host(db, crowned, gear, 9)
+	var back_h := hosted_plain.course.holes[1]
+	check(back_h.award == "" and back_h.plays == 0, "hole 1 comes back with no award and 0 plays")
+	var no_tee: Dictionary = pack.duplicate(true)
+	var no_tee_holes: Array = no_tee.course.holes
+	var no_tee_h: Dictionary = no_tee_holes[0]
+	no_tee_h.erase("tee")
+	check(CourseFile.parse(JSON.stringify(no_tee)).is_empty(), "a hole missing its tee is refused")
+	var off: Dictionary = pack.duplicate(true)
+	var off_course: Dictionary = off.course
+	var off_holes: Array = off_course.holes
+	var off_h: Dictionary = off_holes[0]
+	off_h["pin"] = [float(off_course.w) * Defs.TILE + 5.0, 0.0, 10.0]
+	check(CourseFile.parse(JSON.stringify(off)).is_empty(), "a pin outside the map is refused")
+	var pair: Dictionary = pack.duplicate(true)
+	var pair_holes: Array = pair.course.holes
+	var pair_h: Dictionary = pair_holes[0]
+	pair_h["pin"] = [10.0, 0.0]
+	check(CourseFile.parse(JSON.stringify(pair)).is_empty(), "a two-number pin is refused")
+	var painted: Dictionary = pack.duplicate(true)
+	var painted_course: Dictionary = painted.course
+	var terrain_bytes := Marshalls.base64_to_raw(str(painted_course.terrain))
+	terrain_bytes[0] = 200
+	painted_course.terrain = Marshalls.raw_to_base64(terrain_bytes)
+	check(CourseFile.parse(JSON.stringify(painted)).is_empty(), "a terrain byte of 200 is refused")
+	var mood_num: Dictionary = pack.duplicate(true)
+	var mood_course: Dictionary = mood_num.course
+	mood_course["mood"] = 4
+	check(CourseFile.parse(JSON.stringify(mood_num)).is_empty(), "a mood that is a number is refused")
+	var obj: Dictionary = pack.duplicate(true)
+	var obj_course: Dictionary = obj.course
+	var object_bytes := Marshalls.base64_to_raw(str(obj_course.objects))
+	object_bytes[0] = Defs.O_NAMES.size()
+	obj_course.objects = Marshalls.raw_to_base64(object_bytes)
+	check(CourseFile.parse(JSON.stringify(obj)).is_empty(), "an object byte past the list of objects is refused")
+	var vols: Dictionary = pack.duplicate(true)
+	var vols_course: Dictionary = vols.course
+	vols_course["volcanoes"] = [1, 2, 3]
+	check(CourseFile.parse(JSON.stringify(vols)).is_empty(), "volcanoes that are numbers, not records, are refused")
+	var shut: Dictionary = pack.duplicate(true)
+	var shut_course: Dictionary = shut.course
+	var open_layer := PackedByteArray()
+	open_layer.resize(int(shut_course.w) * int(shut_course.h))
+	open_layer.fill(1)
+	shut_course["closed"] = Marshalls.raw_to_base64(open_layer)
+	check(not CourseFile.parse(JSON.stringify(shut)).is_empty(), "a closed layer of the right size is kept")
+	shut_course["closed"] = 1
+	check(CourseFile.parse(JSON.stringify(shut)).is_empty(), "a closed layer that is a number is refused")
+	var month: Dictionary = pack.duplicate(true)
+	var month_course: Dictionary = month.course
+	var short_month := PackedByteArray()
+	short_month.resize(4)
+	month_course["open_month"] = Marshalls.raw_to_base64(short_month)
+	check(CourseFile.parse(JSON.stringify(month)).is_empty(), "an open_month layer of the wrong size is refused")
+	month_course["open_month"] = 1
+	check(CourseFile.parse(JSON.stringify(month)).is_empty(), "an open_month layer that is not a byte string is refused")
+	var dirty: Dictionary = pack.duplicate(true)
+	var dirty_holes: Array = dirty.course.holes
+	var dirty_h: Dictionary = dirty_holes[0]
+	dirty_h["award"] = "top100"
+	dirty_h["plays"] = 500
+	dirty_h["earned"] = 3
+	var hosted_dirty := CourseFile.host(db, dirty, gear, 4)
+	var dirty_back := hosted_dirty.course.holes[0]
+	check(dirty_back.award == "" and dirty_back.plays == 0, "a file whose hole carries an award, a play count and earnings hosts with none of them")
+	var home_pins: Array[Vector3] = []
+	for h in sim.course.holes:
+		home_pins.append(h.pin)
+	sim.economy.money = 100000.0
+	sim.rating = 80.0
+	check(sim.tourney.schedule("club", "stern"), "a stern week can be booked")
+	sim.tourney.on_day(int(sim.tourney.scheduled.day))
+	check(not sim.tourney.active.is_empty() and not is_equal_approx(sim.course.green_decel, 1.0) and is_equal_approx(sim.course.green_decel, 0.72), "the stern week has started, and the greens are at 0.72")
+	var stern_pack := CourseFile.pack(sim)
+	var stern_course: Dictionary = stern_pack.course
+	var stern_holes: Array = stern_course.holes
+	var pins_home := stern_holes.size() == home_pins.size()
+	for i in stern_holes.size():
+		var hd: Dictionary = stern_holes[i]
+		var pin_a: Array = hd.pin
+		var got := Vector3(float(pin_a[0]), float(pin_a[1]), float(pin_a[2]))
+		if i >= home_pins.size() or got.distance_to(home_pins[i]) >= 0.05:
+			pins_home = false
+	check(pins_home and is_equal_approx(float(stern_course.green_decel), 1.0) and is_equal_approx(float(stern_course.rough_power), 1.0), "packing during a stern week keeps the pre-event pins and the usual greens and rough")
+	var slick: Dictionary = pack.duplicate(true)
+	var slick_course: Dictionary = slick.course
+	slick_course["green_decel"] = 0.0
+	slick_course["rough_power"] = 0.0
+	var hosted_slick := CourseFile.host(db, slick, gear, 3)
+	check(is_equal_approx(hosted_slick.course.green_decel, 1.0) and is_equal_approx(hosted_slick.course.rough_power, 1.0), "a file that claims frictionless greens still plays at the usual pace")
+	var career_path := Game.CAREER_PATH
+	var save_path := Game.SAVE_PATH
+	var live := Game._session_live
+	var old_sim := Game.sim
+	Game.CAREER_PATH = "user://career_share_test.json"
+	Game.SAVE_PATH = "user://save_share_test.json"
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	var home := _sim("three_holes", 21)
+	home.economy.money = home.opening_money + 5000.0
+	home.player.golfer.name = "Member"
+	home.album.append({"kind": "ace", "text": "Ace on the shared nine"})
+	home.career.levels["power"] = 2
+	Game.sim = home
+	Game._session_live = true
+	var left_id := home.club_id
+	var shared_path := Game.share_course()
+	check(shared_path != "", "the live club can be written out for a friend")
+	var purse := float(DataDB.find(db.scenarios, "free_play").get("money", 0.0))
+	check(Game.play_shared(shared_path.get_file()), "opening that file starts a club through the career book")
+	check(is_equal_approx(Game.sim.economy.money, purse + 5000.0), "the profit above the opening purse comes along")
+	check(is_equal_approx(Game.sim.opening_money, Game.sim.economy.money), "that bank is part of the hosted club's opening")
+	check(Game.sim.club_id != "" and Game.sim.club_id != left_id, "the hosted club gets its own id")
+	check(Game.sim.player.golfer.name == "Member" and Game.sim.career.level("power") == 2, "the pro comes along through the career book")
+	check(Game.sim.album.size() == 1 and str(Game.sim.album[0].get("text", "")) == "Ace on the shared nine", "the album comes along")
+	check(Game.play_shared(shared_path.get_file()), "the same file can be opened again")
+	check(is_equal_approx(Game.sim.economy.money, purse), "opening it again does not take the same bank twice")
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	var layout := _sim("three_holes", 22)
+	layout.economy.money = layout.opening_money + 9000.0
+	Game.sim = layout
+	Game._session_live = false
+	var layout_path := Game.share_course()
+	check(Game.play_shared(layout_path.get_file()), "a file can be opened before a club has started")
+	check(is_equal_approx(Game.sim.economy.money, purse), "the hidden first layout does not add its purse")
+	if FileAccess.file_exists(shared_path):
+		DirAccess.remove_absolute(shared_path)
+	if FileAccess.file_exists(layout_path):
+		DirAccess.remove_absolute(layout_path)
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
+	if FileAccess.file_exists(Game.SAVE_PATH):
+		DirAccess.remove_absolute(Game.SAVE_PATH)
+	Game.CAREER_PATH = career_path
+	Game.SAVE_PATH = save_path
+	Game.sim = old_sim
+	Game._session_live = live
+
 
 func _test_easy_and_album() -> void:
 	print("-- too easy, the album, and a career that travels")
