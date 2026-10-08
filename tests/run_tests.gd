@@ -65,6 +65,7 @@ func _ready() -> void:
 	_test_station()
 	_test_comments()
 	_test_course_file()
+	_test_firm()
 	_test_lights_gap_awards()
 	_test_length_scale()
 	print("%d checks, %d failed" % [checks, failures])
@@ -3753,6 +3754,29 @@ func _test_course_file() -> void:
 	terrain_bytes[0] = 200
 	painted_course.terrain = Marshalls.raw_to_base64(terrain_bytes)
 	check(CourseFile.parse(JSON.stringify(painted)).is_empty(), "a terrain byte of 200 is refused")
+	var mood_num: Dictionary = pack.duplicate(true)
+	var mood_course: Dictionary = mood_num.course
+	mood_course["mood"] = 4
+	check(CourseFile.parse(JSON.stringify(mood_num)).is_empty(), "a mood that is a number is refused")
+	var obj: Dictionary = pack.duplicate(true)
+	var obj_course: Dictionary = obj.course
+	var object_bytes := Marshalls.base64_to_raw(str(obj_course.objects))
+	object_bytes[0] = Defs.O_NAMES.size()
+	obj_course.objects = Marshalls.raw_to_base64(object_bytes)
+	check(CourseFile.parse(JSON.stringify(obj)).is_empty(), "an object byte past the list of objects is refused")
+	var vols: Dictionary = pack.duplicate(true)
+	var vols_course: Dictionary = vols.course
+	vols_course["volcanoes"] = [1, 2, 3]
+	check(CourseFile.parse(JSON.stringify(vols)).is_empty(), "volcanoes that are numbers, not records, are refused")
+	var shut: Dictionary = pack.duplicate(true)
+	var shut_course: Dictionary = shut.course
+	var open_layer := PackedByteArray()
+	open_layer.resize(int(shut_course.w) * int(shut_course.h))
+	open_layer.fill(1)
+	shut_course["closed"] = Marshalls.raw_to_base64(open_layer)
+	check(not CourseFile.parse(JSON.stringify(shut)).is_empty(), "a closed layer of the right size is kept")
+	shut_course["closed"] = 1
+	check(CourseFile.parse(JSON.stringify(shut)).is_empty(), "a closed layer that is a number is refused")
 	var dirty: Dictionary = pack.duplicate(true)
 	var dirty_holes: Array = dirty.course.holes
 	var dirty_h: Dictionary = dirty_holes[0]
@@ -3769,6 +3793,7 @@ func _test_course_file() -> void:
 	sim.rating = 80.0
 	check(sim.tourney.schedule("club", "stern"), "a stern week can be booked")
 	sim.tourney.on_day(int(sim.tourney.scheduled.day))
+	check(not sim.tourney.active.is_empty() and not is_equal_approx(sim.course.green_decel, 1.0) and is_equal_approx(sim.course.green_decel, 0.72), "the stern week has started, and the greens are at 0.72")
 	var stern_pack := CourseFile.pack(sim)
 	var stern_course: Dictionary = stern_pack.course
 	var stern_holes: Array = stern_course.holes
@@ -3786,6 +3811,77 @@ func _test_course_file() -> void:
 	slick_course["rough_power"] = 0.0
 	var hosted_slick := CourseFile.host(db, slick, {}, gear, 3)
 	check(is_equal_approx(hosted_slick.course.green_decel, 1.0) and is_equal_approx(hosted_slick.course.rough_power, 1.0), "a file that claims frictionless greens still plays at the usual pace")
+
+
+func _test_firm() -> void:
+	print("-- firm fairway and a fast green")
+	var n := Defs.T_NAMES.size()
+	check(Defs.T.FIRM == n - 2 and Defs.T.FAST_GREEN == n - 1, "the firm fairway and the fast green sit at the end of the terrain list")
+	var wide := true
+	var cols: Array[int] = [
+		Defs.T_COST.size(), Defs.T_CLEAR.size(), Defs.T_DECEL.size(), Defs.T_BOUNCE.size(),
+		Defs.T_KEEP.size(), Defs.T_GRIP.size(), Defs.T_KEYS.size(), Defs.T_LIE_POWER.size(),
+		Defs.T_LIE_SPREAD.size(), Defs.T_ROUTE.size(), Defs.T_GRASS.size(), Defs.T_WEAR.size(),
+		Defs.T_DRY.size(), Defs.T_WEED.size(), Defs.T_CARE.size(), Defs.T_WALK.size(),
+		Hole.PLAY_COST.size(),
+	]
+	for c in cols:
+		if c != n:
+			wide = false
+	check(wide, "every terrain table has a column for the firm fairway and the fast green")
+	check(Defs.T_DECEL[Defs.T.FIRM] < Defs.T_DECEL[Defs.T.FAIRWAY] and Defs.T_DECEL[Defs.T.FAST_GREEN] < Defs.T_DECEL[Defs.T.GREEN], "a firm fairway and a fast green stop the ball later than the ordinary ones")
+	check(Defs.is_fairway(Defs.T.FIRM) and not Defs.is_fairway(Defs.T.FAST_GREEN) and Defs.is_green(Defs.T.FAST_GREEN) and not Defs.is_green(Defs.T.FIRM) and Defs.is_short(Defs.T.FIRM) and Defs.is_short(Defs.T.FAST_GREEN), "a firm fairway counts as fairway, and a fast green counts as a green")
+	var table: Dictionary = db.lies.get("lies", {})
+	check(table.has("firm") and table.has("fast_green"), "both new paints have a lie")
+	var fair_lane := _lane(Defs.T.FAIRWAY)
+	fair_lane.wet.fill(0.05)
+	var firm_lane := _lane(Defs.T.FIRM)
+	firm_lane.wet.fill(0.05)
+	var fair_b := _shoot(fair_lane, 40.0, 8.0, 0.1)
+	var firm_b := _shoot(firm_lane, 40.0, 8.0, 0.1)
+	print("   running shot fairway %.1f m, firm %.1f m" % [fair_b.pos.x - 10.0, firm_b.pos.x - 10.0])
+	check(firm_b.pos.x > fair_b.pos.x + 4.0, "the same shot finishes further on a firm fairway")
+	var green_lane := _lane(Defs.T.GREEN)
+	green_lane.wet.fill(0.05)
+	var fast_lane := _lane(Defs.T.FAST_GREEN)
+	fast_lane.wet.fill(0.05)
+	var green_b := _shoot(green_lane, 5.0, 0.0, 0.0)
+	var fast_b := _shoot(fast_lane, 5.0, 0.0, 0.0)
+	print("   putt green %.1f m, fast green %.1f m" % [green_b.pos.x - 10.0, fast_b.pos.x - 10.0])
+	check(fast_b.pos.x > green_b.pos.x + 1.0, "the same putt runs further on a fast green")
+	var quick := _lane(Defs.T.FAST_GREEN)
+	quick.green_decel = 0.72
+	check(is_equal_approx(quick.roll_decel(Defs.T.FAST_GREEN), Defs.T_DECEL[Defs.T.FAST_GREEN] * 0.72), "a tournament week speeds a fast green the same way it speeds any green")
+	check(is_equal_approx(quick.roll_decel(Defs.T.FIRM), Defs.T_DECEL[Defs.T.FIRM]), "a tournament week leaves a firm fairway alone")
+	var painted := true
+	for biome: Dictionary in db.biomes:
+		var layers: Array = biome.get("layers", [])
+		var pal: Dictionary = biome.get("palette", {})
+		if layers.size() != n or not pal.has("firm") or not pal.has("fast"):
+			painted = false
+	check(painted, "every biome colours the firm fairway and the fast green, and names a ground picture for each")
+	var coach := Tutorial.new()
+	var ground := _sim("three_holes", 11)
+	for i in ground.course.terrain.size():
+		ground.course.terrain[i] = Defs.T.ROUGH
+	coach.sim = ground
+	check(not coach._met({"done": "green"}) and not coach._met({"done": "fairway"}), "bare ground does not finish the green or the fairway")
+	for i in Tutorial.COUNT_GREEN:
+		ground.course.terrain[i] = Defs.T.FAST_GREEN
+	check(coach._met({"done": "green"}) and not coach._met({"done": "fairway"}), "a fast green counts as the green")
+	for i in ground.course.terrain.size():
+		ground.course.terrain[i] = Defs.T.ROUGH
+	for i in Tutorial.COUNT_FAIRWAY:
+		ground.course.terrain[i] = Defs.T.FIRM
+	check(coach._met({"done": "fairway"}) and not coach._met({"done": "green"}), "a firm fairway counts as the fairway")
+	for i in Tutorial.COUNT_GREEN:
+		ground.course.terrain[i] = Defs.T.GREEN
+	for i in range(Tutorial.COUNT_GREEN, Tutorial.COUNT_GREEN + Tutorial.COUNT_FAIRWAY):
+		ground.course.terrain[i] = Defs.T.FAIRWAY
+	check(coach._met({"done": "green"}) and coach._met({"done": "fairway"}), "the ordinary green and fairway still count")
+	for part: Node in [coach._card, coach._title, coach._text, coach._where, coach._glow]:
+		part.free()
+	coach.free()
 
 
 func _test_lights_gap_awards() -> void:

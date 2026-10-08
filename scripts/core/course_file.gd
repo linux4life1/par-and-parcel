@@ -79,6 +79,8 @@ static func _course_safe(course: Dictionary) -> bool:
 		return false
 	if course.has("mood") and not _bytes(course.get("mood", ""), tiles * 4):
 		return false
+	if course.has("closed") and not _bytes(course.get("closed", ""), tiles):
+		return false
 	if course.has("volcanoes"):
 		var vols: Variant = course.get("volcanoes", [])
 		if not (vols is Array):

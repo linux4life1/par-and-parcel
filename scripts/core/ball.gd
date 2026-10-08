@@ -253,9 +253,9 @@ func _fly(dt: float, course: Course, wind: Vector3, pin: Vector3, has_pin: bool)
 		# skids; later ones bite. Only short grass lets a ball come back.
 		var bite: float = Defs.T_GRIP[t] * (1.0 - 0.35 * wetv)
 		if bounces == 1:
-			bite *= 0.8 if t == Defs.T.GREEN else 0.55
+			bite *= 0.8 if Defs.is_green(t) else 0.55
 		var s2 := s * keep - back * SPIN_BITE * bite
-		var short_grass := t == Defs.T.GREEN or t == Defs.T.FAIRWAY or t == Defs.T.TEE
+		var short_grass := Defs.is_short(t)
 		s2 = maxf(s2, -SPIN_BACK if short_grass else minf(s * keep, 0.0))
 		back *= 1.0 - 0.6 * bite
 		vel = across * keep + f3 * s2 + n * out_n
@@ -305,7 +305,7 @@ func _roll(dt: float, course: Course, pin: Vector3, has_pin: bool) -> int:
 	if absf(back) > 0.05:
 		# Whatever spin is left keeps dragging at the ball until it has
 		# rolled off. On short grass it can bring the ball back.
-		var short_grass := t == Defs.T.GREEN or t == Defs.T.FAIRWAY or t == Defs.T.TEE
+		var short_grass := Defs.is_short(t)
 		if back < 0.0 or hv.dot(spin_fwd) > (-SPIN_BACK if short_grass else 0.3):
 			sa -= spin_fwd * (back * 2.4 * Defs.T_GRIP[t])
 		back *= exp(-dt * 3.0)
