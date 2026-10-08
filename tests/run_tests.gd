@@ -2964,6 +2964,14 @@ func _test_setup() -> void:
 		if loaded.course.holes[i].pin.distance_to(homes[i]) >= 0.05:
 			pins_back = false
 	check(is_equal_approx(loaded.course.green_decel, 1.0) and is_equal_approx(loaded.course.rough_power, 1.0) and pins_back, "a save during the event puts the greens, the rough and every pin back")
+	var shared := CourseFile.parse(CourseFile.text_of(sim))
+	var shared_course: Dictionary = shared.course
+	var played := CourseFile.host(db, shared, {}, gear)
+	var shared_home := true
+	for i in played.course.holes.size():
+		if played.course.holes[i].pin.distance_to(homes[i]) >= 0.05:
+			shared_home = false
+	check(is_equal_approx(float(shared_course.get("green_decel", -1.0)), 1.0) and is_equal_approx(float(shared_course.get("rough_power", -1.0)), 1.0) and shared_home and is_equal_approx(played.course.green_decel, 1.0) and is_equal_approx(played.course.rough_power, 1.0), "a course shared during the event is the one the members play")
 	var saved: Dictionary = JSON.parse_string(JSON.stringify(c.to_dict()))
 	saved.erase("green_decel")
 	saved.erase("rough_power")
@@ -3640,3 +3648,17 @@ func _test_course_file() -> void:
 	check(hosted.clubhouse_level == 1 and hosted.clubhouse_level == hosted.level_for_holes(hosted.course.holes.size()), "four holes arrive with the clubhouse that allows them")
 	var fresh := CourseFile.host(db, pack, {}, gear)
 	check(fresh.player.golfer.name == "You" and fresh.career.level("power") == 0, "with no pro along, a new golfer plays")
+	sim.player.golfer.hat = Color(0, 0, 0, 0)
+	var bare := CourseFile.host(db, pack, CourseFile.pro_of(sim), gear)
+	check(bare.player.golfer.name == "Ace" and bare.player.golfer.hat.a < 0.01, "a pro with no hat arrives without one")
+	var kept: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var loaded := Sim.from_dict(db, kept, gear)
+	check(loaded.player.golfer.name == "Ace" and loaded.player.golfer.shirt.is_equal_approx(Color("c62828")) and loaded.player.golfer.hat.a < 0.01 and loaded.player.golfer.course == loaded.course, "a save keeps the pro's name and kit, including no hat")
+	var player_d: Dictionary = kept.player
+	player_d.erase("name")
+	player_d.erase("shirt")
+	player_d.erase("pants")
+	player_d.erase("hat")
+	player_d.erase("skin")
+	var older := Sim.from_dict(db, kept, gear)
+	check(older.player.golfer.name == "You" and older.player.golfer.shirt.is_equal_approx(Color("f5f5f5")), "an older save, with no name or kit stored, still loads")

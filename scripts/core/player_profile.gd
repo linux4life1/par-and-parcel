@@ -116,7 +116,14 @@ func lose_ball() -> void:
 
 
 func to_dict() -> Dictionary:
-	return {"owned": owned.keys(), "equipped": equipped, "balls": ball_stock, "ball": ball_id, "holes": holes_played, "best": best_scores}
+	var g := golfer
+	return {
+		"owned": owned.keys(), "equipped": equipped, "balls": ball_stock, "ball": ball_id,
+		"holes": holes_played, "best": best_scores,
+		"name": g.name,
+		"shirt": g.shirt.to_html(true), "pants": g.pants.to_html(true),
+		"hat": g.hat.to_html(true), "skin": g.skin.to_html(true),
+	}
 
 
 func from_dict(d: Dictionary) -> void:
@@ -132,3 +139,15 @@ func from_dict(d: Dictionary) -> void:
 	holes_played = int(d.get("holes", 0))
 	best_scores = d.get("best", {})
 	refresh()
+	# An older save has none of these. The new golfer's name and kit stay.
+	if d.has("name"):
+		golfer.name = str(d.name)
+	_wear("shirt", str(d.get("shirt", "")))
+	_wear("pants", str(d.get("pants", "")))
+	_wear("hat", str(d.get("hat", "")))
+	_wear("skin", str(d.get("skin", "")))
+
+
+func _wear(field: String, html: String) -> void:
+	if html != "":
+		golfer.set(field, Color(html))

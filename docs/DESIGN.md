@@ -96,7 +96,7 @@ check. **Basic** works but is thin. **Not yet** is planned.
 | Earning skill points | Built | Medals for your best score on each hole (bronze for par, silver for birdie, gold for eagle), 42 one-time challenges across driving, approach, putting, recovery, scoring and career, a point for every full round at par or better, and golfer levels. |
 | Money matches | Built | Visiting pros challenge you for a stake. |
 | Enter your own tournaments | Built | |
-| Golfer editor, taking your pro to other courses | Built | The Menu writes a `.ppcourse` file of the ground and the holes. A saved game is refused, so money, members and staff stay home. Playing a shared course starts a new club on that ground and brings the pro's name, kit, career and bag. The golfer panel sets the name and steps through shirt, trousers and hat. |
+| Golfer editor, taking your pro to other courses | Built | The Menu writes a `.ppcourse` file of the ground and the holes. A saved game is refused, so money, members and staff stay home. Playing a shared course starts a new club on that ground and brings the pro's name, kit, career and bag. The golfer panel sets the name and steps through shirt, trousers and hat, and a save keeps them, including no hat. A course shared during a tournament week is the one the members play. |
 | Multiplayer | Not yet | |
 
 ### Presentation

@@ -14,7 +14,7 @@ static func pack(sim: Sim) -> Dictionary:
 		"version": VERSION,
 		"name": sim.course_name,
 		"biome": str(sim.biome.get("id", "lush")),
-		"course": sim.course.to_dict(),
+		"course": sim.course_dict(),
 	}
 
 
@@ -25,6 +25,8 @@ static func text_of(sim: Sim) -> String:
 ## Empty when the text is not a shared course. A saved game is refused, so a
 ## friend's bank balance cannot ride in with their holes.
 static func parse(text: String) -> Dictionary:
+	if not text.begins_with("{"):
+		return {}
 	var parsed: Variant = JSON.parse_string(text)
 	if not (parsed is Dictionary):
 		return {}
@@ -63,10 +65,10 @@ static func pro_of(sim: Sim) -> Dictionary:
 		"golfer_level": int(sim.skills.level.get("golfer", 1)),
 		"golfer_points": int(sim.skills.points.get("golfer", 0)),
 		"player": sim.player.to_dict(),
-		"shirt": g.shirt.to_html(false),
-		"pants": g.pants.to_html(false),
-		"hat": g.hat.to_html(false),
-		"skin": g.skin.to_html(false),
+		"shirt": g.shirt.to_html(true),
+		"pants": g.pants.to_html(true),
+		"hat": g.hat.to_html(true),
+		"skin": g.skin.to_html(true),
 	}
 
 
@@ -80,18 +82,11 @@ static func host(data: DataDB, pack: Dictionary, pro: Dictionary, gear: Gear = n
 	blank["map"] = {"w": 8, "h": 8, "holes": 0}
 	var biome := str(pack.get("biome", "lush"))
 	var sim := Sim.new(data, blank, 1, gear, biome)
-	sim.course = Course.from_dict(pack.course)
-	sim.course.biome = sim.biome
-	sim.nav = Nav.new(sim.course)
+	var course_d: Dictionary = pack.course
+	sim.install_course(course_d)
 	sim.course_name = str(pack.get("name", sim.course_name))
 	sim.clubhouse_level = sim.level_for_holes(sim.course.holes.size())
-	sim.player.golfer.course = sim.course
-	sim.wildlife.populate()
 	_apply_pro(sim, pro)
-	# The blank course already refreshed the grounds at revision 0, which is
-	# where a course read from a file starts too.
-	sim.grounds._rev = -1
-	sim.grounds.refresh_layout()
 	sim._update_rating(0.0)
 	return sim
 

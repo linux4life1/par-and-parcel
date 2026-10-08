@@ -1197,6 +1197,37 @@ func hire(role_id: String) -> bool:
 
 # ---------------------------------------------------------- save and load
 
+## The ground and the holes, as a file should keep them. A tournament week
+## tucks the pins and changes the greens and the rough. A save and a shared
+## course both keep the course the members play.
+func course_dict() -> Dictionary:
+	var course_d := course.to_dict()
+	if tourney._pin_home.is_empty():
+		return course_d
+	course_d["green_decel"] = 1.0
+	course_d["rough_power"] = 1.0
+	var hs: Array = course_d.get("holes", [])
+	for i in course.holes.size():
+		var hole: Hole = course.holes[i]
+		if i >= hs.size() or not tourney._pin_home.has(hole):
+			continue
+		var pin: Vector3 = tourney._pin_home[hole]
+		var hd: Dictionary = hs[i]
+		hd["pin"] = [pin.x, pin.y, pin.z]
+		hs[i] = hd
+	return course_d
+
+
+## Throw away the blank course this sim was built on, and play `course_d`.
+func install_course(course_d: Dictionary) -> void:
+	course = Course.from_dict(course_d)
+	course.biome = biome
+	nav = Nav.new(course)
+	player.golfer.course = course
+	wildlife.populate()
+	grounds.reset_layout()
+
+
 func to_dict() -> Dictionary:
 	var staff := []
 	for m in crew.members:
@@ -1204,21 +1235,7 @@ func to_dict() -> Dictionary:
 			staff.append({"role": m.role.id, "home": [m.home.x, m.home.y, m.home.z]})
 		else:
 			staff.append(m.role.id)
-	# The event itself is not saved. A mid-event save must not leave the
-	# tucked pins, the fast greens or the thick rough behind.
-	var course_d := course.to_dict()
-	if not tourney._pin_home.is_empty():
-		course_d["green_decel"] = 1.0
-		course_d["rough_power"] = 1.0
-		var hs: Array = course_d.get("holes", [])
-		for i in course.holes.size():
-			var hole: Hole = course.holes[i]
-			if i >= hs.size() or not tourney._pin_home.has(hole):
-				continue
-			var pin: Vector3 = tourney._pin_home[hole]
-			var hd: Dictionary = hs[i]
-			hd["pin"] = [pin.x, pin.y, pin.z]
-			hs[i] = hd
+	var course_d := course_dict()
 	var d := {
 		"version": 1, "scenario": scenario.def.get("id", "free_play"), "status": scenario.status,
 		"name": course_name, "time": time, "clock": clock, "career": career.to_dict(), "money": economy.money, "rating": rating, "reputation": reputation,
@@ -1244,9 +1261,8 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	var sim := Sim.new(data, blank, 1, shared_gear, str(d.get("biome", "lush")))
 	sim.scenario = Scenario.new(scen)
 	sim.scenario.status = str(d.get("status", sim.scenario.status))
-	sim.course = Course.from_dict(d.course)
-	sim.course.biome = sim.biome
-	sim.nav = Nav.new(sim.course)
+	var course_d: Dictionary = d.course
+	sim.install_course(course_d)
 	sim.members.from_list(d.get("members", []))
 	sim.stories.from_dict(d.get("stories", {}))
 	sim.clubhouse_level = int(d.get("clubhouse", 0))
@@ -1261,7 +1277,6 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	sim.land_credits = int(d.get("land_credits", 0))
 	sim.set_difficulty(int(d.get("difficulty", sim.db.difficulty.get("default", 2))))
 	sim.debt_years = int(d.get("debt_years", 0))
-	sim.wildlife.populate()
 	sim.course_name = str(d.get("name", sim.course_name))
 	sim.time = float(d.get("time", 0.0))
 	sim.clock = float(d.get("clock", 8.0))
@@ -1293,7 +1308,6 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 			var hv: Array = row.get("home", [])
 			if hired != null and hv.size() >= 3:
 				sim.crew.station(hired, Vector3(float(hv[0]), float(hv[1]), float(hv[2])))
-	sim.grounds.refresh_layout()
 	# After everything that drew on the blank game's dice, so play continues
 	# from the save and not from the clock.
 	if d.has("rng_state"):
