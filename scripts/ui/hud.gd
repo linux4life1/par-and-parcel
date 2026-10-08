@@ -430,8 +430,8 @@ func _build_bottom() -> void:
 	var oh := UIKit.hbox(4)
 	op.add_child(oh)
 	oh.add_child(UIKit.label("View", 12, UIKit.MUTED))
-	var names := ["Normal", "Moisture", "Turf", "Height", "Mood", "Lots"]
-	var tips := ["The course as golfers see it", "How wet the ground is. Wet ground kills bounce and roll.", "Turf health and weeds", "Elevation", "Where golfers have been pleased or annoyed. It fades over a couple of days.", "Where a home site is worth the most. Brighter ground is dearer."]
+	var names := ["Normal", "Moisture", "Turf", "Height", "Mood", "Lots", "Lights"]
+	var tips := ["The course as golfers see it", "How wet the ground is. Wet ground kills bounce and roll.", "Turf health and weeds", "Elevation", "Where golfers have been pleased or annoyed. It fades over a couple of days.", "Where a home site is worth the most. Brighter ground is dearer.", "Where the floodlights and lamps reach. Brighter ground is lit after dark."]
 	for i in names.size():
 		var b := UIKit.button(names[i], set_overlay.bind(i), tips[i])
 		b.toggle_mode = true
@@ -1064,6 +1064,7 @@ func show_scenarios(first_launch: bool = false) -> void:
 	cards.custom_minimum_size = Vector2(0, minf(root.size.y - 250.0, card_rows * 276.0))
 	modal_card.add_child(cards)
 	cards.add_child(grid)
+	var brought := Game.carried_money()
 	for scen: Dictionary in shown:
 		var card := UIKit.card(Color(1, 1, 1, 0.06))
 		card.custom_minimum_size = Vector2(310, 236)
@@ -1109,7 +1110,6 @@ func show_scenarios(first_launch: bool = false) -> void:
 		v.add_child(filler)
 		var foot := UIKit.hbox()
 		v.add_child(foot)
-		var brought := Game.carried_money()
 		if brought > 0.5:
 			foot.add_child(UIKit.label("Start with %s, plus %s from your last club" % [Defs.money(float(scen.money)), Defs.money(brought)], 13, UIKit.MUTED))
 		else:

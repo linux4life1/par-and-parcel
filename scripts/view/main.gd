@@ -423,7 +423,7 @@ func _process(delta: float) -> void:
 #   --loadingcard (hold the loading screen up) --demo=menuload (save, then load through the Menu)
 #   --soundcheck --soundlog (see sound_desk.gd)
 #   Without --shot the game opens its normal full-size window; add --exit to quit after --frames.
-#   --play=hole --overlay=0..5 --staff=N --demo=name --perf=1
+#   --play=hole --overlay=0..6 --staff=N --demo=name --perf=1
 #   --exit=1 quits after --frames without a screenshot (tests a normal launch)
 func _apply_test_args() -> void:
 	var a := Game.args

@@ -385,46 +385,41 @@ func load_game() -> bool:
 	return true
 
 
+func _read_career() -> Dictionary:
+	if not FileAccess.file_exists(CAREER_PATH):
+		return {}
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
+	if parsed is Dictionary:
+		return parsed
+	return {}
+
+
 func carried_money() -> float:
 	if _session_live and sim != null:
-		var previous := {}
-		if FileAccess.file_exists(CAREER_PATH):
-			var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
-			if parsed is Dictionary:
-				previous = parsed
-		return maxf(float(CareerBook.pack(sim, previous).get("money", 0.0)), 0.0)
-	if not FileAccess.file_exists(CAREER_PATH):
-		return 0.0
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
-	if not (parsed is Dictionary):
-		return 0.0
-	return maxf(float(parsed.get("money", 0.0)), 0.0)
+		return maxf(float(CareerBook.pack(sim, _read_career()).get("money", 0.0)), 0.0)
+	return maxf(float(_read_career().get("money", 0.0)), 0.0)
 
 
 func _store_career(_won: bool = false) -> void:
 	if sim == null:
 		return
-	var previous := {}
-	if FileAccess.file_exists(CAREER_PATH):
-		var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
-		if parsed is Dictionary:
-			previous = parsed
 	var f := FileAccess.open(CAREER_PATH, FileAccess.WRITE)
 	if f == null:
 		return
-	f.store_string(JSON.stringify(CareerBook.pack(sim, previous)))
+	f.store_string(JSON.stringify(CareerBook.pack(sim, _read_career())))
 	f.close()
 
 
 func _load_career() -> void:
 	if sim == null or not FileAccess.file_exists(CAREER_PATH):
 		return
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
-	if parsed is Dictionary:
-		var kept := CareerBook.apply(sim, parsed)
-		var f := FileAccess.open(CAREER_PATH, FileAccess.WRITE)
-		if f == null:
-			return
-		f.store_string(JSON.stringify(kept))
-		f.close()
+	var parsed := _read_career()
+	if parsed.is_empty():
+		return
+	var kept := CareerBook.apply(sim, parsed)
+	var f := FileAccess.open(CAREER_PATH, FileAccess.WRITE)
+	if f == null:
+		return
+	f.store_string(JSON.stringify(kept))
+	f.close()
 

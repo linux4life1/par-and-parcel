@@ -1,7 +1,8 @@
 class_name CareerBook
 extends RefCounted
 ## What follows the owner from one course to the next: the profit, the pro,
-## and the album of aces and wins. Only what was earned above the club's
+## the golfer's experience, and the album of aces and wins. The manager's
+## perks stay behind. Only what was earned above the club's
 ## opening purse travels, and a club's bank is taken once. A debt stays
 ## behind. The new course still starts with its own purse.
 
@@ -23,7 +24,9 @@ static func pack(sim: Sim, previous: Dictionary = {}) -> Dictionary:
 		"taken": taken,
 		"career": sim.career.to_dict(),
 		"player": sim.player.to_dict(),
-		"skills": sim.skills.to_dict(),
+		"golfer_xp": int(sim.skills.xp.golfer),
+		"golfer_level": int(sim.skills.level.golfer),
+		"golfer_points": int(sim.skills.points.golfer),
 		"album": sim.album.duplicate(true),
 	}
 
@@ -55,9 +58,12 @@ static func apply(sim: Sim, d: Dictionary) -> Dictionary:
 		out["taken"] = taken
 		out["money"] = 0.0
 		out["from"] = ""
-	var skills: Dictionary = d.get("skills", {})
-	if not skills.is_empty():
-		sim.skills.from_dict(skills)
+	if d.has("golfer_xp"):
+		sim.skills.xp["golfer"] = int(d.golfer_xp)
+	if d.has("golfer_level"):
+		sim.skills.level["golfer"] = int(d.golfer_level)
+	if d.has("golfer_points"):
+		sim.skills.points["golfer"] = int(d.golfer_points)
 	var career: Dictionary = d.get("career", {})
 	if not career.is_empty():
 		sim.career.from_dict(career)

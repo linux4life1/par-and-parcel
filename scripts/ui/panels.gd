@@ -424,6 +424,22 @@ func _holes(body: VBoxContainer) -> Callable:
 			], false), "Remove this hole")
 		close.add_theme_font_size_override("font_size", 12)
 		h2.add_child(close)
+		var gap_row := UIKit.hbox(6)
+		cv.add_child(gap_row)
+		gap_row.add_child(UIKit.label("Starter", 12, UIKit.MUTED))
+		gap_row.add_child(UIKit.label(sim.starter_text(hole), 12))
+		var gap_less := UIKit.button("-", func() -> void:
+			sim.nudge_gap(hole, -1)
+			hud.rebuild_dock(), "Send the next party out sooner")
+		gap_less.add_theme_font_size_override("font_size", 12)
+		gap_less.disabled = hole.gap <= 0.0
+		gap_row.add_child(gap_less)
+		var gap_more := UIKit.button("+", func() -> void:
+			sim.nudge_gap(hole, 1)
+			hud.rebuild_dock(), "Hold the next party longer, so the hole ahead can clear. Waiting still wears on them.")
+		gap_more.add_theme_font_size_override("font_size", 12)
+		gap_more.disabled = hole.gap >= sim.starter_max()
+		gap_row.add_child(gap_more)
 		# what the hole tests
 		var tests := UIKit.hbox(6)
 		cv.add_child(tests)
@@ -472,7 +488,14 @@ func _holes(body: VBoxContainer) -> Callable:
 				kind.text = "Draft"
 				kind.tooltip_text = "The public cannot play this yet. Test it, then open it."
 			elif hole.lab_ready:
-				kind.text = ("Draft  ·  " if not hole.open else "") + HoleLab.type_name(hole.kind) + ("  ·  Top 100" if hole.award == "top100" else ("  ·  Dream Eighteen" if hole.award == "top18" else ""))
+				var honour := ""
+				if hole.award == "top100":
+					honour = "  ·  Top 100"
+				elif hole.award == "top18":
+					honour = "  ·  Dream Eighteen"
+				for tid in hole.themes:
+					honour += "  ·  " + sim.theme_name(tid)
+				kind.text = ("Draft  ·  " if not hole.open else "") + HoleLab.type_name(hole.kind) + honour
 				kind.tooltip_text = HoleLab.type_blurb(hole.kind)
 				(bars[0] as ProgressBar).value = clampf(hole.test_length / 1.5, 0.0, 1.0)
 				(bars[1] as ProgressBar).value = clampf(hole.test_accuracy / 1.5, 0.0, 1.0)
