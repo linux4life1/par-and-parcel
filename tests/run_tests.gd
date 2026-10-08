@@ -2748,16 +2748,21 @@ func _test_hole_preview() -> void:
 			c.terrain[(fy + oy) * c.w + (fx + ox)] = Defs.T.WATER
 			c.objects[(fy + oy) * c.w + (fx + ox)] = 0
 	c.terrain[fy * c.w + fx] = Defs.T.GREEN
-	var fence_pin := c.tile_center(fx, fy)
-	var fence_tee := c.tile_center(fx, fy + 20)
-	var fenced: Dictionary = Hole.measure(c, fence_tee, fence_pin)
-	check(not bool(fenced.playable) and float(fenced.length) >= short_m, "a green fenced in by water, on the map, is not playable (%.0f m)" % float(fenced.length))
+	for ty in range(fy + 2, fy + 21):
+		var ii := ty * c.w + fx
+		c.terrain[ii] = Defs.T.FAIRWAY
+		c.objects[ii] = 0
+	var isle_pin := c.tile_center(fx, fy)
+	var isle_tee := c.tile_center(fx, fy + 20)
+	var isle: Dictionary = Hole.measure(c, isle_tee, isle_pin)
+	var isle_len := float(isle.length)
+	check(bool(isle.playable) and int(isle.par) == 3 and absf(isle_len - 100.0) < 1.0, "a green ringed by water stays the 100 m par 3 the route has always given (%.1f m)" % isle_len)
 	tools._preview_tile = Vector2i(-999, -999)
 	tools._preview_text = ""
-	tools._tee = fence_tee
-	tools.hover = fence_pin
+	tools._tee = isle_tee
+	tools.hover = isle_pin
 	tools._update_preview()
-	check(tools.preview_warn, "an on-map pin the route cannot reach is a warning")
+	check(not tools.preview_warn, "a playable island green is not a warning")
 	for y in range(0, 42):
 		for x in range(0, 48):
 			var wi := y * c.w + x
