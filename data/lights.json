@@ -1,0 +1,6 @@
+{
+	"_about": "Floodlights and lamp posts run from dusk until dawn, and their monthly upkeep is that share of the listed amount. A building that also throws light still pays in full. Hours are the same clock as sunrise and sunset.",
+	"dusk": 20.5,
+	"dawn": 5.5,
+	"kinds": ["Floodlight", "Lamp post"]
+}

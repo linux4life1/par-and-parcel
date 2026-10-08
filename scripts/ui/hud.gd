@@ -430,8 +430,8 @@ func _build_bottom() -> void:
 	var oh := UIKit.hbox(4)
 	op.add_child(oh)
 	oh.add_child(UIKit.label("View", 12, UIKit.MUTED))
-	var names := ["Normal", "Moisture", "Turf", "Height", "Mood", "Lots"]
-	var tips := ["The course as golfers see it", "How wet the ground is. Wet ground kills bounce and roll.", "Turf health and weeds", "Elevation", "Where golfers have been pleased or annoyed. It fades over a couple of days.", "Where a home site is worth the most. Brighter ground is dearer."]
+	var names := ["Normal", "Moisture", "Turf", "Height", "Mood", "Lots", "Lights"]
+	var tips := ["The course as golfers see it", "How wet the ground is. Wet ground kills bounce and roll.", "Turf health and weeds", "Elevation", "Where golfers have been pleased or annoyed. It fades over a couple of days.", "Where a home site is worth the most. Brighter ground is dearer.", "Where the floodlights and lamps reach. Brighter ground is lit after dark."]
 	for i in names.size():
 		var b := UIKit.button(names[i], set_overlay.bind(i), tips[i])
 		b.toggle_mode = true

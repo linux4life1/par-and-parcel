@@ -63,6 +63,7 @@ func _ready() -> void:
 	_test_progress()
 	_test_accreditation()
 	_test_station()
+	_test_lights_gap_awards()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -3593,3 +3594,153 @@ func _test_accreditation() -> void:
 	stuffed.clubhouse_level = 80
 	stuffed._update_rating(0.0)
 	check(_design_sum(stuffed) > 100.0 and is_equal_approx(stuffed.design, 100.0), "past the top, the lines still add up and the score stops at 100")
+
+
+func _test_lights_gap_awards() -> void:
+	print("-- lights on a schedule, the starter's gap, and themed awards")
+	var sim := _sim("three_holes", 41)
+	sim.economy.money = 400000.0
+	var hole := sim.course.holes[0]
+	var before := sim.monthly_upkeep()
+	var dusk := float(sim.db.lights.get("dusk", 0.0))
+	var dawn := float(sim.db.lights.get("dawn", 0.0))
+	var hours := dawn - dusk
+	if hours <= 0.0:
+		hours += 24.0
+	var share := hours / 24.0
+	check(is_equal_approx(sim.light_on_share(), share) and share > 0.0 and share < 1.0, "light upkeep follows the dusk-to-dawn hours in the data (%.0f%% of the day)" % (share * 100.0))
+	var n := _light_hole(sim, hole)
+	check(n > 0 and hole.lit_enough(sim.course), "floodlights along the hole light it")
+	var lit_cost := sim.monthly_upkeep()
+	check(is_equal_approx(lit_cost - before, float(n) * float(Defs.O_UPKEEP[Defs.O.FLOODLIGHT]) * share), "a floodlight's upkeep is only the hours it is on")
+	var lamp := 0
+	var stand := 0
+	var c := sim.course
+	for y in range(4, c.h - 4):
+		if lamp == 1 and stand == 1:
+			break
+		for x in range(4, c.w - 4):
+			if lamp == 0 and sim.place_object(x, y, Defs.O.LAMP) == 1:
+				lamp = 1
+			elif stand == 0 and sim.place_object(x, y, Defs.O.DRINK_STAND) == 1:
+				stand = 1
+			if lamp == 1 and stand == 1:
+				break
+	check(lamp == 1 and stand == 1, "a lamp post and a drink stand go up")
+	var expect := float(Defs.O_UPKEEP[Defs.O.LAMP]) * share + float(Defs.O_UPKEEP[Defs.O.DRINK_STAND])
+	check(is_equal_approx(sim.monthly_upkeep() - lit_cost, expect), "a lamp post is on the same schedule, and a building that glows still pays in full")
+
+	var s2 := _sim("three_holes", 42)
+	s2.open = false
+	s2.events.timer = 99999.0
+	var h2 := s2.course.holes[0]
+	check(not h2.starter_holds(s2.time), "with no gap, the next party is not held")
+	h2.gap = 180.0
+	var a := s2.visitors.add_group("public", 1, 0.5)
+	var b := s2.visitors.add_group("public", 1, 0.5)
+	var guard := 0
+	var waiting: Group = null
+	while guard < 60 * 240:
+		s2.step(1.0 / 60.0)
+		guard += 1
+		for gr in [a, b]:
+			if gr.turn != null and gr.turn.phase == Golfer.P.AIM and gr.turn.timer > 0.2:
+				gr.turn.timer = 0.05
+		var queued: Group = a if a.state == Group.S.QUEUE else (b if b.state == Group.S.QUEUE else null)
+		if queued != null and h2.teeing_group == null and h2.starter_holds(s2.time):
+			waiting = queued
+			break
+	check(waiting != null and waiting.state == Group.S.QUEUE, "the starter holds the next party after the tee is free")
+	_run(s2, 8.0)
+	check(waiting != null and waiting.state == Group.S.QUEUE and h2.starter_holds(s2.time), "and keeps holding them for the gap")
+	h2.gap = 0.0
+	guard = 0
+	while guard < 60 * 30 and waiting != null and waiting.state != Group.S.PLAY:
+		s2.step(1.0 / 60.0)
+		guard += 1
+	check(waiting != null and waiting.state == Group.S.PLAY and h2.teeing_group == waiting, "with the gap cleared, that party takes the free tee")
+
+	var s3 := _sim("three_holes", 43)
+	s3.economy.money = 400000.0
+	var holes := s3.course.holes
+	for h in holes:
+		h.lab_ready = true
+		h.open = true
+		h.kind = 0
+		h.plays = 40
+		h.fun = 99.0
+		h.par = 3
+	s3._judge_themes()
+	check(holes[0].themes.is_empty(), "a breather is not named, however much golfers love it")
+	for h in holes:
+		h.kind = 1
+		h.plays = 10
+		h.fun = 50.0
+		h.par = 4
+	var p3 := holes[0]
+	p3.par = 3
+	p3.plays = 25
+	p3.fun = 80.0
+	var lesser := holes[1]
+	lesser.par = 3
+	lesser.plays = 25
+	lesser.fun = 72.0
+	holes[2].par = 4
+	holes[2].plays = 40
+	holes[2].fun = 95.0
+	holes[2].kind = 2
+	s3._judge_themes()
+	check(p3.themes.has("par3") and not lesser.themes.has("par3") and not holes[2].themes.has("par3"), "the best par 3 is named, and a higher-scoring par 4 is not")
+	var g := s3.visitors.make_golfer("public", 0.5)
+	g.persona = {}
+	g.wealth = 0.5
+	var paid := s3.visitors.worth(g, p3)
+	p3.themes.clear()
+	var plain := s3.visitors.worth(g, p3)
+	var fee := float(s3._theme("par3").get("fee", 0.0))
+	check(fee > 0.0 and is_equal_approx(paid, plain * (1.0 + fee)), "the award adds the fee from the data")
+	p3.themes.append("par3")
+	p3.fun = 40.0
+	s3._slip_themes()
+	check(not p3.themes.has("par3"), "the award is taken back when the hole slips")
+	for h in holes:
+		h.fun = 50.0
+		h.themes.clear()
+	var water := holes[1]
+	water.par = 4
+	water.kind = 2
+	water.plays = 25
+	water.fun = 84.0
+	var spot := water.pin
+	var tile := s3.course.tile_of(spot.x, spot.z)
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			var tx := tile.x + dx
+			var ty := tile.y + dy
+			if s3.course.in_bounds(tx, ty):
+				s3.course.terrain[ty * s3.course.w + tx] = Defs.T.WATER
+	check(water.touches_water(s3.course), "water beside the pin makes it a water hole")
+	s3._judge_themes()
+	check(water.themes.has("water") and not p3.themes.has("water"), "the best water hole is named")
+	for h in holes:
+		h.fun = 50.0
+	var night := holes[2]
+	night.par = 4
+	night.kind = 2
+	night.plays = 25
+	night.fun = 86.0
+	check(_light_hole(s3, night) > 0 and night.lit_enough(s3.course), "lights make a night hole")
+	s3._judge_themes()
+	check(night.themes.has("night"), "the best night hole is named")
+	p3.gap = 30.0
+	p3.themes.append("par3")
+	var saved: Dictionary = JSON.parse_string(JSON.stringify(s3.to_dict()))
+	var back := Sim.from_dict(db, saved, gear)
+	check(is_equal_approx(back.course.holes[0].gap, 30.0) and back.course.holes[0].themes.has("par3"), "a save keeps the starter gap and the awards")
+	var course_d: Dictionary = saved.course
+	var hs: Array = course_d.holes
+	var h0: Dictionary = hs[0]
+	h0.erase("themes")
+	h0.erase("gap")
+	var old := Sim.from_dict(db, saved, gear)
+	check(old.course.holes[0].gap == 0.0 and old.course.holes[0].themes.is_empty(), "an older save, with neither stored, still loads")

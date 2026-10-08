@@ -30,6 +30,15 @@ var fun := 60.0                 # running golfer opinion of this hole, 0..100
 var name := ""
 var comments := {}              # mood tag -> summed effect on golfers here
 var award := ""                 # "", "top100" or "top18"
+## Themed awards this hole holds ("par3", "water", "night"). One hole
+## per theme. Taken back when the hole no longer deserves it.
+var themes: Array[String] = []
+## Seconds the starter holds the next party after the one ahead begins.
+## Zero sends them out as soon as the tee is free.
+var gap := 0.0
+## When the party now playing began the hole. Far in the past until then,
+## so the first party is never held.
+var tee_at := -1.0e9
 # What the hole tests, measured by HoleLab in strokes of advantage.
 var lab_ready := false
 var lab_sig := -1
@@ -532,13 +541,33 @@ func average_time() -> float:
 	return s / float(play_times.size())
 
 
+## True while the starter is still holding the next party. The gap is
+## measured from when the party ahead began the hole.
+func starter_holds(now: float) -> bool:
+	return gap > 0.0 and now < tee_at + gap
+
+
+## Water sits beside the line of play, close enough to be the hole's hazard.
+func touches_water(course: Course) -> bool:
+	var pts := route
+	if pts.is_empty():
+		pts = PackedVector2Array([Vector2(tee.x, tee.z), Vector2(pin.x, pin.z)])
+	var step: int = maxi(1, int(pts.size() / 16))
+	var k := 0
+	while k < pts.size():
+		if course.water_near(pts[k].x, pts[k].y, 14.0):
+			return true
+		k += step
+	return course.water_near(pin.x, pin.z, 14.0) or course.water_near(tee.x, tee.z, 14.0)
+
+
 func to_dict() -> Dictionary:
 	return {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
-		"name": name, "award": award, "comments": comments, "open": open,
+		"name": name, "award": award, "themes": themes, "gap": gap, "comments": comments, "open": open,
 		"play_times": play_times,
 	}
 
@@ -565,6 +594,10 @@ static func from_dict(d: Dictionary) -> Hole:
 	while hole.play_times.size() > PACE_KEEP:
 		hole.play_times.pop_front()
 	hole.award = str(d.get("award", ""))
+	hole.gap = float(d.get("gap", 0.0))
+	var th: Array = d.get("themes", [])
+	for id in th:
+		hole.themes.append(str(id))
 	hole.comments = d.get("comments", {})
 	# Par is filled in properly once the ground is loaded (Course.from_dict).
 	# Until then, a save that recorded one keeps it, and an older save keeps

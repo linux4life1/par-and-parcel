@@ -27,6 +27,9 @@ var stories: Dictionary = {}    # the long golfer stories
 var setups: Array = []          # how a tournament can be set up
 var landmarks: Dictionary = {}  # area effects of landmark objects
 var accreditation: Dictionary = {}  # the design-score checklist
+var lights: Dictionary = {}     # dusk-to-dawn upkeep for floodlights and lamps
+var starter: Dictionary = {}    # how far apart the starter sends parties
+var awards: Dictionary = {}     # themed hole awards
 var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
 var feed: Dictionary = {}
@@ -61,6 +64,9 @@ func _init() -> void:
 	setups = _load("setups").get("setups", [])
 	landmarks = _load("landmarks")
 	accreditation = _load("accreditation")
+	lights = _load("lights")
+	starter = _load("starter")
+	awards = _load("awards")
 	names = _load("names")
 	feed = _load("feed")
 
