@@ -7,6 +7,47 @@ extends RefCounted
 ## up or sit down, be plugged where it landed, be wet, or lie on a slope.
 ## The computer golfers and the player both read the same lie.
 
+static var _lies: Dictionary = {}
+
+
+## The lie table from data/lies.json. Called when the data is loaded.
+static func bind(book: Dictionary) -> void:
+	var rows: Variant = book.get("lies", {})
+	if rows is Dictionary:
+		_lies = rows
+	else:
+		_lies = {}
+
+
+static func _row(t: int) -> Dictionary:
+	if t < 0 or t >= Defs.T_KEYS.size():
+		return {}
+	var row: Variant = _lies.get(Defs.T_KEYS[t], {})
+	if row is Dictionary:
+		return row
+	return {}
+
+
+## Power lost to this ground. A lie that names its own power in the data
+## uses that. The others keep the table in Defs.
+static func terrain_power(t: int) -> float:
+	var row := _row(t)
+	if row.has("power"):
+		return float(row["power"])
+	if t >= 0 and t < Defs.T_LIE_POWER.size():
+		return Defs.T_LIE_POWER[t]
+	return 1.0
+
+
+## How much wilder a shot is from this ground. Same rule as terrain_power.
+static func terrain_spread(t: int) -> float:
+	var row := _row(t)
+	if row.has("spread"):
+		return float(row["spread"])
+	if t >= 0 and t < Defs.T_LIE_SPREAD.size():
+		return Defs.T_LIE_SPREAD[t]
+	return 1.0
+
 
 ## Read the lie for a shot heading this way. Returns
 ##   t       the terrain (Defs.T)
@@ -27,7 +68,7 @@ static func read(sim: Sim, g: Golfer, heading: float) -> Dictionary:
 	var notes: Array[String] = []
 	var out := {"t": t, "name": sim.terrain_name(t), "sit": "", "power": 1.0, "spread": 1.0, "spin": 1.0,
 		"lift": 1.0, "loft": 0.0, "side": 0.0, "mishit": 1.0, "notes": notes}
-	if Defs.is_green(t) or t == Defs.T.WATER:
+	if Defs.is_green(t) or Defs.is_liquid(t):
 		return out
 	var all: Dictionary = sim.db.lies.get("lies", {})
 	var d: Dictionary = all.get(Defs.T_KEYS[t], {})

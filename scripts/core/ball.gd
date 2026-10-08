@@ -162,7 +162,7 @@ func _fly(dt: float, course: Course, wind: Vector3, pin: Vector3, has_pin: bool)
 			return E.OOB
 		return E.NONE
 	var t: int = course.terrain[ti]
-	if t != Defs.T.WATER:
+	if not Defs.is_liquid(t):
 		last_land = pos
 
 	# anything solid in the way, and any foliage to get through
@@ -205,13 +205,15 @@ func _fly(dt: float, course: Course, wind: Vector3, pin: Vector3, has_pin: bool)
 		ev = E.LANDED
 	# Land that is not the club's is out of bounds, but only a ball that
 	# comes to rest there is lost: it may yet bounce or roll back in.
-	if t == Defs.T.WATER:
+	if Defs.is_liquid(t):
 		if course.locked[ti] != 0:
 			state = S.OOB
 			vel = Vector3.ZERO
 			return E.OOB
+		# Lava does not skip. A stream is water, so a skipping ball can still cross it.
+		var molten := lava and t == Defs.T.WATER
 		var flat := Vector2(vel.x, vel.z).length()
-		if skips > 0 and not lava and flat > 9.0 and absf(vel.y) < flat * 0.9:
+		if skips > 0 and not molten and flat > 9.0 and absf(vel.y) < flat * 0.9:
 			skips -= 1
 			vel = Vector3(vel.x * 0.72, absf(vel.y) * 0.45 + 1.5, vel.z * 0.72)
 			return ev
@@ -288,7 +290,7 @@ func _roll(dt: float, course: Course, pin: Vector3, has_pin: bool) -> int:
 		vel = Vector3.ZERO
 		return E.OOB
 	var t: int = course.terrain[ti]
-	if t == Defs.T.WATER:
+	if Defs.is_liquid(t):
 		state = S.OOB if course.locked[ti] != 0 else S.WATER
 		vel = Vector3.ZERO
 		return E.OOB if state == S.OOB else E.WATER

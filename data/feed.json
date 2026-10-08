@@ -157,6 +157,10 @@
     "Donated another ball to the pond on {hole}. The fish at {course} must have quite a collection.",
     "Splash. Hole {hole}. Don't ask."
   ],
+  "stream_ball": [
+    "The stream on hole {hole} at {course} took the ball. It did not give it back.",
+    "In the stream on {hole}. Wet feet, and a drop."
+  ],
   "greens_bad": [
     "The greens at {course} look like the surface of the moon. Hire a greenkeeper.",
     "Putting on hole {hole} is like putting across a car park."

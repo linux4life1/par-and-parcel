@@ -1119,7 +1119,7 @@ func _step_balls(dt: float) -> void:
 				sim.wildlife.startle(b.pos)
 				var lt := course.terrain_at(b.pos.x, b.pos.z)
 				var what := "land_soft"
-				if lt == Defs.T.BUNKER or lt == Defs.T.ASH:
+				if lt == Defs.T.BUNKER or lt == Defs.T.ASH or lt == Defs.T.WASTE:
 					what = "land_sand"
 				elif lt == Defs.T.PATH or lt == Defs.T.ROCK:
 					what = "land_hard"
@@ -1129,7 +1129,9 @@ func _step_balls(dt: float) -> void:
 			Ball.E.TREE:
 				sim.sound.emit("leaves", b.pos, 0.8)
 			Ball.E.WATER:
-				sim.sound.emit("sizzle" if sim.is_lava() else "splash", b.pos, 1.0)
+				var sunk := course.terrain_at(b.pos.x, b.pos.z)
+				var molten := sim.is_lava() and sunk != Defs.T.STREAM
+				sim.sound.emit("sizzle" if molten else "splash", b.pos, 1.0)
 			Ball.E.OOB:
 				sim.sound.emit("oob", b.pos, 1.0)
 				sim.popup.emit(b.pos, "Out of bounds", "bad")

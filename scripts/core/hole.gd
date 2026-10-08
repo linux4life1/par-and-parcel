@@ -74,7 +74,7 @@ const PAR_4 := 430.0
 const ROUTE_CAP := 1.6
 ## Step cost for choosing the line of play. Fairway, tee and green are cheap.
 ## Everything else is dearer, never infinite, so a carry still connects.
-const PLAY_COST: Array[float] = [3.0, 1.0, 1.0, 1.0, 4.0, 8.0, 5.0, 2.0, 6.0, 4.0, 1.0, 1.0]
+const PLAY_COST: Array[float] = [3.0, 1.0, 1.0, 1.0, 4.0, 8.0, 5.0, 2.0, 6.0, 4.0, 1.0, 1.0, 3.5, 8.0]
 const PLAY_TREE := 6.0
 var groups: Array[Group] = []   # every group currently playing the hole
 ## Parties waiting to tee off, in the order they arrived. The front of the
