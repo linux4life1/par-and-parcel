@@ -153,7 +153,7 @@ func start_match(s: Sim, camera: CameraRig, offer: Dictionary) -> bool:
 	s.tag_eddy(rival)
 	rival.kind = "lab"
 	rival.name = str(offer.rival)
-	rival.roll_stats(float(offer.skill), s.rng)
+	rival.roll_stats(float(offer.skill), s.rng, s.members.progress)
 	for cat: Dictionary in s.db.categories:
 		rival.brands[cat.id] = s.db.brands[4]
 	rival.ball.set_def(s.db.balls[0])

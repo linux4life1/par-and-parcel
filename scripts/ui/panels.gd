@@ -1589,7 +1589,7 @@ func _members(body: VBoxContainer) -> Callable:
 			var mood := float(m.last_mood)
 			h.add_child(UIKit.label("%d visit%s  ·  last round %d%%" % [int(m.visits), "" if int(m.visits) == 1 else "s", int(mood)], 11, UIKit.mood_color(mood)))
 			var prog := sim.members.progress
-			var length := int(round(clampf(inverse_lerp(float(prog["power_floor"]), float(prog["power_cap"]), float(m.get("power", 0.9))), 0.0, 1.0) * 100.0))
+			var length := roundi(clampf(Members.power_share(float(m.get("power", 0.9)), prog), 0.0, 1.0) * 100.0)
 			var putt := int(round(clampf(float(m.get("putting", 0.0)) / float(prog["skill_cap"]), 0.0, 1.0) * 100.0))
 			v.add_child(UIKit.label("Length %d  ·  Putting %d" % [length, putt], 11, UIKit.MUTED))
 			var persona := DataDB.find(sim.db.personalities, str(m.persona))

@@ -65,6 +65,7 @@ func _ready() -> void:
 	_test_station()
 	_test_comments()
 	_test_easy_and_album()
+	_test_length_scale()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2524,7 +2525,7 @@ func _expert(sim: Sim) -> Golfer:
 	var g := Golfer.new()
 	g.kind = "lab"
 	g.skill = 0.82
-	g.power = lerpf(0.74, 1.06, 0.82)
+	g.power = Members.power_at(0.82, sim.members.progress)
 	g.accuracy = 0.82
 	g.imagination = 0.9
 	g.putting = 0.55
@@ -3705,7 +3706,7 @@ func _test_easy_and_album() -> void:
 	kept.erase("club")
 	var older := Sim.from_dict(db, kept, gear)
 	check(older.album.is_empty(), "an older save, with no album stored, still loads")
-	check(is_equal_approx(older.opening_money, older.economy.money) and older.club_id != "", "an older save, with no opening or club stored, still loads")
+	check(is_equal_approx(older.opening_money, older.economy.money) and older.club_id == Sim.legacy_club_id(kept), "an older save, with no opening or club stored, still loads")
 	var path := Game.CAREER_PATH
 	var live := Game._session_live
 	var old_sim := Game.sim
@@ -3733,6 +3734,63 @@ func _test_easy_and_album() -> void:
 	check(is_equal_approx(Game.sim.economy.money, fresh), "a debt stays behind")
 	if FileAccess.file_exists(Game.CAREER_PATH):
 		DirAccess.remove_absolute(Game.CAREER_PATH)
+	var src := _sim("three_holes", 8)
+	var bare: Dictionary = src.to_dict()
+	bare.erase("club")
+	bare.erase("opening")
+	var again := Sim.from_dict(db, bare, gear)
+	var twice := Sim.from_dict(db, bare, gear)
+	check(again.club_id == twice.club_id and again.club_id == Sim.legacy_club_id(bare), "a club-less save loads the same id every time")
+	var purse := float(DataDB.find(db.scenarios, "free_play").get("money", -1.0))
+	Game.sim = again
+	Game._session_live = true
+	Game.sim.economy.money += 8000.0
+	var stale := FileAccess.open(Game.CAREER_PATH, FileAccess.WRITE)
+	stale.store_string(JSON.stringify({"money": 99999.0, "taken": []}))
+	stale.close()
+	check(is_equal_approx(Game.carried_money(), 8000.0), "the scenario screen reads the live club, not a stale file")
+	Game.new_game("free_play", 11)
+	check(is_equal_approx(Game.sim.economy.money, purse + 8000.0), "an older club carries its profit once")
+	Game.sim = Sim.from_dict(db, bare, gear)
+	Game._session_live = true
+	Game.sim.economy.money += 8000.0
+	var raw: Variant = JSON.parse_string(FileAccess.get_file_as_string(Game.CAREER_PATH))
+	var book: Dictionary = {}
+	if raw is Dictionary:
+		book = raw
+	book["money"] = 99999.0
+	var stuffed := FileAccess.open(Game.CAREER_PATH, FileAccess.WRITE)
+	stuffed.store_string(JSON.stringify(book))
+	stuffed.close()
+	check(is_equal_approx(Game.carried_money(), 0.0), "a club already taken shows nothing, even when the file still names a sum")
+	Game.new_game("free_play", 12)
+	check(is_equal_approx(Game.sim.economy.money, purse), "loading that older club again does not carry the bank a second time")
+	if FileAccess.file_exists(Game.CAREER_PATH):
+		DirAccess.remove_absolute(Game.CAREER_PATH)
 	Game.CAREER_PATH = path
 	Game.sim = old_sim
 	Game._session_live = live
+
+
+func _test_length_scale() -> void:
+	print("-- one length scale")
+	var sim := _sim("three_holes", 2)
+	var progress: Dictionary = sim.members.progress
+	var lo := float(progress.get("power_floor", -1.0))
+	var hi := float(progress.get("power_cap", -1.0))
+	check(is_equal_approx(Members.power_at(0.0, progress), lo) and is_equal_approx(Members.power_at(1.0, progress), hi), "a new golfer's length comes from the progression data")
+	var shifted := progress.duplicate()
+	shifted["power_floor"] = 0.5
+	shifted["power_cap"] = 1.2
+	check(is_equal_approx(Members.power_at(0.0, shifted), 0.5) and is_equal_approx(Members.power_at(1.0, shifted), 1.2) and is_equal_approx(Members.power_share(1.2, shifted), 1.0), "a change in the progression data is the length scale")
+	var card := roundi(clampf(Members.power_share(Members.power_at(0.4, progress), progress), 0.0, 1.0) * 100.0)
+	check(card == 40, "the golfer card reads the same scale")
+	var rolled := Golfer.new()
+	var dice := RandomNumberGenerator.new()
+	dice.seed = 11
+	rolled.roll_stats(0.5, dice, {"power_floor": 2.0, "power_cap": 2.0})
+	check(rolled.power >= 1.94 and rolled.power <= 2.06, "a flat length scale still leaves room for the small roll")
+	sim.members.progress["power_floor"] = 1.5
+	sim.members.progress["power_cap"] = 1.8
+	var lab_g := sim.lab._test_golfer(HoleLab.CLASSES[0])
+	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")

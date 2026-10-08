@@ -386,6 +386,13 @@ func load_game() -> bool:
 
 
 func carried_money() -> float:
+	if _session_live and sim != null:
+		var previous := {}
+		if FileAccess.file_exists(CAREER_PATH):
+			var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))
+			if parsed is Dictionary:
+				previous = parsed
+		return maxf(float(CareerBook.pack(sim, previous).get("money", 0.0)), 0.0)
 	if not FileAccess.file_exists(CAREER_PATH):
 		return 0.0
 	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string(CAREER_PATH))

@@ -1191,7 +1191,7 @@ func _update_inspector(force: bool = false) -> void:
 		var hole_no := g.group.hole_i + 1 if g.group != null else 0
 		inspector_body.add_child(UIKit.row("Round", "Hole %d  ·  %s through %d" % [hole_no, g.to_par_text(), g.scores.size()]))
 		inspector_body.add_child(UIKit.row("Game", "length %d  ·  accuracy %d  ·  imagination %d" % [
-			int(inverse_lerp(0.74, 1.06, g.power) * 100.0), int(g.accuracy * 100.0), int(g.imagination * 100.0)]))
+			roundi(clampf(Members.power_share(g.power, sim.members.progress), 0.0, 1.0) * 100.0), int(g.accuracy * 100.0), int(g.imagination * 100.0)]))
 		inspector_body.add_child(UIKit.row("Clubs and ball", "%s  ·  %s" % [str(g.brand_of("irons").get("name", "?")), str(g.ball.def.get("name", "?"))]))
 		inspector_body.add_child(UIKit.row("Paid so far", Defs.money(g.paid) + ("  ·  riding a cart" if g.group != null and g.group.has_cart else "")))
 		if g.group != null and not g.group.story.is_empty():

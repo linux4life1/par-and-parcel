@@ -102,6 +102,12 @@ static func fresh_club_id() -> String:
 	return "%d-%d" % [Time.get_ticks_usec(), _club_n]
 
 
+## A save from before clubs had ids. The same file must produce the same id
+## on every load, or its bank could be taken again.
+static func legacy_club_id(d: Dictionary) -> String:
+	return "legacy-%s-%s" % [str(d.get("rng_seed", "")), str(d.get("name", ""))]
+
+
 func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gear = null, biome_id: String = "") -> void:
 	db = data
 	rng.seed = seed_value if seed_value != 0 else int(Time.get_unix_time_from_system())
@@ -1299,7 +1305,7 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	else:
 		sim.opening_money = sim.economy.money
 	var club := str(d.get("club", ""))
-	sim.club_id = club if club != "" else fresh_club_id()
+	sim.club_id = club if club != "" else legacy_club_id(d)
 	for hrow: Dictionary in d.get("history", []):
 		sim.economy.history.append(hrow)
 	sim.rating = float(d.get("rating", 45.0))

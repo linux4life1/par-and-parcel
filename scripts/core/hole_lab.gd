@@ -114,7 +114,7 @@ func _test_golfer(c: Array) -> Golfer:
 	var g := Golfer.new()
 	g.kind = "lab"
 	g.skill = (float(c[1]) + float(c[2]) + float(c[3])) / 3.0
-	g.power = lerpf(0.74, 1.06, float(c[1]))
+	g.power = Members.power_at(float(c[1]), sim.members.progress)
 	g.accuracy = float(c[2])
 	g.imagination = float(c[3])
 	g.putting = 0.55
