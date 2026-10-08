@@ -55,6 +55,7 @@ func _ready() -> void:
 	_test_club_life()
 	_test_gallery()
 	_test_dogleg()
+	_test_hole_preview()
 	_test_mood_map()
 	_test_draft_hole()
 	_test_pace()
@@ -2599,7 +2600,20 @@ func _test_dogleg() -> void:
 	c.revision += 1
 	var tee := c.tile_center(tee_t.x, tee_t.y)
 	var pin := c.tile_center(pin_t.x, pin_t.y)
+	var laid := BuildTools.new()
+	laid.sim = sim
+	laid.mode = "hole"
+	laid._tee = tee
+	laid.hover = pin
+	laid._update_preview()
+	var dog_par := laid.preview_par
+	var dog_len := laid.preview_length
+	var searches := laid._preview_searches
+	laid.hover = Vector3(pin.x + 0.4, pin.y, pin.z + 0.4)
+	laid._update_preview()
+	check(laid._preview_searches == searches, "the search isn't repeated on the same tile")
 	var hole := sim.add_hole(tee, pin)
+	check(dog_par == hole.par and is_equal_approx(dog_len, hole.length), "the dogleg preview is the par and length the hole gets (%d, %.1f m)" % [dog_par, dog_len])
 	var chord := hole.straight_length()
 	print("   dogleg straight %.0f m (%d yd), along the fairway %.0f m (%d yd), par %d" % [chord, Defs.yards(chord), hole.length, Defs.yards(hole.length), hole.par])
 	check(chord <= Hole.PAR_3, "the straight line across a 30 by 28 dogleg is a par 3 distance (%.0f m)" % chord)
@@ -2609,7 +2623,16 @@ func _test_dogleg() -> void:
 	var across := hole.tee.lerp(hole.pin, 0.5)
 	check(Vector2(mid.x, mid.z).distance_to(Vector2(bend.x, bend.z)) < 40.0, "the line of play goes round the corner")
 	check(Vector2(mid.x, mid.z).distance_to(Vector2(bend.x, bend.z)) < Vector2(across.x, across.z).distance_to(Vector2(bend.x, bend.z)), "and not across the rough in the corner")
-	var straight_hole := sim.add_hole(c.tile_center(sx, 90), c.tile_center(sx, 30))
+	var st_tee := c.tile_center(sx, 90)
+	var st_pin := c.tile_center(sx, 30)
+	laid._preview_tile = Vector2i(-999, -999)
+	laid._preview_text = ""
+	laid._tee = st_tee
+	laid.hover = st_pin
+	laid._update_preview()
+	var straight_hole := sim.add_hole(st_tee, st_pin)
+	check(laid.preview_par == straight_hole.par and is_equal_approx(laid.preview_length, straight_hole.length), "the straight preview is the par and length the hole gets (%.1f m)" % laid.preview_length)
+	laid.free()
 	check(straight_hole.par == 4 and absf(straight_hole.length - 300.0) < 2.0, "a straight 60-tile hole is still a 300 m par 4 (%.1f m)" % straight_hole.length)
 	check(c.set_object(tee_t.x, pin_t.y, Defs.O.FLOODLIGHT), "a floodlight can stand at the corner")
 	var share := hole.lit_share(c)
@@ -2662,6 +2685,7 @@ func _test_dogleg() -> void:
 	tools.mode = "hole"
 	tools._tee = hole.tee
 	tools.hover = hole.pin
+	tools._update_preview()
 	var preview := tools.hint()
 	check(preview.contains("Par 4") and preview.contains("yd") and preview.contains("1 tile ≈ 5.5 yd."), "laying out a hole previews par and yardage (%s)" % preview.replace("\n", " "))
 	tools.free()
@@ -2676,6 +2700,126 @@ func _test_dogleg() -> void:
 	sim.refresh_hole_lines()
 	check(hole.par == 3 and hole.length <= Hole.PAR_3, "painting the corner fairway shortens the hole to a par 3 (%d yd)" % Defs.yards(hole.length))
 	check(int(hole.tally.get("1", 0)) == 1, "the 4 already recorded becomes a bogey on the new par")
+
+
+func _test_hole_preview() -> void:
+	print("-- the hole preview")
+	var sim := _sim("sandbox", 6)
+	var c := sim.course
+	var sx := 70
+	for ty in range(20, 81):
+		var i := ty * c.w + sx
+		c.terrain[i] = Defs.T.FAIRWAY
+		c.objects[i] = 0
+	c.terrain[80 * c.w + sx] = Defs.T.TEE
+	c.terrain[20 * c.w + sx] = Defs.T.GREEN
+	var tee := c.tile_center(sx, 80)
+	var pin := c.tile_center(sx, 20)
+	var straight: Dictionary = Hole.measure(c, tee, pin)
+	check(bool(straight.playable) and int(straight.par) == 4, "a straight hole is playable, and this one is a par 4")
+	var tools := BuildTools.new()
+	tools.sim = sim
+	tools.mode = "hole"
+	tools._tee = tee
+	tools.hover = pin
+	tools._update_preview()
+	check(not tools.preview_warn, "a normal par 4 is not a warning")
+	var short_pin := c.tile_center(sx, 70)
+	c.terrain[70 * c.w + sx] = Defs.T.GREEN
+	var brief: Dictionary = Hole.measure(c, tee, short_pin)
+	var short_m := float(sim.db.preview.get("short_metres", 90.0))
+	check(bool(brief.playable) and float(brief.length) < short_m, "a ten-tile hole is playable and under the short line (%.0f m)" % float(brief.length))
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools.hover = short_pin
+	tools._update_preview()
+	check(tools.preview_warn, "a hole shorter than the data's short line is a warning")
+	var lost := Vector3(-30.0, 0.0, tee.z)
+	var missed: Dictionary = Hole.measure(c, tee, lost)
+	check(not bool(missed.playable), "a pin off the map is not playable")
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools.hover = lost
+	tools._update_preview()
+	check(tools.preview_warn, "a pin off the map is a warning")
+	var fx := 90
+	var fy := 50
+	for oy in range(-1, 2):
+		for ox in range(-1, 2):
+			c.terrain[(fy + oy) * c.w + (fx + ox)] = Defs.T.WATER
+			c.objects[(fy + oy) * c.w + (fx + ox)] = 0
+	c.terrain[fy * c.w + fx] = Defs.T.GREEN
+	for ty in range(fy + 2, fy + 21):
+		var ii := ty * c.w + fx
+		c.terrain[ii] = Defs.T.FAIRWAY
+		c.objects[ii] = 0
+	var isle_pin := c.tile_center(fx, fy)
+	var isle_tee := c.tile_center(fx, fy + 20)
+	var isle: Dictionary = Hole.measure(c, isle_tee, isle_pin)
+	var isle_len := float(isle.length)
+	check(bool(isle.playable) and int(isle.par) == 3 and absf(isle_len - 100.0) < 1.0, "a green ringed by water stays the 100 m par 3 the route has always given (%.1f m)" % isle_len)
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools._tee = isle_tee
+	tools.hover = isle_pin
+	tools._update_preview()
+	check(not tools.preview_warn, "a playable island green is not a warning")
+	for y in range(0, 42):
+		for x in range(0, 48):
+			var wi := y * c.w + x
+			c.terrain[wi] = Defs.T.WATER
+			c.objects[wi] = 0
+	for y in range(2, 21):
+		c.terrain[y * c.w + 5] = Defs.T.FAIRWAY
+		c.terrain[y * c.w + 25] = Defs.T.FAIRWAY
+	for x in range(5, 26):
+		c.terrain[2 * c.w + x] = Defs.T.FAIRWAY
+	c.terrain[20 * c.w + 5] = Defs.T.TEE
+	c.terrain[20 * c.w + 25] = Defs.T.GREEN
+	var bend_tee := c.tile_center(5, 20)
+	var bend_pin := c.tile_center(25, 20)
+	var detour: Dictionary = Hole.measure(c, bend_tee, bend_pin)
+	check(not bool(detour.playable), "a detour longer than the route cap is not playable (%.0f m against a %.0f m line)" % [float(detour.length), Vector2(bend_pin.x - bend_tee.x, bend_pin.z - bend_tee.z).length()])
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools._tee = bend_tee
+	tools.hover = bend_pin
+	tools._update_preview()
+	check(tools.preview_warn, "that detour is a warning too")
+	var every := maxi(int(sim.db.preview.get("throttle_frames", 1)), 1)
+	tools._preview_frame = 0
+	tools._preview_due = 0
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools._tee = tee
+	tools.hover = pin
+	var before := tools._preview_searches
+	tools._update_preview(true)
+	check(tools._preview_searches == before + 1, "the first paced look searches")
+	var mid := tools._preview_searches
+	tools._preview_frame = tools._preview_due - 1
+	tools.hover = short_pin
+	tools._update_preview(true)
+	check(tools._preview_searches == mid, "a paced look on a new tile does not search before the throttle has passed")
+	tools._preview_frame = tools._preview_due
+	tools._update_preview(true)
+	check(tools._preview_searches == mid + 1, "a paced look searches once the throttle has passed (%d frames)" % every)
+	tools._preview_frame = 0
+	tools._preview_due = 0
+	tools._preview_tile = Vector2i(-999, -999)
+	tools._preview_text = ""
+	tools._tee = tee
+	tools.hover = pin
+	tools.mode = "hole"
+	var back := tools._preview_searches
+	tools._process(0.0)
+	check(tools._preview_searches == back + 1, "hovering a tile searches")
+	tools.hover = null
+	tools._process(0.0)
+	tools.hover = pin
+	tools._process(0.0)
+	check(tools._preview_searches == back + 2, "leaving the ground and coming back to the same tile searches again")
+	tools.free()
 
 
 func _test_mood_map() -> void:
