@@ -264,8 +264,8 @@ func _register(g: Golfer) -> void:
 	# a warm-up before the round. It lasts this round only; a member keeps
 	# the slower gain in Members._grow.
 	var warm := sim.members.warmup
-	var skill_cap := float(warm.get("skill_cap", sim.members.progress.get("skill_cap", 0.99)))
-	var power_cap := float(warm.get("power_cap", sim.members.progress.get("power_cap", 1.06)))
+	var skill_cap := float(warm["skill_cap"])
+	var power_cap := float(warm["power_cap"])
 	if int(amenities.get("putting", 0)) > 0:
 		g.putting = minf(skill_cap, g.putting + float(warm.get("putting", 0.05)))
 		g.feel(1.5, "Rolled a few on the practice green first.", "practice")

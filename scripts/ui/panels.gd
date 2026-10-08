@@ -1232,6 +1232,11 @@ func _goals(body: VBoxContainer) -> Callable:
 	var recs := UIKit.vbox(3)
 	body.add_child(recs)
 	body.add_child(UIKit.gap(6))
+	body.add_child(UIKit.heading("Design checklist"))
+	body.add_child(UIKit.para("Each line is part of the design score, and the next thing that would raise it. A round's length is listed too, and it does not change the score.", 12))
+	var accred := UIKit.vbox(2)
+	body.add_child(accred)
+	body.add_child(UIKit.gap(6))
 	body.add_child(UIKit.heading("World rankings"))
 	var ranks := UIKit.vbox(2)
 	body.add_child(ranks)
@@ -1280,6 +1285,12 @@ func _goals(body: VBoxContainer) -> Callable:
 		if sim.eruption.has_volcano():
 			recs.add_child(UIKit.row("Eruptions survived", str(sim.stats.eruptions)))
 		recs.add_child(UIKit.row("Your holes played", str(sim.player.holes_played)))
+		UIKit.clear(accred)
+		for row in sim.accreditation():
+			var met := bool(row.met)
+			var head := ("\u2713  " if met else "\u25cb  ") + str(row.text)
+			accred.add_child(UIKit.para(head, 13, UIKit.GOOD if met else UIKit.TEXT))
+			accred.add_child(UIKit.para(str(row.detail), 12, UIKit.MUTED))
 		# the ranking table, with your course slotted in
 		UIKit.clear(ranks)
 		var table: Array = []
@@ -1533,8 +1544,9 @@ func _members(body: VBoxContainer) -> Callable:
 			h.add_child(UIKit.spacer())
 			var mood := float(m.last_mood)
 			h.add_child(UIKit.label("%d visit%s  ·  last round %d%%" % [int(m.visits), "" if int(m.visits) == 1 else "s", int(mood)], 11, UIKit.mood_color(mood)))
-			var length := int(round(clampf(inverse_lerp(0.74, 1.06, float(m.get("power", 0.9))), 0.0, 1.0) * 100.0))
-			var putt := int(round(clampf(float(m.get("putting", 0.0)), 0.0, 1.0) * 100.0))
+			var prog := sim.members.progress
+			var length := int(round(clampf(inverse_lerp(float(prog["power_floor"]), float(prog["power_cap"]), float(m.get("power", 0.9))), 0.0, 1.0) * 100.0))
+			var putt := int(round(clampf(float(m.get("putting", 0.0)) / float(prog["skill_cap"]), 0.0, 1.0) * 100.0))
 			v.add_child(UIKit.label("Length %d  ·  Putting %d" % [length, putt], 11, UIKit.MUTED))
 			var persona := DataDB.find(sim.db.personalities, str(m.persona))
 			var line := str(persona.get("name", ""))
