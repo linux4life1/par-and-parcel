@@ -17,6 +17,9 @@ var wet := PackedFloat32Array()       # 0 dry .. 1 flooded
 var health := PackedFloat32Array()    # 0 dead .. 1 perfect turf
 var weeds := PackedFloat32Array()     # 0 .. 1
 var pests := PackedFloat32Array()     # 0 .. 1
+var litter := PackedFloat32Array()    # 0 clean .. 1 buried in cups and wrappers
+var repair := PackedByteArray()       # 1 where a window is waiting on a board
+var litter_rev := 0                   # bumps when a tile starts or stops looking littered
 var mood := PackedFloat32Array()      # recent feelings on this tile: negative annoys, positive pleases; fades over a couple of days
 var holes: Array[Hole] = []
 var clubhouse := Vector2i.ZERO
@@ -58,6 +61,10 @@ func _init(width: int = 128, height: int = 128) -> void:
 	weeds.fill(0.0)
 	pests.resize(w * h)
 	pests.fill(0.0)
+	litter.resize(w * h)
+	litter.fill(0.0)
+	repair.resize(w * h)
+	repair.fill(0)
 	mood.resize(w * h)
 	mood.fill(0.0)
 	locked.resize(w * h)
@@ -340,6 +347,7 @@ func set_terrain(tx: int, ty: int, t: int) -> bool:
 	if objects[i] != 0 and t != Defs.T.ROUGH and t != Defs.T.DEEP_ROUGH and t != Defs.T.ASH:
 		var gave_light: bool = Defs.O_LIGHT[objects[i]] > 0.0
 		objects[i] = 0
+		repair[i] = 0
 		_objects_dirty = true
 		objects_touched(i, gave_light)
 	if t == Defs.T.WATER:
@@ -407,6 +415,7 @@ func set_object(tx: int, ty: int, o: int) -> bool:
 		return false
 	var lights: bool = Defs.O_LIGHT[objects[i]] > 0.0 or Defs.O_LIGHT[o] > 0.0
 	objects[i] = o
+	repair[i] = 0
 	objects_touched(i, lights)
 	revision += 1
 	objects_changed.emit()
@@ -638,6 +647,8 @@ func to_dict() -> Dictionary:
 		"health": Marshalls.raw_to_base64(health.to_byte_array()),
 		"weeds": Marshalls.raw_to_base64(weeds.to_byte_array()),
 		"pests": Marshalls.raw_to_base64(pests.to_byte_array()),
+		"litter": Marshalls.raw_to_base64(litter.to_byte_array()),
+		"repair": Marshalls.raw_to_base64(repair),
 		"mood": Marshalls.raw_to_base64(mood.to_byte_array()),
 		"clubhouse": [clubhouse.x, clubhouse.y],
 		"holes": hs,
@@ -659,6 +670,18 @@ static func from_dict(d: Dictionary) -> Course:
 	c.health = Marshalls.base64_to_raw(d.health).to_float32_array()
 	c.weeds = Marshalls.base64_to_raw(d.weeds).to_float32_array()
 	c.pests = Marshalls.base64_to_raw(d.pests).to_float32_array()
+	if d.has("litter"):
+		c.litter = Marshalls.base64_to_raw(d.litter).to_float32_array()
+	if c.litter.size() != c.w * c.h:
+		c.litter = PackedFloat32Array()
+		c.litter.resize(c.w * c.h)
+		c.litter.fill(0.0)
+	if d.has("repair"):
+		c.repair = Marshalls.base64_to_raw(d.repair)
+	if c.repair.size() != c.w * c.h:
+		c.repair = PackedByteArray()
+		c.repair.resize(c.w * c.h)
+		c.repair.fill(0)
 	if d.has("mood"):
 		c.mood = Marshalls.base64_to_raw(d.mood).to_float32_array()
 	if c.mood.size() != c.w * c.h:

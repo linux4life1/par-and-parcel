@@ -37,6 +37,8 @@ var _trail_mat := StandardMaterial3D.new()
 var _trail_n := 0
 var _ring := MeshInstance3D.new()
 var _mounds := MultiMeshInstance3D.new()
+var _litter: MultiMeshInstance3D
+var _litter_rev := -1
 var _spots: MultiMeshInstance3D
 var _mound_set := {}
 var _mound_cursor := 0
@@ -941,6 +943,15 @@ static func _built(kind: String) -> Array:
 				[_cyl(0.05, 0.05, 4.2, 6), Vector3(-0.2, 2.7, -4.0), paint(Color(0.75, 0.75, 0.78), 0.3)],
 				[_box(0.04, 2.8, 1.7), Vector3(-0.2, 3.1, -3.15), paint(Color(0.95, 0.95, 0.9))],
 			]
+		"o28":  # litter bin: a dark tub with an open top
+			var dark := paint(Color(0.12, 0.13, 0.14), 0.55)
+			var lid := paint(Color(0.22, 0.24, 0.22), 0.5)
+			parts = [
+				[_box(0.7, 0.08, 0.55), Vector3(0, 0.04, 0), dark],
+				[_box(0.62, 0.9, 0.48), Vector3(0, 0.52, 0), dark],
+				[_box(0.66, 0.06, 0.52), Vector3(0, 0.98, 0), lid],
+				[_box(0.4, 0.04, 0.08), Vector3(0, 0.78, -0.26), lid],
+			]
 	return parts
 
 
@@ -1308,6 +1319,20 @@ func _ready() -> void:
 	_mounds.multimesh = mm
 	_mounds.material_override = mat(Color(0.42, 0.3, 0.18))
 	add_child(_mounds)
+	var scrap := BoxMesh.new()
+	scrap.size = Vector3(0.2, 0.02, 0.14)
+	var lmm := MultiMesh.new()
+	lmm.transform_format = MultiMesh.TRANSFORM_3D
+	lmm.mesh = scrap
+	_litter = MultiMeshInstance3D.new()
+	_litter.multimesh = lmm
+	var paper := StandardMaterial3D.new()
+	paper.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	paper.albedo_color = Color(0.92, 0.9, 0.84)
+	_litter.material_override = paper
+	_litter.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	_litter.visibility_range_end = 80.0
+	add_child(_litter)
 	_spots = MultiMeshInstance3D.new()
 	var spots_mm := MultiMesh.new()
 	spots_mm.transform_format = MultiMesh.TRANSFORM_3D
@@ -1346,6 +1371,7 @@ func bind(s: Sim, camera_rig: CameraRig) -> void:
 	_mound_set.clear()
 	_mound_cursor = 0
 	_mound_changed = true
+	_litter_rev = -1
 	for p in _popups:
 		p.node.queue_free()
 	_popups.clear()
@@ -1452,6 +1478,7 @@ func _frame_world(delta: float) -> void:
 	t0 = Time.get_ticks_usec()
 	_scan_mounds()
 	Game.prof("w.mounds", t0)
+	_sync_litter()
 	if selected != null:
 		var p: Vector3 = selected.prev.lerp(selected.pos, a)
 		_ring.visible = true
@@ -1496,6 +1523,8 @@ func _update_people(k: float, a: float, delta: float) -> void:
 				prop = "cart"
 			elif m.role.id == "club_pro":
 				prop = "club"
+			elif m.role.id == "porter":
+				prop = "bag"
 			fig.build(Color(str(m.role.color)), Color(0.2, 0.22, 0.25), Golfer.SKINS[m.id % Golfer.SKINS.size()], Color(0.95, 0.95, 0.9), prop, false, m.id * 6)
 			_people_root.add_child(fig)
 			_staff_figs[m.id] = fig
@@ -2062,6 +2091,37 @@ func _scan_mounds() -> void:
 				_mound_set[i] = true
 			else:
 				_mound_set.erase(i)
+
+
+## Scraps appear when a tile crosses the line, and go when it is cleaned.
+func _sync_litter() -> void:
+	if sim.course.litter_rev == _litter_rev:
+		return
+	_litter_rev = sim.course.litter_rev
+	var course := sim.course
+	var show := float(sim.db.litter.get("show", 0.45))
+	var xforms: Array[Transform3D] = []
+	var n := course.w * course.h
+	for i in n:
+		if course.litter[i] < show:
+			continue
+		var scraps := 1 if fposmod(sin(float(i) * 1.7), 1.0) < 0.55 else 2
+		for s in scraps:
+			var ox := sin(float(i) * 2.1 + float(s) * 4.0) * 1.6
+			var oz := cos(float(i) * 1.3 + float(s) * 2.2) * 1.4
+			var p := course.tile_center(i % course.w, int(i / course.w))
+			p = course.on_ground(p.x + ox, p.z + oz)
+			p.y += 0.015
+			var yaw := fposmod(sin(float(i) * 5.1 + float(s)), 1.0) * TAU
+			xforms.append(Transform3D(Basis(Vector3.UP, yaw), p))
+			if xforms.size() >= 600:
+				break
+		if xforms.size() >= 600:
+			break
+	var mm := _litter.multimesh
+	mm.instance_count = xforms.size()
+	for k in xforms.size():
+		mm.set_instance_transform(k, xforms[k])
 
 
 func _rebuild_mounds() -> void:

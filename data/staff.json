@@ -40,6 +40,14 @@
       "speed": 3.5,
       "color": "f5f5f5",
       "blurb": "Greets golfers at the clubhouse and hands out tips. Everyone starts their round happier and hits it a little straighter."
+    },
+    {
+      "id": "porter",
+      "name": "Porter",
+      "wage": 95,
+      "speed": 5.2,
+      "color": "8d6e4c",
+      "blurb": "Picks up litter, empties the bins and boards a broken window."
     }
   ]
 }

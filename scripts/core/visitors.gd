@@ -10,6 +10,7 @@ const GOOD_REASONS := {
 }
 const BAD_REASONS := {
 	"weeds": "Weeds everywhere.", "pests": "Gopher mounds all over the place.", "wet": "The course was a swamp.",
+	"litter": "Litter around the course.",
 	"wait": "Painfully slow play.", "hit": "I got hit by a golf ball.",
 	"hard": "Unfair, punishing holes.", "thirst": "Nowhere to buy a drink.", "rain": "Rained on all day.",
 	"greens_bad": "The greens were in terrible shape.", "water": "Lost too many balls in the water.",
@@ -877,6 +878,8 @@ func react_to_lie(g: Golfer, hole: Hole, hole_i: int) -> void:
 	if course.pests[ti] > 0.4:
 		g.feel(-1.5, "Gopher mounds all over hole %d." % n, "pests")
 		sim.feed.say("pests", g, {"hole": n})
+	if course.litter[ti] >= float(sim.db.litter.get("show", 0.45)):
+		g.feel(float(sim.db.litter.get("mood", -1.5)), "Litter around hole %d." % n, "litter")
 
 
 func on_hole_done(g: Golfer, hole: Hole, hole_i: int, group: Group) -> void:
@@ -1047,6 +1050,9 @@ func _on_ricochet(b: Ball) -> void:
 		sim.feed.say("window", null, {}, false, "A homeowner", "FairwayLiving")
 	else:
 		sim.toast.emit("A golf ball went through a window at the %s. %s to fix." % [sim.object_name(b.hit_obj).to_lower(), Defs.money(50.0)], "bad")
+	var wi := sim.course.index_at(b.pos.x, b.pos.z)
+	if wi >= 0:
+		sim.course.repair[wi] = 1
 
 
 func untrack(b: Ball) -> void:

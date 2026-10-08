@@ -1,0 +1,11 @@
+{
+  "_about": "Litter gathers on the tiles around a drink stand, snack bar, restroom, vending machine or bar. rate is added per second on each tile of that 3 by 3. A litter bin within bin_radius metres cuts new litter to bin_cut of the rate and absorbs existing litter at absorb per second. Golfers complain once a tile reaches show. mood is the satisfaction change. patch is how many tiles out from the messy spot a porter clears, taking clean off each tile (1 clears a 3 by 3).",
+  "rate": 0.02,
+  "bin_cut": 0.12,
+  "bin_radius": 22.0,
+  "absorb": 0.4,
+  "show": 0.45,
+  "mood": -1.5,
+  "clean": 1.0,
+  "patch": 1
+}

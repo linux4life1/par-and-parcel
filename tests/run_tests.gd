@@ -67,6 +67,7 @@ func _ready() -> void:
 	_test_firm()
 	_test_lights_gap_awards()
 	_test_length_scale()
+	_test_litter()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -3948,3 +3949,87 @@ func _test_length_scale() -> void:
 	sim.members.progress["power_cap"] = 1.8
 	var lab_g := sim.lab._test_golfer(HoleLab.CLASSES[0])
 	check(is_equal_approx(lab_g.power, Members.power_at(float(HoleLab.CLASSES[0][1]), sim.members.progress)), "the hole lab's test golfer reads the membership length scale")
+
+
+func _test_litter() -> void:
+	print("-- litter and bins")
+	var sim := _sim("three_holes", 6)
+	var c := sim.course
+	c.guard = false
+	var spot := Vector2i(-1, -1)
+	for y in range(1, c.h - 1):
+		for x in range(1, c.w - 3):
+			var open := true
+			for ox in [0, 2]:
+				var i := y * c.w + x + ox
+				if c.locked[i] != 0 or c.objects[i] != 0 or c.hot[i] != 0 or c.terrain[i] != Defs.T.ROUGH:
+					open = false
+			if open:
+				spot = Vector2i(x, y)
+				break
+		if spot.x >= 0:
+			break
+	check(spot.x >= 0, "there is rough for a stand and a bin")
+	check(sim.place_object(spot.x, spot.y, Defs.O.DRINK_STAND) == 1, "a drink stand goes up")
+	var ti := spot.y * c.w + spot.x
+	var show := float(sim.db.litter.get("show", 0.45))
+	sim.grounds.step(30.0)
+	check(c.litter[ti] >= show, "half a minute at a stand leaves litter you can see (%.2f)" % c.litter[ti])
+	c.litter.fill(0.0)
+	check(sim.place_object(spot.x + 2, spot.y, Defs.O.BIN) == 1, "a bin goes up two tiles away")
+	sim.grounds.step(30.0)
+	check(c.litter[ti] < show, "the bin keeps that same half minute from showing (%.2f)" % c.litter[ti])
+	c.litter[ti] = 0.8
+	c.weeds[ti] = 0.0
+	c.pests[ti] = 0.0
+	c.wet[ti] = 0.2
+	var g := Golfer.new()
+	g.persona = {}
+	g.satisfaction = 70.0
+	g.course = c
+	g.ball.pos = c.tile_center(spot.x, spot.y)
+	sim.visitors.react_to_lie(g, c.holes[0], 0)
+	check(float(g.gripes.get("litter", 0.0)) < -1.0, "a golfer minds the litter")
+	var porter := sim.crew.hire("porter")
+	check(porter != null, "a porter can be hired")
+	porter.pos = c.tile_center(spot.x, spot.y)
+	sim.crew._find_job(porter)
+	check(porter.target_i == ti, "and walks to the litter")
+	sim.crew._finish_job(porter)
+	check(c.litter[ti] < 0.05, "then picks it up")
+	c.litter[ti] = 0.6
+	c.repair[ti] = 1
+	var back := Course.from_dict(c.to_dict())
+	check(is_equal_approx(back.litter[ti], 0.6) and back.repair[ti] == 1, "a save keeps the litter and the broken window")
+	var old: Dictionary = c.to_dict()
+	old.erase("litter")
+	old.erase("repair")
+	var clean := Course.from_dict(old)
+	check(clean.litter[ti] == 0.0 and clean.repair[ti] == 0, "an older save without those layers loads clean")
+	var house := Vector2i(-1, -1)
+	for y in c.h:
+		for x in c.w:
+			var i := y * c.w + x
+			if i == ti or c.locked[i] != 0 or c.objects[i] != 0 or c.hot[i] != 0 or c.terrain[i] != Defs.T.ROUGH:
+				continue
+			house = Vector2i(x, y)
+			break
+		if house.x >= 0:
+			break
+	check(house.x >= 0 and c.set_object(house.x, house.y, Defs.O.HOUSE), "a house stands on another rough tile")
+	var wi := house.y * c.w + house.x
+	var ball := Ball.new()
+	ball.pos = c.tile_center(house.x, house.y)
+	ball.hit_mat = "wall"
+	ball.hit_speed = 20.0
+	ball.hit_obj = Defs.O.HOUSE
+	var smashed := false
+	for _k in 20:
+		sim.visitors._on_ricochet(ball)
+		if c.repair[wi] != 0:
+			smashed = true
+			break
+	check(smashed, "a hard shot into a house can break a window")
+	porter.target_i = wi
+	sim.crew._finish_job(porter)
+	check(c.repair[wi] == 0, "the porter boards it")

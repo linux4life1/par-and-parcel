@@ -115,8 +115,8 @@ func _build(body: VBoxContainer) -> Callable:
 	var groups := [
 		["Scenery", [Defs.O.OAK, Defs.O.PINE, Defs.O.BUSH, Defs.O.BOULDER, Defs.O.FLOWERS, Defs.O.FOUNTAIN, Defs.O.LANDMARK],
 			"Scenery makes holes prettier, and golfers notice. Trees and boulders also knock down wayward shots."],
-		["On the course", [Defs.O.BENCH, Defs.O.BALL_WASHER, Defs.O.DRINK_STAND, Defs.O.VENDING, Defs.O.SNACK_BAR, Defs.O.BAR, Defs.O.RESTROOM, Defs.O.BRIDGE],
-			"Golfers get thirsty, hungry and tired, and sooner or later need a restroom. Put these where they pass between holes. Benches and ball washers belong beside tees. Bridges carry golfers over the hazard. A vending machine is the cheap answer to thirst and hunger both. A bar is a gamble: drinkers tip well and forgive a lot, but they play slowly, spray the ball and lose their tempers faster."],
+		["On the course", [Defs.O.BENCH, Defs.O.BALL_WASHER, Defs.O.DRINK_STAND, Defs.O.VENDING, Defs.O.SNACK_BAR, Defs.O.BAR, Defs.O.RESTROOM, Defs.O.BRIDGE, Defs.O.BIN],
+			"Golfers get thirsty, hungry and tired, and sooner or later need a restroom. Put these where they pass between holes. Benches and ball washers belong beside tees. Bridges carry golfers over the hazard. A vending machine is the cheap answer to thirst and hunger both. A bar is a gamble: drinkers tip well and forgive a lot, but they play slowly, spray the ball and lose their tempers faster. A litter bin cuts the mess around a stand, a snack bar, a restroom, a machine or the bar."],
 		["Lighting", [Defs.O.FLOODLIGHT, Defs.O.LAMP],
 			"Golfers play on after dark, but on an unlit hole they see poorly, enjoy it less and pay less, and few new golfers turn up at night. Light a hole from tee to green and it plays as well as by day. A floodlight lights a wide circle, shown as you place it. Lamp posts light paths and odd corners. Holes shows how much of each hole is lit."],
 		["Club facilities", [Defs.O.PUTTING_GREEN, Defs.O.DRIVING_RANGE, Defs.O.CART_BARN, Defs.O.HOME_SITE],
@@ -265,7 +265,7 @@ func _build(body: VBoxContainer) -> Callable:
 const COMMENT_WORDS := {
 	"scenery": "the scenery", "bare": "it being bare", "score": "scoring well", "shot": "hitting good shots", "suits": "how it suits their game",
 	"hard": "how hard it is", "water": "balls lost in the hazard", "bunker": "the bunkers", "rough": "the rough", "oob": "going out of bounds",
-	"wait": "waiting", "weeds": "weeds", "pests": "pest damage", "wet": "wet ground",
+	"wait": "waiting", "weeds": "weeds", "pests": "pest damage", "wet": "wet ground", "litter": "the litter",
 	"greens": "the greens", "greens_bad": "poor greens", "hit": "being hit by balls", "eruption": "the volcano", "tired": "the walk",
 	"amenity": "the facilities", "rest": "the bench", "prestige": "its reputation", "story": "the company", "putt": "missed putts",
 	"dark": "unlit holes", "night": "golf under the lights", "drink": "the drinks", "snack": "the food",
@@ -648,7 +648,7 @@ func _hole_gripe(h: Hole) -> String:
 			worst_v = v
 			worst = tag
 	var words := {"water": "too much water", "bunker": "too much sand", "rough": "the rough", "hard": "it is too hard", "oob": "out of bounds",
-		"wait": "the wait", "weeds": "the weeds", "pests": "the pests", "wet": "the wet", "bare": "the bare ground", "dark": "the dark", "hit": "flying balls", "greens_bad": "the greens"}
+		"wait": "the wait", "weeds": "the weeds", "pests": "the pests", "wet": "the wet", "bare": "the bare ground", "dark": "the dark", "hit": "flying balls", "greens_bad": "the greens", "litter": "the litter"}
 	return str(words.get(worst, "")) if worst != "" else ""
 
 
