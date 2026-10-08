@@ -1,0 +1,5 @@
+{
+	"_about": "How long the starter holds the next party after the one ahead begins, in simulation seconds. The panel steps by 'step' up to 'max'. Zero sends them out as soon as the tee is free. Waiting still wears on the party.",
+	"step": 15,
+	"max": 90
+}

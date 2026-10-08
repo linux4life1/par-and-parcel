@@ -14,7 +14,7 @@ uniform vec2 map_size = vec2(128.0, 128.0);
 uniform float tile_size = 5.0;
 uniform float grid_alpha = 0.0;
 uniform float contour_alpha = 0.0;
-uniform int overlay = 0;            // 0 off, 1 moisture, 2 turf health, 3 height, 4 mood, 5 lot value (4 and 5 store that in alpha, not weeds)
+uniform int overlay = 0;            // 0 off, 1 moisture, 2 turf health, 3 height, 4 mood, 5 lot value, 6 lights (4, 5 and 6 store that in alpha, not weeds)
 uniform vec3 brush = vec3(0.0, 0.0, -1.0);   // x, z, radius; negative radius hides it
 uniform vec3 brush_color : source_color = vec3(1.0, 1.0, 1.0);
 uniform vec4 land_rect = vec4(0.0);          // x0, z0, x1, z1 of a highlighted land parcel
@@ -364,6 +364,11 @@ void fragment() {
 		float v = clamp(weeds, 0.0, 1.0);
 		vec3 vcol = mix(lin(vec3(0.22, 0.30, 0.40)), lin(vec3(0.93, 0.74, 0.16)), v);
 		col = vcol * (0.55 + 1.6 * luma);
+	} else if (overlay == 6) {
+		// Alpha is how well the spot is lit after dark.
+		float lit = clamp(weeds, 0.0, 1.0);
+		vec3 lcol = mix(lin(vec3(0.05, 0.07, 0.14)), lin(vec3(1.0, 0.93, 0.62)), lit);
+		col = lcol * (0.45 + 1.4 * luma);
 	}
 
 	// land you do not own yet is washed out and hatched

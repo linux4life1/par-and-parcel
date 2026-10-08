@@ -108,6 +108,23 @@ func light_at(x: float, z: float) -> float:
 	return _light[i]
 
 
+## True when a water tile sits within `radius` metres of the spot.
+func water_near(x: float, z: float, radius: float) -> bool:
+	var cx := int(floor(x / Defs.TILE))
+	var cz := int(floor(z / Defs.TILE))
+	var r := int(ceil(radius / Defs.TILE))
+	var r2 := radius * radius
+	for tz in range(maxi(cz - r, 0), mini(cz + r + 1, h)):
+		for tx in range(maxi(cx - r, 0), mini(cx + r + 1, w)):
+			var dx := (float(tx) + 0.5) * Defs.TILE - x
+			var dz := (float(tz) + 0.5) * Defs.TILE - z
+			if dx * dx + dz * dz > r2:
+				continue
+			if terrain[tz * w + tx] == Defs.T.WATER:
+				return true
+	return false
+
+
 func _ensure_light() -> void:
 	if _light_rev == lights_rev and _light.size() == w * h:
 		return

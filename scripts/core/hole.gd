@@ -30,6 +30,15 @@ var fun := 60.0                 # running golfer opinion of this hole, 0..100
 var name := ""
 var comments := {}              # mood tag -> summed effect on golfers here
 var award := ""                 # "", "top100" or "top18"
+## Themed awards this hole holds ("par3", "water", "night"). One hole
+## per theme. Taken back when the hole no longer deserves it.
+var themes: Array[String] = []
+## Seconds the starter holds the next party after the one ahead begins.
+## Zero sends them out as soon as the tee is free.
+var gap := 0.0
+## When the party now playing began the hole. Far in the past until then,
+## so the first party is never held.
+var tee_at := -1.0e9
 # What the hole tests, measured by HoleLab in strokes of advantage.
 var lab_ready := false
 var lab_sig := -1
@@ -532,15 +541,50 @@ func average_time() -> float:
 	return s / float(play_times.size())
 
 
+## True while the starter is still holding the next party. The gap is
+## measured from when the party ahead began the hole.
+func starter_holds(now: float) -> bool:
+	return gap > 0.0 and now < tee_at + gap
+
+
+## Water sits beside the line of play, close enough to be the hole's hazard.
+## The tee itself is not tested: a pond behind the box is not in play.
+func touches_water(course: Course) -> bool:
+	var n := maxi(6, int(length / 10.0))
+	for k in range(1, n + 1):
+		var p := point_along(float(k) / float(n))
+		if course.water_near(p.x, p.z, 14.0):
+			return true
+	return course.water_near(pin.x, pin.z, 14.0)
+
+
 func to_dict() -> Dictionary:
 	return {
 		"tee": [tee.x, tee.y, tee.z], "pin": [pin.x, pin.y, pin.z],
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"tally": tally, "aces": aces,
-		"name": name, "award": award, "comments": comments, "open": open,
+		"name": name, "award": award, "themes": themes, "gap": gap, "comments": comments, "open": open,
 		"play_times": play_times,
 	}
+
+
+static var _known_themes := {}
+static var _known_themes_read := false
+
+
+## Theme ids from data/awards.json, read once. A load walks every hole.
+static func _theme_ids() -> Dictionary:
+	if _known_themes_read:
+		return _known_themes
+	_known_themes = {}
+	var awards: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/awards.json"))
+	if awards is Dictionary:
+		for row in awards.get("themes", []):
+			if row is Dictionary:
+				_known_themes[str(row.get("id", ""))] = true
+	_known_themes_read = true
+	return _known_themes
 
 
 static func from_dict(d: Dictionary) -> Hole:
@@ -565,6 +609,16 @@ static func from_dict(d: Dictionary) -> Hole:
 	while hole.play_times.size() > PACE_KEEP:
 		hole.play_times.pop_front()
 	hole.award = str(d.get("award", ""))
+	hole.gap = float(d.get("gap", 0.0))
+	var known := _theme_ids()
+	var th: Array = d.get("themes", [])
+	for id in th:
+		var name := str(id)
+		if name == "" or hole.themes.has(name):
+			continue
+		if not known.is_empty() and not known.has(name):
+			continue
+		hole.themes.append(name)
 	hole.comments = d.get("comments", {})
 	# Par is filled in properly once the ground is loaded (Course.from_dict).
 	# Until then, a save that recorded one keeps it, and an older save keeps
