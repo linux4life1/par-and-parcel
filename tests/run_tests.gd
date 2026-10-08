@@ -3741,7 +3741,8 @@ func _test_easy_and_album() -> void:
 	var again := Sim.from_dict(db, bare, gear)
 	var twice := Sim.from_dict(db, bare, gear)
 	check(again.club_id == twice.club_id and again.club_id == Sim.legacy_club_id(bare), "a club-less save loads the same id every time")
-	var purse := float(DataDB.find(db.scenarios, "free_play").get("money", -1.0))
+	var free_play: Dictionary = DataDB.find(db.scenarios, "free_play")
+	var free_purse := float(free_play.get("money", -1.0))
 	Game.sim = again
 	Game._session_live = true
 	Game.sim.economy.money += 8000.0
@@ -3750,7 +3751,7 @@ func _test_easy_and_album() -> void:
 	stale.close()
 	check(is_equal_approx(Game.carried_money(), 8000.0), "the scenario screen reads the live club, not a stale file")
 	Game.new_game("free_play", 11)
-	check(is_equal_approx(Game.sim.economy.money, purse + 8000.0), "an older club carries its profit once")
+	check(is_equal_approx(Game.sim.economy.money, free_purse + 8000.0), "an older club carries its profit once")
 	Game.sim = Sim.from_dict(db, bare, gear)
 	Game._session_live = true
 	Game.sim.economy.money += 8000.0
@@ -3764,7 +3765,7 @@ func _test_easy_and_album() -> void:
 	stuffed.close()
 	check(is_equal_approx(Game.carried_money(), 0.0), "a club already taken shows nothing, even when the file still names a sum")
 	Game.new_game("free_play", 12)
-	check(is_equal_approx(Game.sim.economy.money, purse), "loading that older club again does not carry the bank a second time")
+	check(is_equal_approx(Game.sim.economy.money, free_purse), "loading that older club again does not carry the bank a second time")
 	if FileAccess.file_exists(Game.CAREER_PATH):
 		DirAccess.remove_absolute(Game.CAREER_PATH)
 	Game.CAREER_PATH = path
