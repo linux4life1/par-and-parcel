@@ -6,6 +6,7 @@ extends Node3D
 const CHUNK := 16
 
 var course: Course
+var sim: Sim
 var material := ShaderMaterial.new()
 var _chunks := {}
 var _dirty := {}
@@ -88,7 +89,7 @@ func _frame_terrain(_delta: float) -> void:
 			n += 1
 			if n >= 6:
 				break
-	# The mood overlay borrows the weeds channel. Refill at once when it is switched.
+	# Mood and lot value borrow the weeds channel. Refill at once when switched.
 	var shown := int(material.get_shader_parameter("overlay"))
 	if shown != _shown_overlay:
 		_shown_overlay = shown
@@ -165,6 +166,9 @@ func _fill_row(ty: int) -> void:
 	var w := course.w
 	var j := ty * w * 4
 	var i := ty * w
+	var shade := PackedByteArray()
+	if _shown_overlay == 5 and sim != null:
+		shade = sim.lot_shade()
 	for tx in w:
 		_bytes[j] = course.terrain[i] | (128 if (course.locked[i] != 0 and course.hot[i] == 0) else 0) | (64 if _bare[i] != 0 else 0)
 		_bytes[j + 1] = int(course.wet[i] * 255.0)
@@ -172,6 +176,8 @@ func _fill_row(ty: int) -> void:
 		if _shown_overlay == 4:
 			var m := clampf(course.mood[i] / 12.0, -1.0, 1.0)
 			_bytes[j + 3] = int((m * 0.5 + 0.5) * 255.0)
+		elif _shown_overlay == 5 and sim != null:
+			_bytes[j + 3] = shade[i] if i < shade.size() else 0
 		else:
 			_bytes[j + 3] = int(course.weeds[i] * 255.0)
 		j += 4
