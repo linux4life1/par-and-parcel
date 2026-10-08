@@ -2881,6 +2881,18 @@ func _test_hole_preview() -> void:
 	tools.free()
 
 
+## The card button whose label is this exact quote, or null.
+func _quote_button(root: Node, quote: String) -> Button:
+	var stack: Array[Node] = [root]
+	while not stack.is_empty():
+		var n: Node = stack.pop_back()
+		if n is Button and (n as Button).text == quote:
+			return n as Button
+		for child in n.get_children():
+			stack.append(child)
+	return null
+
+
 func _test_mood_map() -> void:
 	print("-- the mood map")
 	var sim := _sim("sandbox", 3)
@@ -2897,6 +2909,38 @@ func _test_mood_map() -> void:
 	var th: Dictionary = g.thoughts[g.thoughts.size() - 1]
 	var at: Vector3 = th.pos
 	check(at.distance_to(g.pos) < 0.1, "the thought remembers where it happened")
+	g.pos = sim.course.tile_center(48, 40)
+	g.feel(-6.0, "What a lie.", "lie")
+	var sour_tile := sim.course.tile_of(g.pos.x, g.pos.z)
+	var sour_i := sour_tile.y * sim.course.w + sour_tile.x
+	check(sour_i != i and sim.course.mood[sour_i] < -1.0, "an annoyed golfer lowers the tile they are standing on (%.1f)" % sim.course.mood[sour_i])
+	check(sim.course.mood[i] > 1.0, "the pleased tile is left alone")
+	sim.visitors.golfers.append(g)
+	var mood_hud := Hud.new()
+	add_child(mood_hud)
+	var mood_rig := CameraRig.new()
+	add_child(mood_rig)
+	mood_hud.rig = mood_rig
+	mood_hud.bind(sim)
+	mood_hud.inspect(g)
+	var fair_btn: Button = _quote_button(mood_hud.inspector_body, "\"What a fairway.\"")
+	var lie_btn: Button = _quote_button(mood_hud.inspector_body, "\"What a lie.\"")
+	check(fair_btn != null and lie_btn != null, "each thought is a button on the golfer card")
+	if fair_btn != null:
+		fair_btn.pressed.emit()
+	var fair_spot: Vector3 = g.thoughts[0].pos
+	check(mood_rig.focus.distance_to(fair_spot) < 0.1, "clicking the pleased thought reports where it happened")
+	if lie_btn != null:
+		lie_btn.pressed.emit()
+	var lie_spot: Vector3 = g.thoughts[g.thoughts.size() - 1].pos
+	check(mood_rig.focus.distance_to(lie_spot) < 0.1 and mood_rig.focus.distance_to(fair_spot) > 20.0, "clicking the annoyed thought reports its own spot")
+	check(mood_hud.overlay_btns.size() > 4 and mood_hud.overlay_btns[4].text == "Mood" and mood_hud.overlay_btns[4].button_pressed, "that click shows the mood map")
+	mood_hud.terrain = null
+	mood_hud.rig = null
+	remove_child(mood_hud)
+	mood_hud.free()
+	remove_child(mood_rig)
+	mood_rig.free()
 	var before: float = sim.course.mood[i]
 	for n in 160:
 		sim.grounds.step(0.25)
