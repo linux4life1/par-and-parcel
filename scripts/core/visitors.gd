@@ -311,6 +311,7 @@ func worth(g: Golfer, hole: Hole) -> float:
 		v *= 1.4
 	elif hole.award == "top100":
 		v *= 1.2
+	v *= 1.0 + sim.theme_fee(hole)
 	if sim.resort.has("airstrip"):
 		v *= 1.2
 	return v * sim.skills.mult("generosity")
