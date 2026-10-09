@@ -23,6 +23,10 @@ var top_box: VBoxContainer
 var _refresh := Callable()
 var _refresh_t := 0.0
 var _tool_buttons := {}
+func tool_button(id: String) -> Button:
+	return _tool_buttons[id] as Button
+
+
 var undo_btn: Button
 
 var l_name: Label

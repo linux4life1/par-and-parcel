@@ -1279,6 +1279,10 @@ static func _parts(kind: String) -> Array:
 
 # ----------------------------------------------------------------- setup
 
+func show_objects(on: bool) -> void:
+	_obj_root.visible = on
+
+
 func _ready() -> void:
 	add_child(_obj_root)
 	add_child(_hole_root)

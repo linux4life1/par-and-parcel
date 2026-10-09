@@ -92,8 +92,137 @@ func _ready() -> void:
 	_test_practice_area()
 	_test_hole_target()
 	_test_thoughts_here()
+	_test_demo_driver()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
+
+
+
+
+func _drop_main(host: Main) -> void:
+	var nodes: Array[Node] = [host.terrain, host.grass, host.world, host.arrows, host.crowd, host.fx, host.rig, host.sky, host.volcano, host.tools, host.play, host.hud, host.desk, host.pad]
+	for n in nodes:
+		if n != null and is_instance_valid(n) and n.get_parent() == null:
+			n.free()
+	host.free()
+
+
+func _demo_child(host: Main) -> DemoDriver:
+	for c in host.get_children():
+		if c is DemoDriver:
+			return c as DemoDriver
+	return null
+
+
+func _test_demo_driver() -> void:
+	print("-- the demo driver")
+	var saved_args: Dictionary = Game.args.duplicate()
+	var saved_sim := Game.sim
+	var src := FileAccess.get_file_as_string("res://scripts/view/main.gd")
+	var i0 := src.find("func _process")
+	var i1 := src.find("\nfunc ", i0 + 12)
+	var body := src.substr(i0, i1 - i0)
+	check(i0 >= 0 and not body.contains("fxtest") and not body.contains("posetest") and not body.contains("ragetest") and not body.contains("cheertest") and not body.contains("Game.args"), "with no driver, a frame of main reads no test switch")
+	Game.args = {}
+	var bare := Main.new()
+	bare._attach_driver()
+	check(_demo_child(bare) == null and bare.driver == null, "with no args, main has no DemoDriver child")
+	Game.args = {"clock": "15"}
+	var clocked := Main.new()
+	clocked._attach_driver()
+	check(_demo_child(clocked) == null, "a switch main still handles does not add the driver")
+	Game.args = {"demo": "paint"}
+	var shown := Main.new()
+	shown._attach_driver()
+	check(_demo_child(shown) != null and shown.driver.demo_name() == "paint", "a demo arg adds the driver and keeps the demo")
+	var sim := _sim("three_holes", 4)
+	Game.sim = sim
+	Game.args = {"lights": "1"}
+	var lights := DemoDriver.new()
+	var lamps := 0
+	for o in sim.course.objects:
+		if o == Defs.O.FLOODLIGHT:
+			lamps += 1
+	lights.apply()
+	var lamps_after := 0
+	for o in sim.course.objects:
+		if o == Defs.O.FLOODLIGHT:
+			lamps_after += 1
+	check(lamps_after > lamps, "lights floods the first hole (%d lamps)" % lamps_after)
+	Game.args = {"weeds": "all"}
+	var weeds := DemoDriver.new()
+	weeds.apply()
+	var lo := 1.0
+	var hi := 0.0
+	for i in sim.grounds.play_tiles:
+		lo = minf(lo, sim.course.weeds[i])
+		hi = maxf(hi, sim.course.weeds[i])
+	check(hi > lo + 0.5, "weeds lays a gradient across the course (%.2f to %.2f)" % [lo, hi])
+	Game.args = {"wind": "10"}
+	var windy := DemoDriver.new()
+	windy.apply()
+	check(is_equal_approx(sim.weather.wind_speed, 10.0 / 2.237), "wind holds the steady wind (%.2f m/s)" % sim.weather.wind_speed)
+	Game.args = {"day": "10"}
+	var dated := DemoDriver.new()
+	dated.apply()
+	check(is_equal_approx(sim.time, 10.0 * Defs.DAY_SECONDS), "day jumps the calendar")
+	var hired := sim.crew.members.size()
+	Game.args = {"staff": "2"}
+	var staff := DemoDriver.new()
+	staff.apply()
+	check(sim.crew.members.size() == hired + 4, "staff hires the greenkeepers, the exterminator and the marshal (%d)" % sim.crew.members.size())
+	var rig := CameraRig.new()
+	Game.args = {"zoom": "55"}
+	var zoomed := DemoDriver.new()
+	zoomed.rig = rig
+	zoomed.apply()
+	check(is_equal_approx(rig.target_dist, 55.0) and is_equal_approx(rig.dist, 55.0), "zoom sets the camera")
+	var fx := FxView.new()
+	add_child(fx)
+	fx.rig = rig
+	rig.dist = 40.0
+	Game.args = {"fxtest": "sand"}
+	var bursts := DemoDriver.new()
+	bursts.fx = fx
+	bursts.rig = rig
+	bursts.tests(0.2)
+	var puffs := 0
+	for c in fx.get_children():
+		if c is GPUParticles3D and (c as GPUParticles3D).emitting:
+			puffs += 1
+	check(puffs > 0, "fxtest fires the burst (%d)" % puffs)
+	var party := sim.visitors.add_group("public", 2, 0.5)
+	for g in party.members:
+		g.phase = Golfer.P.AIM
+		g.walking = false
+		g.swing_t = -1.0
+		g.hit_t = 0.0
+	Game.args = {"posetest": "1"}
+	var poses := DemoDriver.new()
+	poses.rig = rig
+	poses.tests(0.1)
+	check(party.members[0].sulk_t == 1.0 and party.members[1].cheer_t == 1.0, "posetest hangs a head and pumps a fist")
+	Game.args = {"ragetest": "toss"}
+	var rage := DemoDriver.new()
+	rage.rig = rig
+	var victim := party.members[0]
+	rage.tests(0.1)
+	check(victim.tantrum, "ragetest sends the golfer into a tantrum")
+	sim.tourney.gallery_hole = 0
+	var heard: Array[String] = []
+	sim.sound.connect(func(id: String, _at: Vector3, _power: float) -> void: heard.append(id))
+	Game.args = {"cheertest": "ovation"}
+	var cheer := DemoDriver.new()
+	cheer.tests(0.1)
+	check(heard.has("ovation"), "cheertest plays the gallery sound (%s)" % str(heard))
+	fx.free()
+	rig.free()
+	_drop_main(bare)
+	_drop_main(clocked)
+	_drop_main(shown)
+	Game.args = saved_args
+	Game.sim = saved_sim
+
 
 
 ## A game for testing. The clock is stopped at noon so that tests about
