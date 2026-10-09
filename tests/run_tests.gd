@@ -2563,6 +2563,7 @@ func _test_planner() -> void:
 	var pin_line := Vector2(hole.pin.x - hole.tee.x, hole.pin.z - hole.tee.z).angle()
 	var on_fairway := 0
 	var down_the_leg := 0
+	var under := 0
 	var n := 20
 	for k in n:
 		var g := sim.visitors.make_golfer("public", 0.55)
@@ -2576,9 +2577,16 @@ func _test_planner() -> void:
 			on_fairway += 1
 		if absf(wrapf(float(plan.heading) - pin_line, -PI, PI)) > deg_to_rad(5.0):
 			down_the_leg += 1
+		var from := Vector2(g.ball.pos.x, g.ball.pos.z)
+		var aim := Vector2(t.x - from.x, t.z - from.y)
+		var reach := aim.length()
+		if reach > 1.0 and ShotAI.under_canopy(c, from, aim / reach, float(plan.dist)):
+			under += 1
 	print("   on a dogleg, %d of %d average golfers aim at the fairway and %d aim down the leg rather than at the flag" % [on_fairway, n, down_the_leg])
+	print("   %d of 20 lines pass under a canopy" % under)
 	check(on_fairway >= n * 0.8, "golfers aim for the fairway, not the trees between them and the flag")
 	check(down_the_leg >= n * 0.6, "and follow the dogleg rather than aiming at the pin")
+	check(under <= 16, "no more than 16 of the 20 lines pass under a canopy (%d)" % under)
 	var duffer := sim.visitors.make_golfer("public", 0.1)
 	duffer.persona = {}
 	duffer.imagination = 0.0
@@ -2810,6 +2818,12 @@ func _test_tree_sixty() -> void:
 	check(ShotAI._line_block(c, tee, dir, layup) > ShotAI._line_block(c, tee, dir, 40.0), "the tree at 60 m adds a penalty the first 40 m do not")
 	check(ShotAI.under_canopy(c, tee, dir, layup), "a straight layup meets that tree under its canopy")
 	check(ShotAI._line_block(c, tee, dir, layup) > 0.0, "the full shot, not a 40 m cap, prices that tree")
+	var with_oak := ShotAI._line_block(c, tee, dir, layup)
+	var oak_i := 88 * c.w + 40
+	c.objects[oak_i] = 0
+	var cleared := ShotAI._line_block(c, tee, dir, layup)
+	c.objects[oak_i] = Defs.O.OAK
+	check(with_oak > cleared, "the tree 60 m out raises the line penalty compared with the oak removed (%.0f against %.0f)" % [with_oak, cleared])
 
 
 ## Shot length whose simple arc is between `lo` and `hi` metres at `s` metres out.
