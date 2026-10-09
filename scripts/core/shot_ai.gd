@@ -13,6 +13,8 @@ const COST_WATER := 240.0
 const COST_OUT := 300.0
 const COST_TREE := 48.0
 const GAIN_GREEN := 10.0
+## Under a canopy, per tree tile. Above the canopy the penalty stays 4.
+const UNDER_CANOPY := 22.0
 const REACH: Array[float] = [1.0, 0.9, 0.78, 0.64, 0.5]
 
 static var _scratch := Ball.new()
@@ -136,23 +138,51 @@ static func _waste_trouble(sim: Sim) -> float:
 	return WASTE_TROUBLE_FALLBACK
 
 
-## Penalty for trees standing in the way. A low ball pays the full price;
-## one well above the canopy pays a little, in case the branch is taller
-## than the guess. Carry and apex are a rough arc, not the real flight.
-static func _line_block(course: Course, from: Vector2, dir: Vector2, length: float) -> float:
-	var c := 0.0
+## Height of the simple flight arc at `s` metres along a shot of `length`.
+## Carry is about 0.87 of the shot and the apex about 0.12 of the carry.
+## This is a rough arc, not the real flight.
+static func _ball_height(s: float, length: float) -> float:
 	var carry := maxf(length * 0.87, 1.0)
 	var apex := carry * 0.12
+	var u := clampf(s / carry, 0.0, 1.0)
+	return 4.0 * apex * u * (1.0 - u)
+
+
+## Penalty for trees standing in the way, over the whole shot. A ball under
+## that tree's own canopy pays the full price. One above it pays a little,
+## in case a branch sticks up past the shape. Tree heights are the shapes
+## already used for collisions.
+static func _line_block(course: Course, from: Vector2, dir: Vector2, length: float) -> float:
+	var c := 0.0
 	var s := 6.0
 	while s < length:
 		var q := from + dir * s
 		var i := course.index_at(q.x, q.y)
 		if i >= 0 and Defs.is_tree(course.objects[i]):
-			var u := clampf(s / carry, 0.0, 1.0)
-			var h := 4.0 * apex * u * (1.0 - u)
-			c += 22.0 if h < 10.0 else 4.0
+			c += UNDER_CANOPY if _ball_height(s, length) < _canopy_at(course, i) else 4.0
 		s += Defs.TILE
 	return c
+
+
+## True when the chosen line meets a tree while the ball is still under
+## that tree's canopy.
+static func under_canopy(course: Course, from: Vector2, dir: Vector2, length: float) -> bool:
+	var s := 6.0
+	while s < length:
+		var q := from + dir * s
+		var i := course.index_at(q.x, q.y)
+		if i >= 0 and Defs.is_tree(course.objects[i]) and _ball_height(s, length) < _canopy_at(course, i):
+			return true
+		s += Defs.TILE
+	return false
+
+
+## That tree's canopy, or 10 m when the tile has no shape yet.
+static func _canopy_at(course: Course, tile: int) -> float:
+	var top := course.solids.tree_top(tile)
+	if top <= 0.0:
+		return 10.0
+	return top
 
 
 ## Where a perfectly struck shot would finish.
