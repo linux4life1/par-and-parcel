@@ -1797,8 +1797,10 @@ func course_dict() -> Dictionary:
 func install_course(course_d: Dictionary) -> void:
 	course = Course.from_dict(course_d)
 	var keep := int(db.hole_target.get("window", 1))
+	var thought_keep := int(db.thoughts_here.get("keep", 1))
 	for loaded in course.holes:
 		loaded.trim_target(keep)
+		loaded.trim_thoughts(thought_keep)
 	course.biome = biome
 	course.bind_switch(Callable(self, "can_switch"))
 	_bind_marks()

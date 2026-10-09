@@ -44,6 +44,7 @@ var rating: Dictionary = {}    # scratch score and slope, apart from the 0–100
 var practice: Dictionary = {}  # practice green and driving range: prices, upkeep, mood, bucket, field and wait
 var test_hole: Dictionary = {} # the Test button: how many balls, which classes, which finishes count as trouble
 var hole_target: Dictionary = {} # rolling trouble share from public rounds, and when a skilled golfer says so
+var thoughts_here: Dictionary = {} # how many remarks a hole remembers
 var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
 var feed: Dictionary = {}
@@ -98,6 +99,7 @@ func _init() -> void:
 	practice = _load("practice")
 	test_hole = _load("test_hole")
 	hole_target = _load("hole_target")
+	thoughts_here = _load("thoughts_here")
 	names = _load("names")
 	feed = _load("feed")
 

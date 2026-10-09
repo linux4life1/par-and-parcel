@@ -49,6 +49,45 @@ static func target_line(hole: Hole, book: Dictionary) -> String:
 	return "%d%% %s" % [int(round(share * 100.0)), tag]
 
 
+## Remarks on this hole, newest first. Empty for a draft, even when remarks
+## were kept.
+static func thought_lines(hole: Hole) -> PackedStringArray:
+	var out := PackedStringArray()
+	if hole == null or not hole.open:
+		return out
+	for i in range(hole.thoughts_here.size() - 1, -1, -1):
+		var rec: Dictionary = hole.thoughts_here[i]
+		out.append(str(rec.get("text", "")))
+	return out
+
+
+## Where a remark was said, as a point the camera can sit on.
+static func thought_focus(course: Course, rec: Dictionary) -> Vector3:
+	var tile: Array = rec.get("tile", [0, 0])
+	var tx := 0
+	var ty := 0
+	if tile.size() > 0:
+		tx = int(tile[0])
+	if tile.size() > 1:
+		ty = int(tile[1])
+	return course.tile_center(tx, ty)
+
+
+static func thoughts_stamp(hole: Hole) -> String:
+	var stamp := "1" if hole.open else "0"
+	for rec in hole.thoughts_here:
+		var row: Dictionary = rec
+		var tile: Array = row.get("tile", [])
+		var tx := 0
+		var ty := 0
+		if tile.size() > 0:
+			tx = int(tile[0])
+		if tile.size() > 1:
+			ty = int(tile[1])
+		stamp += "|%s|%d|%d|%d" % [str(row.get("text", "")), int(row.get("day", 0)), tx, ty]
+	return stamp
+
+
 var hud: Hud
 var _skill_branch := "manager"
 var _skill_pick := ""
@@ -383,6 +422,8 @@ func _holes(body: VBoxContainer) -> Callable:
 	var card_box := UIKit.vbox(2)
 	body.add_child(card_box)
 	var rows: Array = []
+	var thought_boxes: Array[VBoxContainer] = []
+	var thought_stamps: Array[String] = []
 	var diagrams: Array[YardageCard] = []
 	var diagram_tex: Array[TextureRect] = []
 	var count := sim.course.holes.size()
@@ -540,6 +581,10 @@ func _holes(body: VBoxContainer) -> Callable:
 		cv.add_child(st)
 		var report := UIKit.para("", 12, UIKit.TEXT)
 		cv.add_child(report)
+		var thoughts_box := UIKit.vbox(1)
+		cv.add_child(thoughts_box)
+		thought_boxes.append(thoughts_box)
+		thought_stamps.append("")
 		rows.append([kind, bars, st, report, paid, turn_text, turn_btn, tee_text, mid_btn, fwd_btn])
 	var card_plays := -1
 	var card_rev := -1
@@ -622,6 +667,10 @@ func _holes(body: VBoxContainer) -> Callable:
 				txt += "\nAbout %s a group, waiting included" % Defs.pace_text(hole.average_time())
 			(row[2] as Label).text = txt
 			(row[3] as Label).text = _hole_report(hole)
+			var stamp := thoughts_stamp(hole)
+			if stamp != thought_stamps[i]:
+				thought_stamps[i] = stamp
+				_fill_thoughts(thought_boxes[i], hole)
 			var turn_lbl: Label = row[5]
 			turn_lbl.text = hole.turn_line()
 			var turn_now: Button = row[6]
@@ -644,6 +693,27 @@ func _holes(body: VBoxContainer) -> Callable:
 				var avg := hole.average_paid()
 				paid.text = "%s a golfer" % Defs.money(avg)
 				paid.add_theme_color_override("font_color", UIKit.GOOD if hole.fun >= 55.0 else (UIKit.WARN if hole.fun >= 40.0 else UIKit.BAD))
+
+
+func _fill_thoughts(box: VBoxContainer, hole: Hole) -> void:
+	UIKit.clear(box)
+	box.add_child(UIKit.label("Thoughts here", 12, UIKit.MUTED))
+	if not hole.open:
+		return
+	for n in range(hole.thoughts_here.size() - 1, -1, -1):
+		var rec: Dictionary = hole.thoughts_here[n]
+		var line := UIKit.button("\"%s\"" % str(rec.get("text", "")), _show_thought_here.bind(rec), "Move the camera to where this was said")
+		line.alignment = HORIZONTAL_ALIGNMENT_LEFT
+		line.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		line.add_theme_font_size_override("font_size", 12)
+		box.add_child(line)
+
+
+## A click on a remark moves the camera to the tile it was said on.
+func _show_thought_here(rec: Dictionary) -> void:
+	if hud == null or hud.rig == null or hud.sim == null:
+		return
+	hud.rig.center_on(thought_focus(hud.sim.course, rec), 45.0)
 
 
 ## The course scorecard: every hole's par, yardage, average score and how

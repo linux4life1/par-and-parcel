@@ -346,6 +346,7 @@ func make_golfer(m: Dictionary) -> Golfer:
 	sim.tag_eddy(g)
 	g.kind = "public"
 	g.course = sim.course
+	g.sim = sim
 	g.name = str(m.name)
 	g.handle = str(m.handle)
 	g.skill = float(m.skill)

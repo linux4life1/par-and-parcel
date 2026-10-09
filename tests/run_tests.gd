@@ -91,6 +91,7 @@ func _ready() -> void:
 	_test_practice()
 	_test_practice_area()
 	_test_hole_target()
+	_test_thoughts_here()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -2888,13 +2889,21 @@ func _test_hole_preview() -> void:
 
 ## The card button whose label is this exact quote, or null.
 func _quote_button(root: Node, quote: String) -> Button:
+	return _first_quote(root, quote)
+
+
+## The first button with this exact quote, in the order the panel lays
+## children out. Newest remarks are added first, so this is the newest
+## when several buttons share the words.
+func _first_quote(root: Node, quote: String) -> Button:
 	var stack: Array[Node] = [root]
 	while not stack.is_empty():
 		var n: Node = stack.pop_back()
 		if n is Button and (n as Button).text == quote:
 			return n as Button
-		for child in n.get_children():
-			stack.append(child)
+		var kids := n.get_children()
+		for i in range(kids.size() - 1, -1, -1):
+			stack.append(kids[i])
 	return null
 
 
@@ -8913,3 +8922,310 @@ func _test_holes_intro() -> void:
 	var intro := Panels.HOLES_INTRO
 	check(intro.contains("starts closed") and intro.contains("Test hits test balls from the back tee and marks where they land and where they stop") and intro.contains("Open lets the public on"), "the holes intro says test balls are marked where they land and where they stop")
 	check(not intro.contains("bucket") and not intro.contains("lab golfers") and not intro.contains("tee shots"), "the holes intro does not call that a bucket or a lab tee shot")
+
+
+func _test_thoughts_here() -> void:
+	print("-- thoughts here")
+	_test_thoughts_land()
+	_test_thoughts_keep()
+	_test_thoughts_save()
+	_test_thoughts_panel()
+	_test_thoughts_tantrum()
+	_test_thoughts_story()
+	_test_thoughts_warmup()
+	_test_thoughts_repeat()
+
+
+func _test_thoughts_land() -> void:
+	var sim := _sim("sandbox", 71)
+	var book: Dictionary = sim.db.thoughts_here
+	check(int(book.get("keep", 0)) >= 1, "how many remarks a hole keeps is data")
+	var first := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	var second := sim.add_hole(sim.course.tile_center(28, 20), sim.course.tile_center(28, 36))
+	first.open = true
+	second.open = true
+	var g := _target_golfer(sim, 0.5)
+	g.group.hole_i = 0
+	g.group.state = Group.S.PLAY
+	g.pos = sim.course.tile_center(40, 40)
+	_public_shot(sim, g, first, Defs.T.BUNKER, Ball.S.REST)
+	check(first.thoughts_here.size() == 1 and second.thoughts_here.is_empty(), "a bunker remark lands on the hole being played")
+	var row: Dictionary = first.thoughts_here[0]
+	var stood := sim.course.tile_of(g.pos.x, g.pos.z)
+	var tile: Array = row.get("tile", [])
+	check(str(row.get("text", "")).contains("sand") and str(row.get("golfer", "")) == g.name, "the remark keeps the words and the golfer")
+	check(int(row.get("day", -1)) == sim.day() and tile.size() == 2 and int(tile[0]) == stood.x and int(tile[1]) == stood.y, "the remark keeps the day and the tile")
+	g.group.hole_i = 1
+	g.pos = sim.course.tile_center(48, 44)
+	_public_shot(sim, g, second, Defs.T.DEEP_ROUGH, Ball.S.REST)
+	check(second.thoughts_here.size() == 1 and str((second.thoughts_here[0] as Dictionary).get("text", "")).contains("thick"), "the next hole gets its own remark")
+	check(first.thoughts_here.size() == 1, "the first hole does not take the second remark")
+	var stood2 := sim.course.tile_of(g.pos.x, g.pos.z)
+	var tile2: Array = (second.thoughts_here[0] as Dictionary).get("tile", [])
+	check(int(tile2[0]) == stood2.x and int(tile2[1]) == stood2.y and (stood2.x != stood.x or stood2.y != stood.y), "the second remark remembers its own tile")
+	var before := first.thoughts_here.size()
+	var lab := _target_golfer(sim, 0.5)
+	lab.kind = "lab"
+	lab.group.hole_i = 0
+	lab.group.state = Group.S.PLAY
+	lab.pos = g.pos
+	lab.feel(-1.0, "A lab golfer says this.", "bunker")
+	var owner := _target_golfer(sim, 0.5)
+	owner.kind = "player"
+	owner.group.hole_i = 0
+	owner.group.state = Group.S.PLAY
+	owner.pos = g.pos
+	owner.feel(-1.0, "The owner says this.", "bunker")
+	check(first.thoughts_here.size() == before, "a lab remark and a play-mode remark are not kept")
+
+
+func _test_thoughts_keep() -> void:
+	var sim := _sim("sandbox", 72)
+	var book: Dictionary = sim.db.thoughts_here
+	var saved: Dictionary = book.duplicate(true)
+	var keep := int(book.get("keep", 1))
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	var g := _target_golfer(sim, 0.4)
+	g.group.hole_i = 0
+	g.group.state = Group.S.PLAY
+	g.pos = sim.course.tile_center(40, 40)
+	for i in keep + 1:
+		g.feel(0.0, "Remark %d" % i)
+	check(hole.thoughts_here.size() == keep, "one remark past keep drops the oldest")
+	var oldest: Dictionary = hole.thoughts_here[0]
+	var newest: Dictionary = hole.thoughts_here[keep - 1]
+	check(str(oldest.get("text", "")) == "Remark 1" and str(newest.get("text", "")) == "Remark %d" % keep, "the oldest remark is the one dropped")
+	var lines := Panels.thought_lines(hole)
+	check(lines.size() == keep and lines[0] == "Remark %d" % keep and lines[lines.size() - 1] == "Remark 1", "the panel lists remarks newest first")
+	book["keep"] = 2
+	hole.thoughts_here.clear()
+	g.thoughts.clear()
+	for j in 3:
+		g.feel(0.0, "Short %d" % j)
+	check(hole.thoughts_here.size() == 2, "changing keep in the data changes how many remarks stay")
+	var short_old: Dictionary = hole.thoughts_here[0]
+	var short_new: Dictionary = hole.thoughts_here[1]
+	check(str(short_old.get("text", "")) == "Short 1" and str(short_new.get("text", "")) == "Short 2", "the shorter keep drops the oldest of the three")
+	sim.db.thoughts_here = saved
+
+
+func _test_thoughts_save() -> void:
+	var sim := _sim("sandbox", 73)
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	var g := _target_golfer(sim, 0.4)
+	g.group.hole_i = 0
+	g.group.state = Group.S.PLAY
+	g.pos = sim.course.tile_center(40, 40)
+	g.feel(1.0, "First words.", "shot")
+	g.pos = sim.course.tile_center(42, 41)
+	g.feel(1.0, "Second words.", "shot")
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var loaded := Sim.from_dict(db, raw, gear)
+	var back: Hole = loaded.course.holes[0]
+	check(back.thoughts_here.size() == 2, "a save keeps the remarks")
+	var one: Dictionary = back.thoughts_here[0]
+	var two: Dictionary = back.thoughts_here[1]
+	var tile_one: Array = one.get("tile", [])
+	var tile_two: Array = two.get("tile", [])
+	check(str(one.get("text", "")) == "First words." and str(one.get("golfer", "")) == g.name and int(one.get("day", -1)) == sim.day(), "the first saved remark keeps its words, golfer and day")
+	check(int(tile_one[0]) == 40 and int(tile_one[1]) == 40 and int(tile_two[0]) == 42 and int(tile_two[1]) == 41 and str(two.get("text", "")) == "Second words.", "the saved remarks keep their tiles")
+	var book: Dictionary = sim.db.thoughts_here
+	var saved: Dictionary = book.duplicate(true)
+	book["keep"] = 2
+	var course_d: Dictionary = raw.course
+	var rows: Array = course_d.holes
+	var filed: Dictionary = rows[0]
+	filed["here"] = [
+		{"text": "One", "golfer": "A", "day": 1, "tile": [1, 2]},
+		{"text": "Two", "golfer": "B", "day": 1, "tile": [3, 4]},
+		{"text": "Three", "golfer": "C", "day": 2, "tile": [5, 6]},
+		{"text": "Four", "golfer": "D", "day": 2, "tile": [7, 8]},
+	]
+	var trimmed := Sim.from_dict(db, raw, gear)
+	var cut: Hole = trimmed.course.holes[0]
+	check(cut.thoughts_here.size() == 2, "a save with more remarks than keep is cut to keep")
+	var cut_old: Dictionary = cut.thoughts_here[0]
+	var cut_new: Dictionary = cut.thoughts_here[1]
+	check(str(cut_old.get("text", "")) == "Three" and str(cut_new.get("text", "")) == "Four", "the newest remarks are the ones kept")
+	filed.erase("here")
+	var old := Sim.from_dict(db, raw, gear)
+	var blank: Hole = old.course.holes[0]
+	check(blank.thoughts_here.is_empty(), "an old save, with no remark list, loads empty")
+	sim.db.thoughts_here = saved
+
+
+func _test_thoughts_panel() -> void:
+	var sim := _sim("sandbox", 74)
+	var open_hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	var draft := sim.add_hole(sim.course.tile_center(28, 20), sim.course.tile_center(28, 36))
+	open_hole.open = true
+	draft.open = false
+	var g := _target_golfer(sim, 0.4)
+	g.group.hole_i = 0
+	g.group.state = Group.S.PLAY
+	g.pos = sim.course.tile_center(40, 40)
+	g.feel(1.0, "Said on the first tile.", "shot")
+	g.pos = sim.course.tile_center(46, 42)
+	g.feel(1.0, "Said on the second tile.", "shot")
+	g.group.hole_i = 1
+	g.pos = sim.course.tile_center(50, 40)
+	g.feel(1.0, "Heard on the draft.", "shot")
+	var lines := Panels.thought_lines(open_hole)
+	check(lines.size() == 2 and lines[0] == "Said on the second tile." and lines[1] == "Said on the first tile.", "an open hole lists the newest remark first")
+	check(draft.thoughts_here.size() == 1 and Panels.thought_lines(draft).is_empty(), "a draft keeps the remark and shows none")
+	var rig := CameraRig.new()
+	add_child(rig)
+	var hud := Hud.new()
+	add_child(hud)
+	hud.rig = rig
+	hud.bind(sim)
+	hud.open_dock("holes")
+	var newest: Button = _quote_button(hud.dock_body, "\"Said on the second tile.\"")
+	var older: Button = _quote_button(hud.dock_body, "\"Said on the first tile.\"")
+	var hidden: Button = _quote_button(hud.dock_body, "\"Heard on the draft.\"")
+	check(newest != null and older != null and hidden == null, "the open hole's remarks are buttons, and the draft's remark is not")
+	var second_at := sim.course.tile_center(46, 42)
+	var first_at := sim.course.tile_center(40, 40)
+	if newest != null:
+		newest.pressed.emit()
+	check(rig.focus.distance_to(second_at) < 0.1, "clicking the newest remark moves the camera to its tile")
+	if older != null:
+		older.pressed.emit()
+	check(rig.focus.distance_to(first_at) < 0.1 and rig.focus.distance_to(second_at) > 20.0, "clicking the older remark moves the camera to that tile")
+	hud.rig = null
+	remove_child(hud)
+	hud.free()
+	remove_child(rig)
+	rig.free()
+
+
+func _test_thoughts_tantrum() -> void:
+	var sim := _sim("sandbox", 75)
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	var g := _target_golfer(sim, 0.4)
+	g.group.hole_i = 0
+	g.group.state = Group.S.PLAY
+	g.pos = sim.course.tile_center(40, 40)
+	sim.visitors._tantrum(g)
+	var kept := PackedStringArray()
+	for rec in hole.thoughts_here:
+		kept.append(str((rec as Dictionary).get("text", "")))
+	check(kept.has("This club is going in the lake."), "a scripted tantrum on a hole adds its line to that hole")
+	check(kept.has(g.bubble), "the line said over their head is the one the hole kept")
+
+
+func _test_thoughts_story() -> void:
+	var sim := _sim("sandbox", 78)
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	var g := _target_golfer(sim, 0.4)
+	g.group.hole_i = 0
+	g.pos = sim.course.tile_center(40, 40)
+	g.member = {"id": 41}
+	sim.visitors.golfers.append(g)
+	var r := {
+		"cast": {"lead": 41},
+		"names": {"lead": g.name},
+		"log": [],
+		"uid": 1,
+		"def": "no-such-story",
+		"started": 0,
+		"hole": 1,
+	}
+	sim.stories._show_bubble(r, g)
+	check(hole.thoughts_here.is_empty() and g.bubble == "A story", "a story title said before the tee is not kept on the hole")
+	g.group.state = Group.S.PLAY
+	var fired := sim.stories._fire(r, {"bubble": {"role": "lead", "text": "Told on this hole."}, "chapter": "A line"}, {})
+	var told := ""
+	if not hole.thoughts_here.is_empty():
+		told = str((hole.thoughts_here[0] as Dictionary).get("text", ""))
+	check(not fired and hole.thoughts_here.size() == 1 and told == "Told on this hole.", "a story line said on a hole is recorded")
+
+
+func _test_thoughts_warmup() -> void:
+	var sim := _sim("sandbox", 76)
+	var c := sim.course
+	_ready_tile(sim, 20, 30)
+	_ready_tile(sim, 22, 30)
+	check(sim.place_object(20, 30, Defs.O.DRIVING_RANGE) == 1 and sim.place_object(22, 30, Defs.O.PUTTING_GREEN) == 1, "both facilities stand before the round")
+	_paint_field(sim, 20, 30)
+	_paint_practice_green(sim, 22, 30)
+	check(sim.visitors.range_ready() and sim.visitors.green_ready(), "the range and the practice green are both open")
+	var hole := sim.add_hole(c.tile_center(48, 70), c.tile_center(48, 50))
+	hole.open = true
+	check(sim.hire("club_pro"), "a club pro is on staff for the arrival tip")
+	var g := _target_golfer(sim, 0.4)
+	g.group.hole_i = 0
+	g.pos = c.tile_center(40, 40)
+	sim.visitors._register(g)
+	sim.visitors.begin_warmup(g.group)
+	var full := _target_golfer(sim, 0.4)
+	full.group.hole_i = 0
+	full.pos = c.tile_center(41, 40)
+	sim.visitors._skip_bays(full.group)
+	var shut := _target_golfer(sim, 0.4)
+	shut.group.hole_i = 0
+	shut.pos = c.tile_center(42, 40)
+	shut.group.waiting_bay = true
+	sim.visitors.bay_line.append(shut.group)
+	check(c.set_closed(20, 30, true), "the range can be switched off")
+	sim.visitors._release_shut_line()
+	var spilled := false
+	for listed in c.holes:
+		if not listed.thoughts_here.is_empty():
+			spilled = true
+	check(not spilled, "a party warming up with both facilities adds nothing to any hole")
+	check(_said(g, "Got a quick tip from the club pro.") and _said(g, "Hit a bucket of balls on the range first.") and _said(g, "Rolled a few on the practice green first."), "the tip, the bucket and the practice green were still said")
+	check(_said(full, "The range was full, so we went straight to the tee.") and _said(shut, "The range was closed, so we went straight to the tee."), "the range full and closed lines were still said")
+	g.group.state = Group.S.QUEUE
+	g.thoughts.clear()
+	g.feel(0.0, "Next up on the tee.")
+	check(hole.thoughts_here.size() == 1 and str((hole.thoughts_here[0] as Dictionary).get("text", "")).contains("Next up"), "a remark while the party is in the queue is kept")
+	g.group.state = Group.S.PLAY
+	_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	check(hole.thoughts_here.size() == 2 and str((hole.thoughts_here[1] as Dictionary).get("text", "")).contains("sand"), "a bunker remark after teeing off still lands")
+
+
+func _test_thoughts_repeat() -> void:
+	var sim := _sim("sandbox", 77)
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	var keep := int(sim.db.thoughts_here.get("keep", 1))
+	var g := _target_golfer(sim, 0.4)
+	g.group.hole_i = 0
+	g.group.state = Group.S.PLAY
+	for i in keep:
+		g.thoughts.clear()
+		g.pos = sim.course.tile_center(30 + i, 40)
+		g.feel(0.0, "Same words.")
+	check(hole.thoughts_here.size() == keep, "the hole is full of the same line on different tiles")
+	var rig := CameraRig.new()
+	add_child(rig)
+	var hud := Hud.new()
+	add_child(hud)
+	hud.rig = rig
+	hud.bind(sim)
+	hud.open_dock("holes")
+	var fresh_x := 30 + keep
+	var fresh_y := 44
+	g.thoughts.clear()
+	g.pos = sim.course.tile_center(fresh_x, fresh_y)
+	g.feel(0.0, "Same words.")
+	var newest_row: Dictionary = hole.thoughts_here[keep - 1]
+	var newest_tile: Array = newest_row.get("tile", [])
+	check(hole.thoughts_here.size() == keep and int(newest_tile[0]) == fresh_x and int(newest_tile[1]) == fresh_y, "one more of the same line drops the oldest tile")
+	hud._frame_hud(0.3)
+	var button := _first_quote(hud.dock_body, "\"Same words.\"")
+	var fresh_at := sim.course.tile_center(fresh_x, fresh_y)
+	var dropped_at := sim.course.tile_center(30, 40)
+	if button != null:
+		button.pressed.emit()
+	check(button != null and rig.focus.distance_to(fresh_at) < 0.1 and rig.focus.distance_to(dropped_at) > 20.0, "clicking the newest button goes to the new tile")
+	hud.rig = null
+	remove_child(hud)
+	hud.free()
+	remove_child(rig)
+	rig.free()
