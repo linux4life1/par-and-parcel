@@ -88,6 +88,7 @@ func _ready() -> void:
 	_test_tee_sets()
 	_test_tee_and_stake()
 	_test_rating()
+	_test_practice()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -509,7 +510,7 @@ func _test_collisions() -> void:
 		probe.biome = bio
 		for o in range(1, Defs.O_NAMES.size()):
 			var kind := probe.kind_of(o)
-			if not Solids.data().kinds.has(kind) and Defs.O_COST[o] > 0 and not (o in [Defs.O.BRIDGE, Defs.O.PUTTING_GREEN, Defs.O.HOME_SITE, Defs.O.TENNIS]):
+			if not Solids.data().kinds.has(kind) and (Defs.O_COST[o] > 0 or o == Defs.O.DRIVING_RANGE) and not (o in [Defs.O.BRIDGE, Defs.O.PUTTING_GREEN, Defs.O.HOME_SITE, Defs.O.TENNIS]):
 				missing.append("%s/%s" % [bio.id, kind])
 	check(missing.is_empty(), "every solid object in every biome can be hit %s" % str(missing))
 	# a whole course plays with it
@@ -7522,3 +7523,144 @@ func _rating_carry_sum() -> float:
 		course.terrain[(band + 2) * course.w + tx] = Defs.T.WATER
 	course.revision += 1
 	return sim.playing_card().scratch_sum()
+
+
+func _test_practice() -> void:
+	print("-- practice green and driving range")
+	var sim := _sim("sandbox", 3)
+	var book: Dictionary = sim.db.practice
+	var green_cost: float = float(book.get("green_cost", 0.0))
+	var range_cost: float = float(book.get("range_cost", 0.0))
+	var green_upkeep: float = float(book.get("green_upkeep", 0.0))
+	var range_upkeep: float = float(book.get("range_upkeep", 0.0))
+	var green_mood: float = float(book.get("green_mood", 0.0))
+	var range_mood: float = float(book.get("range_mood", 0.0))
+	var bucket_fee: float = float(book.get("bucket", 0.0))
+	check(green_cost > 0.0 and range_cost > 0.0 and green_upkeep > 0.0 and range_upkeep > 0.0 and green_mood > 0.0 and range_mood > 0.0 and bucket_fee > 0.0, "practice prices, upkeep, mood and the bucket fee are in the data")
+	check(sim.can_switch(Defs.O.PUTTING_GREEN) and sim.can_switch(Defs.O.DRIVING_RANGE), "both facilities have a monthly bill and can be switched off")
+	check(sim.crew.count("club_pro") == 0 and sim.clubhouse_level == 0, "a sandbox arrival has no club pro and no clubhouse mood mixed in")
+	var c := sim.course
+	var spots: Array[Vector2i] = []
+	for ty in range(8, 60):
+		for tx in range(8, 60):
+			var ti := ty * c.w + tx
+			var ground: int = c.terrain[ti]
+			if c.objects[ti] != 0 or not c.can_build(tx, ty):
+				continue
+			if Defs.is_green(ground) or ground == Defs.T.TEE or ground == Defs.T.BUNKER or Defs.is_liquid(ground):
+				continue
+			if not spots.is_empty():
+				var prev: Vector2i = spots[0]
+				if absi(tx - prev.x) + absi(ty - prev.y) < 3:
+					continue
+			spots.append(Vector2i(tx, ty))
+			if spots.size() == 2:
+				break
+		if spots.size() == 2:
+			break
+	check(spots.size() == 2, "the sandbox has room for a practice green and a range")
+	if spots.size() != 2:
+		return
+	var gx: int = spots[0].x
+	var gy: int = spots[0].y
+	var rx: int = spots[1].x
+	var ry: int = spots[1].y
+	var gi := gy * c.w + gx
+	var ri := ry * c.w + rx
+	c.guard = false
+	c.set_terrain(gx, gy, Defs.T.ROUGH)
+	c.set_terrain(rx, ry, Defs.T.ROUGH)
+	c.set_object(gx, gy, Defs.O.NONE)
+	c.set_object(rx, ry, Defs.O.NONE)
+	c.guard = true
+	check(c.objects.count(Defs.O.PUTTING_GREEN) == 0 and c.objects.count(Defs.O.DRIVING_RANGE) == 0, "a new course has neither facility")
+	book["green_cost"] = green_cost + 17.0
+	var shift_purse := sim.economy.money
+	var shift_placed := sim.place_object(gx, gy, Defs.O.PUTTING_GREEN)
+	book["green_cost"] = green_cost
+	check(shift_placed == 1 and is_equal_approx(shift_purse - sim.economy.money, green_cost + 17.0), "building the practice green charges the price in the practice data")
+	check(sim.undo.undo() and int(c.objects[gi]) == 0 and is_equal_approx(sim.economy.money, shift_purse), "undo refunds that build cost")
+	check(is_zero_approx(float(sim.economy.expense.get("construction", 0.0))), "the refund comes off construction")
+	var green_purse := sim.economy.money
+	check(sim.place_object(gx, gy, Defs.O.PUTTING_GREEN) == 1 and is_equal_approx(green_purse - sim.economy.money, green_cost), "the practice green costs its published price")
+	check(is_equal_approx(float(sim.economy.expense.get("construction", 0.0)), green_cost), "that price is booked as construction")
+	var putter := sim.visitors.make_golfer("public", 0.4)
+	putter.persona = {}
+	putter.mood_good = 1.0
+	putter.satisfaction = 70.0
+	var shop_before: float = float(sim.economy.income.get("pro_shop", 0.0))
+	var range_before: float = float(sim.economy.income.get("range", 0.0))
+	var putter_purse := sim.economy.money
+	sim.visitors._register(putter)
+	var shop_gain: float = float(sim.economy.income.get("pro_shop", 0.0)) - shop_before
+	check(is_equal_approx(putter.satisfaction - 70.0, green_mood), "the practice green raises satisfaction by the amount in the data")
+	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)), range_before), "the practice green earns nothing on the range line")
+	check(is_equal_approx(sim.economy.money - putter_purse, shop_gain), "the practice green adds no money beyond a pro-shop visit")
+	book["green_mood"] = green_mood + 2.0
+	var putter2 := sim.visitors.make_golfer("public", 0.4)
+	putter2.persona = {}
+	putter2.mood_good = 1.0
+	putter2.satisfaction = 70.0
+	sim.visitors._register(putter2)
+	book["green_mood"] = green_mood
+	check(is_equal_approx(putter2.satisfaction - 70.0, green_mood + 2.0), "the satisfaction effect is read from the practice data")
+	var green_back := sim.economy.money
+	check(sim.undo.undo() and int(c.objects[gi]) == 0 and is_equal_approx(sim.economy.money, green_back + green_cost), "undo refunds the practice green's build cost")
+	book["range_cost"] = range_cost + 19.0
+	var range_shift := sim.economy.money
+	var range_placed := sim.place_object(rx, ry, Defs.O.DRIVING_RANGE)
+	book["range_cost"] = range_cost
+	check(range_placed == 1 and is_equal_approx(range_shift - sim.economy.money, range_cost + 19.0), "building the range charges the price in the practice data")
+	check(sim.undo.undo() and int(c.objects[ri]) == 0 and is_equal_approx(sim.economy.money, range_shift), "undo refunds the range's build cost")
+	var range_purse := sim.economy.money
+	check(sim.place_object(rx, ry, Defs.O.DRIVING_RANGE) == 1 and is_equal_approx(range_purse - sim.economy.money, range_cost), "the range costs its published price")
+	var driver := sim.visitors.make_golfer("public", 0.4)
+	driver.persona = {}
+	driver.mood_good = 1.0
+	driver.satisfaction = 70.0
+	var shop_r0: float = float(sim.economy.income.get("pro_shop", 0.0))
+	var range_line0: float = float(sim.economy.income.get("range", 0.0))
+	var driver_purse := sim.economy.money
+	sim.visitors._register(driver)
+	var shop_r: float = float(sim.economy.income.get("pro_shop", 0.0)) - shop_r0
+	var booked: float = float(sim.economy.income.get("range", 0.0)) - range_line0
+	check(is_equal_approx(booked, bucket_fee), "the range charges the bucket fee from the practice data")
+	check(is_equal_approx(sim.economy.money - driver_purse, booked + shop_r), "the bucket fee lands in the books")
+	check(is_equal_approx(driver.satisfaction - 70.0, range_mood), "the range raises satisfaction by the amount in the data")
+	book["bucket"] = bucket_fee + 2.5
+	var driver2 := sim.visitors.make_golfer("public", 0.4)
+	driver2.persona = {}
+	driver2.mood_good = 1.0
+	var line_before: float = float(sim.economy.income.get("range", 0.0))
+	var cash_before := sim.economy.money
+	sim.visitors._register(driver2)
+	var line_gain: float = float(sim.economy.income.get("range", 0.0)) - line_before
+	var cash_gain := sim.economy.money - cash_before
+	book["bucket"] = bucket_fee
+	var shop_only: float = float(sim.economy.income.get("pro_shop", 0.0)) - (shop_r0 + shop_r)
+	check(is_equal_approx(line_gain, bucket_fee + 2.5), "the bucket fee is read from the practice data")
+	check(is_equal_approx(cash_gain, line_gain + shop_only), "a changed bucket fee is what lands in the books")
+	var range_back := sim.economy.money
+	check(sim.undo.undo() and int(c.objects[ri]) == 0 and is_equal_approx(sim.economy.money, range_back + range_cost), "undo refunds the published range price")
+	var bare := sim.monthly_upkeep()
+	check(sim.place_object(gx, gy, Defs.O.PUTTING_GREEN) == 1 and sim.place_object(rx, ry, Defs.O.DRIVING_RANGE) == 1, "both facilities go up together")
+	var with_both := sim.monthly_upkeep()
+	check(is_equal_approx(with_both - bare, green_upkeep + range_upkeep), "both cost their upkeep each month")
+	book["green_upkeep"] = green_upkeep + 5.0
+	book["range_upkeep"] = range_upkeep + 7.0
+	check(is_equal_approx(sim.monthly_upkeep() - bare, green_upkeep + range_upkeep + 12.0), "the monthly bill reads the upkeep from the practice data")
+	book["green_upkeep"] = green_upkeep
+	book["range_upkeep"] = range_upkeep
+	check(is_equal_approx(sim.monthly_upkeep(), with_both), "the published upkeep is back")
+	var owed := sim.monthly_upkeep()
+	sim._end_month(Defs.DAYS_PER_MONTH)
+	var row: Dictionary = sim.economy.history[sim.economy.history.size() - 1]
+	var exp: Dictionary = row.get("expense", {})
+	check(is_equal_approx(float(exp.get("upkeep", 0.0)), owed), "the month's books include that upkeep")
+	var kept_raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var kept := Sim.from_dict(db, kept_raw, gear)
+	check(int(kept.course.objects[gi]) == Defs.O.PUTTING_GREEN and int(kept.course.objects[ri]) == Defs.O.DRIVING_RANGE, "a save keeps the practice green and the driving range")
+	book["green_upkeep"] = 0.0
+	check(not sim.can_switch(Defs.O.PUTTING_GREEN) and not c.set_closed(gx, gy, true), "setting green_upkeep to 0 makes the practice green unswitchable")
+	book["green_upkeep"] = green_upkeep
+	check(sim.can_switch(Defs.O.PUTTING_GREEN) and c.set_closed(gx, gy, true), "putting the upkeep back makes the practice green switchable again")

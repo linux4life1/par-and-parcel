@@ -72,8 +72,9 @@ const O_NAMES: Array[String] = [
 	"Fountain", "Home site", "House", "Landmark", "Tennis courts", "Resort hotel", "Marina", "Airstrip",
 	"Floodlight", "Lamp post", "Vending machine", "Bar", "Litter bin",
 ]
-const O_COST: Array[int] = [0, 30, 25, 10, 20, 40, 400, 500, 0, 700, 60, 15, 120, 1500, 900, 2000, 350, 400, 0, 2500, 3000, 12000, 8000, 20000, 450, 60, 150, 1200, 80]
-const O_UPKEEP: Array[int] = [0, 0, 0, 0, 1, 0, 25, 20, 0, 40, 2, 0, 2, 60, 30, 70, 8, 0, 0, 25, 60, 200, 120, 300, 14, 2, 4, 45, 3]
+## Putting green and driving range are priced in data/practice.json.
+const O_COST: Array[int] = [0, 30, 25, 10, 20, 40, 400, 500, 0, 700, 60, 15, 120, 1500, 0, 0, 350, 400, 0, 2500, 3000, 12000, 8000, 20000, 450, 60, 150, 1200, 80]
+const O_UPKEEP: Array[int] = [0, 0, 0, 0, 1, 0, 25, 20, 0, 40, 2, 0, 2, 60, 0, 0, 8, 0, 0, 25, 60, 200, 120, 300, 14, 2, 4, 45, 3]
 const O_SCENERY: Array[float] = [0.0, 1.0, 0.8, 0.5, 1.6, 0.4, 0.0, 0.0, 0.0, 0.0, 0.2, 0.6, 0.5, 0.0, 0.5, 0.0, 3.0, 0.0, -0.4, 6.0, 0.3, 0.0, 1.5, -0.5, -0.2, 0.3, -0.1, 0.2, 0.1]
 ## Buildings: golfers walk around them, and they survive lava bombs.
 const O_BUILDING: Array[bool] = [

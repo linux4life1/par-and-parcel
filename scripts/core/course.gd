@@ -43,6 +43,7 @@ var _solids: Solids = null
 var _solids_all := true
 var _solids_pending := PackedInt32Array()
 var lights_rev := 0                   # bumps when anything that gives light is added or removed
+var _may_switch: Callable = Callable() # Sim.can_switch, once a game is running
 var _light := PackedFloat32Array()    # per tile: how well lit it is after dark, 0 to 1
 var _light_rev := -1
 
@@ -542,10 +543,18 @@ func set_object(tx: int, ty: int, o: int) -> bool:
 	return true
 
 
+## The simulation decides from the monthly bill. Until that is bound, the
+## build table is the bill.
+func bind_switch(fn: Callable) -> void:
+	_may_switch = fn
+
+
 ## A structure with a monthly bill can be switched off. The clubhouse,
 ## trees and anything else that costs nothing stay as they are. A bridge
 ## stays open: people are still walking it.
 func can_switch(o: int) -> bool:
+	if _may_switch.is_valid():
+		return bool(_may_switch.call(o))
 	if o == Defs.O.BRIDGE:
 		return false
 	return o > 0 and o < Defs.O_UPKEEP.size() and Defs.O_UPKEEP[o] > 0

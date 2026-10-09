@@ -41,6 +41,7 @@ var yardage: Dictionary = {}    # the printed hole diagram on the scorecard
 var turns: Dictionary = {}      # stakes on the line of play, where a dogleg turns
 var tees: Dictionary = {}       # middle and forward tees, and who plays which
 var rating: Dictionary = {}    # scratch score and slope, apart from the 0–100 reputation rating
+var practice: Dictionary = {}  # practice green and driving range: prices, upkeep, mood, bucket fee
 var home_radius := 45.0         # how far a stationed member looks for work, metres
 var names: Dictionary = {}
 var feed: Dictionary = {}
@@ -92,6 +93,7 @@ func _init() -> void:
 	tees = _load("tees")
 	rating = _load("rating")
 	CourseRating.use(rating)
+	practice = _load("practice")
 	names = _load("names")
 	feed = _load("feed")
 

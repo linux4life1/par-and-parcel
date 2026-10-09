@@ -154,9 +154,9 @@ func hint() -> String:
 				body += " Slope under the brush: %s. %s" % [Slope.percent_text(float(read.get("percent", 0.0))), Slope.fair_line()]
 		"object":
 			if object_type == Defs.O.BRIDGE:
-				body = "Click the water or a stream to bridge it. %s a span." % Defs.money(Defs.O_COST[object_type])
+				body = "Click the water or a stream to bridge it. %s a span." % Defs.money(sim.object_price(object_type))
 			else:
-				body = "Click to place: %s. %s each." % [sim.object_name(object_type).to_lower(), Defs.money(Defs.O_COST[object_type])]
+				body = "Click to place: %s. %s each." % [sim.object_name(object_type).to_lower(), Defs.money(sim.object_price(object_type))]
 		"bulldoze":
 			body = "Drag to clear trees, scenery and buildings."
 		"hole":
@@ -296,7 +296,7 @@ func _unhandled_input(event: InputEvent) -> void:
 						var at: Vector3 = spot
 						var tile := sim.course.tile_of(at.x, at.z)
 						var ci := tile.y * sim.course.w + tile.x
-						if sim.course.in_bounds(tile.x, tile.y) and sim.course.can_switch(int(sim.course.objects[ci])):
+						if sim.course.in_bounds(tile.x, tile.y) and sim.can_switch(int(sim.course.objects[ci])):
 							world.selected = null
 							selection_changed.emit(tile)
 							return

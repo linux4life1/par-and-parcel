@@ -120,7 +120,7 @@ func _build(body: VBoxContainer) -> Callable:
 		["Lighting", [Defs.O.FLOODLIGHT, Defs.O.LAMP],
 			"Golfers play on after dark, but on an unlit hole they see poorly, enjoy it less and pay less, and few new golfers turn up at night. Light a hole from tee to green and it plays as well as by day. A floodlight lights a wide circle, shown as you place it. Lamp posts light paths and odd corners. Holes shows how much of each hole is lit."],
 		["Club facilities", [Defs.O.PUTTING_GREEN, Defs.O.DRIVING_RANGE, Defs.O.CART_BARN, Defs.O.HOME_SITE],
-			"A putting green helps putting and a driving range adds length. A member who plays keeps a little of that, so regulars get longer and better on the greens the more they come. A cart barn rents carts that fly along cart paths. Home sites are lots that Silver members and above will buy: they are worth more with a view and less in the line of fire."],
+			"A putting green is a green with no hole, and visitors putt there for free. A driving range has bays. The short grass in front of them is drawn on the range's own tile and claims no ground, and a bucket is a small fee. A member who plays keeps a little of either, so regulars get longer and better on the greens the more they come. A cart barn rents carts that fly along cart paths. Home sites are lots that Silver members and above will buy: they are worth more with a view and less in the line of fire."],
 		["Resort", [Defs.O.TENNIS, Defs.O.MARINA, Defs.O.HOTEL, Defs.O.AIRSTRIP],
 			"Big investments that lift the whole club. Tennis courts put every arrival in a good mood. A marina raises home values and draws celebrities. A hotel brings more golfers and keeps them fresh. An airstrip brings the kind who pay more for every hole."],
 	]
@@ -135,7 +135,7 @@ func _build(body: VBoxContainer) -> Callable:
 		og.add_theme_constant_override("v_separation", 6)
 		body.add_child(og)
 		for o: int in grp[1]:
-			var b := UIKit.button("%s   %s" % [hud.sim.object_name(o), Defs.money(Defs.O_COST[o])], func() -> void:
+			var b := UIKit.button("%s   %s" % [hud.sim.object_name(o), Defs.money(hud.sim.object_price(o))], func() -> void:
 				tools.object_type = o
 				tools.set_mode("object"))
 			b.toggle_mode = true
@@ -221,7 +221,7 @@ func _build(body: VBoxContainer) -> Callable:
 			elif why != "":
 				ob_btn.text = "%s   %s" % [hud.sim.object_name(ob_o), why]
 			else:
-				ob_btn.text = "%s   %s" % [hud.sim.object_name(ob_o), Defs.money(Defs.O_COST[ob_o])]
+				ob_btn.text = "%s   %s" % [hud.sim.object_name(ob_o), Defs.money(hud.sim.object_price(ob_o))]
 		var sim := hud.sim
 		var cap := sim.hole_cap()
 		var n_holes := sim.course.holes.size()

@@ -150,6 +150,7 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	course_name = "%s %s %s" % [db.pick("course_first", rng), db.pick("course_second", rng), db.pick("course_suffix", rng)]
 	course = CourseGen.generate(map, rng, biome)
 	course.biome = biome
+	course.bind_switch(Callable(self, "can_switch"))
 	nav = Nav.new(course)
 	undo = UndoLog.new(self)
 	_bind_undo()
@@ -451,11 +452,43 @@ func monthly_upkeep() -> float:
 		# does not make the month free.
 		if course.is_closed(i) and course.open_month[i] == 0:
 			continue
-		var cost := float(Defs.O_UPKEEP[o])
+		var cost := object_upkeep(o)
 		if _light_kind(o):
 			cost *= share
 		t += cost
 	return t
+
+
+## What it costs to build. The practice green and the driving range are
+## priced in data/practice.json. Everything else uses the build table.
+func object_price(o: int) -> float:
+	var book := db.practice
+	if o == Defs.O.PUTTING_GREEN:
+		return float(book.get("green_cost", 0.0))
+	if o == Defs.O.DRIVING_RANGE:
+		return float(book.get("range_cost", 0.0))
+	return float(Defs.O_COST[o])
+
+
+## What it costs to keep for a month. Same split as the build price.
+func object_upkeep(o: int) -> float:
+	var book := db.practice
+	if o == Defs.O.PUTTING_GREEN:
+		return float(book.get("green_upkeep", 0.0))
+	if o == Defs.O.DRIVING_RANGE:
+		return float(book.get("range_upkeep", 0.0))
+	return float(Defs.O_UPKEEP[o])
+
+
+## A structure with a monthly bill can be switched off. The bill is
+## `object_upkeep`, so the practice file decides the green and the range.
+## A bridge stays open: people are still walking it.
+func can_switch(o: int) -> bool:
+	if o == Defs.O.BRIDGE or o <= 0:
+		return false
+	if o != Defs.O.PUTTING_GREEN and o != Defs.O.DRIVING_RANGE and o >= Defs.O_UPKEEP.size():
+		return false
+	return object_upkeep(o) > 0.0
 
 
 ## The share of a day the floodlights and lamp posts are switched on:
@@ -1051,7 +1084,7 @@ func place_object(tx: int, ty: int, o: int) -> int:
 	if build_block(o) != "":
 		return 0
 	var free := int(gifts.get(o, 0)) > 0
-	var cost := 0.0 if free else float(Defs.O_COST[o])
+	var cost := 0.0 if free else object_price(o)
 	if not economy.can_afford(cost):
 		return -1
 	if not course.can_build(tx, ty):
@@ -1744,6 +1777,7 @@ func course_dict() -> Dictionary:
 func install_course(course_d: Dictionary) -> void:
 	course = Course.from_dict(course_d)
 	course.biome = biome
+	course.bind_switch(Callable(self, "can_switch"))
 	nav = Nav.new(course)
 	if undo != null:
 		undo.clear()
