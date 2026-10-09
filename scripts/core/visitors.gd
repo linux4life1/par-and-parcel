@@ -60,9 +60,14 @@ const BAR_LINES: Array[String] = [
 ]
 var _gid := 1
 var _amen_rev := -1
+## The four tiles that share a side with a building or a green.
+const NEIGHBORS: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 ## When each claimed bay frees, in sim seconds. A bay is busy until this
-## time; nothing else clears the list.
+## time; counting the free ones drops any whose time has passed.
 var bay_until: Array[float] = []
+## Parties waiting for a bay, earliest first. A freed bay goes to the front
+## of this line. A new arrival does not claim past them.
+var bay_line: Array[Group] = []
 ## Golfers who gave up on a full range this month. The books take the count
 ## when the month closes.
 var range_skips := 0
@@ -277,7 +282,7 @@ func _register(g: Golfer) -> void:
 	if sim.rng.randf() < 0.14 * shop:
 		sim.economy.earn("pro_shop", sim.rng.randf_range(15.0, 90.0) * shop)
 	# The range and the practice green are a wait on the first tee of the
-	# round (practice_wait). A member keeps the slower gain in Members._grow.
+	# round (begin_warmup). A member keeps the slower gain in Members._grow.
 	var warm := sim.members.warmup
 	var skill_cap := float(warm["skill_cap"])
 	if sim.clubhouse_level > 0:
@@ -838,8 +843,7 @@ func _sim_minutes(minutes: float) -> float:
 func field_length(tx: int, ty: int) -> float:
 	var course := sim.course
 	var n := 0
-	var y: int = ty - 1
-	while y >= 0:
+	for y in range(ty - 1, -1, -1):
 		if not course.in_bounds(tx, y):
 			break
 		var i: int = y * course.w + tx
@@ -850,7 +854,6 @@ func field_length(tx: int, ty: int) -> float:
 		if _tile_on_route(tx, y):
 			break
 		n += 1
-		y -= 1
 	return float(n) * Defs.TILE
 
 
@@ -860,31 +863,24 @@ func _tile_on_route(tx: int, ty: int) -> bool:
 	var half := Defs.TILE * 0.5
 	for hole in course.holes:
 		var route := hole.route
-		var count := route.size()
-		if count == 0:
-			continue
-		var seg := 0
-		while seg < count:
+		for seg in route.size():
 			var p: Vector2 = route[seg]
 			if absf(p.x - center.x) <= half and absf(p.y - center.z) <= half:
 				return true
-			if seg + 1 < count and _segment_hits(p, route[seg + 1], center.x, center.z, half):
+			if seg + 1 < route.size() and _segment_hits(p, route[seg + 1], center.x, center.z, half):
 				return true
-			seg += 1
 	return false
 
 
 func _segment_hits(a: Vector2, b: Vector2, cx: float, cz: float, half: float) -> bool:
 	var span := a.distance_to(b)
 	var steps: int = maxi(int(ceil(span)), 1)
-	var s := 0
-	while s <= steps:
+	for s in steps + 1:
 		var t := float(s) / float(steps)
 		var x := lerpf(a.x, b.x, t)
 		var z := lerpf(a.y, b.y, t)
 		if absf(x - cx) <= half and absf(z - cz) <= half:
 			return true
-		s += 1
 	return false
 
 
@@ -914,15 +910,11 @@ func _spread_green(start: int, into: Dictionary, blocked: Dictionary) -> void:
 		return
 	var stack: Array[int] = [start]
 	into[start] = true
-	var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
 	while not stack.is_empty():
 		var cur: int = stack.pop_back()
 		var cx: int = cur % course.w
 		var cy: int = int(cur / course.w)
-		var d := 0
-		while d < dirs.size():
-			var step: Vector2i = dirs[d]
-			d += 1
+		for step in NEIGHBORS:
 			var nx: int = cx + step.x
 			var ny: int = cy + step.y
 			if not course.in_bounds(nx, ny):
@@ -941,11 +933,7 @@ func practice_green_count(tx: int, ty: int) -> int:
 	var course := sim.course
 	var blocked := _hole_greens()
 	var found := {}
-	var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	var d := 0
-	while d < dirs.size():
-		var step: Vector2i = dirs[d]
-		d += 1
+	for step in NEIGHBORS:
 		var nx: int = tx + step.x
 		var ny: int = ty + step.y
 		if not course.in_bounds(nx, ny):
@@ -960,11 +948,7 @@ func practice_green_count(tx: int, ty: int) -> int:
 func _beside_hole_green(tx: int, ty: int) -> bool:
 	var course := sim.course
 	var owned := _hole_greens()
-	var dirs: Array[Vector2i] = [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]
-	var d := 0
-	while d < dirs.size():
-		var step: Vector2i = dirs[d]
-		d += 1
+	for step in NEIGHBORS:
 		var nx: int = tx + step.x
 		var ny: int = ty + step.y
 		if course.in_bounds(nx, ny) and owned.has(ny * course.w + nx):
@@ -1025,14 +1009,6 @@ func practice_shut_reason(o: int, tx: int, ty: int) -> String:
 	return ""
 
 
-## Start the warm-up and report how long a free bay holds the party. The
-## tee calls this once, on the first hole the party actually plays.
-func practice_wait(gr: Group) -> float:
-	gr.warm_set = true
-	begin_warmup(gr)
-	return gr.warm_left
-
-
 func begin_warmup(gr: Group) -> void:
 	if gr.kind != "public":
 		return
@@ -1045,25 +1021,28 @@ func begin_warmup(gr: Group) -> void:
 		gr.warm_left += _sim_minutes(float(book.get("green_minutes", 0.0)))
 	if not range_ready():
 		return
+	# A party already in line takes the next free bay. A newcomer does not
+	# jump that queue, even when a bay looks free this instant.
+	var queued := _someone_waiting(gr)
 	var waiting := 0
-	var claimed := false
 	for g in gr.members:
 		if g.kind != "public":
 			continue
-		if _bays_free() > 0:
-			_take_bay(g)
-			claimed = true
-		else:
+		if queued or _bays_free() <= 0:
 			waiting += 1
-	if claimed:
-		_grant_bucket_time(gr)
+		else:
+			_take_bay(g)
+			_cover_bay(gr)
 	gr.bay_need = waiting
 	if waiting > 0:
 		gr.waiting_bay = true
 		gr.bay_left = _sim_minutes(float(book.get("bay_wait", 0.0)))
+		if not bay_line.has(gr):
+			bay_line.append(gr)
 
 
 func tick_warmup(gr: Group, dt: float) -> void:
+	var owed := gr.bay_need
 	if gr.waiting_bay:
 		_fill_waiting(gr)
 		if gr.waiting_bay:
@@ -1072,6 +1051,24 @@ func tick_warmup(gr: Group, dt: float) -> void:
 				_skip_bays(gr)
 	if gr.warm_left > 0.0:
 		gr.warm_left = maxf(0.0, gr.warm_left - dt)
+	# A bay taken during this step still owes its full bucket. The step's
+	# own tick must not eat into that time.
+	if gr.bay_need < owed:
+		_cover_bay(gr)
+
+
+func _someone_waiting(gr: Group) -> bool:
+	for other in bay_line:
+		if other != gr and other.waiting_bay and other.bay_need > 0:
+			return true
+	return false
+
+
+func _first_waiter(gr: Group) -> bool:
+	for other in bay_line:
+		if other.waiting_bay and other.bay_need > 0:
+			return other == gr
+	return true
 
 
 func _live_bays() -> int:
@@ -1113,14 +1110,22 @@ func _apply_putting(g: Golfer) -> void:
 	g.feel(float(sim.db.practice.get("green_mood", 0.0)), "Rolled a few on the practice green first.", "practice")
 
 
-func _grant_bucket_time(gr: Group) -> void:
-	if gr.bay_timed:
+## The first bay adds a full bucket on top of any practice-green time. A
+## later bay in the same party extends the wait to that bay's end, instead
+## of leaving the party with only the first golfer's remaining time.
+func _cover_bay(gr: Group) -> void:
+	var hold := _sim_minutes(float(sim.db.practice.get("bucket_minutes", 0.0)))
+	if not gr.bay_timed:
+		gr.warm_left += hold
+		gr.bay_timed = true
 		return
-	gr.bay_timed = true
-	gr.warm_left += _sim_minutes(float(sim.db.practice.get("bucket_minutes", 0.0)))
+	if hold > gr.warm_left:
+		gr.warm_left = hold
 
 
 func _fill_waiting(gr: Group) -> void:
+	if not _first_waiter(gr):
+		return
 	for g in gr.members:
 		if gr.bay_need <= 0 or _bays_free() <= 0:
 			break
@@ -1128,10 +1133,11 @@ func _fill_waiting(gr: Group) -> void:
 			continue
 		_take_bay(g)
 		gr.bay_need -= 1
-		_grant_bucket_time(gr)
+		_cover_bay(gr)
 	if gr.bay_need <= 0:
 		gr.waiting_bay = false
 		gr.bay_left = 0.0
+		bay_line.erase(gr)
 
 
 func _skip_bays(gr: Group) -> void:
@@ -1144,6 +1150,7 @@ func _skip_bays(gr: Group) -> void:
 	gr.bay_need = 0
 	gr.waiting_bay = false
 	gr.bay_left = 0.0
+	bay_line.erase(gr)
 
 
 func on_holed(g: Golfer, hole: Hole, hole_i: int) -> void:

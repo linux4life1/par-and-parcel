@@ -7696,15 +7696,13 @@ func _paint_practice_green(sim: Sim, tx: int, ty: int) -> void:
 func _paint_column(sim: Sim, tx: int, ty: int, tiles: int, ground: int) -> void:
 	var course := sim.course
 	course.guard = false
-	var n := 0
-	while n < tiles:
+	for n in tiles:
 		var y: int = ty - 1 - n
 		if course.in_bounds(tx, y):
 			var i: int = y * course.w + tx
 			if int(course.objects[i]) != 0 and int(course.objects[i]) != Defs.O.CLUBHOUSE:
 				course.set_object(tx, y, Defs.O.NONE)
 			course.set_terrain(tx, y, ground)
-		n += 1
 	course.guard = true
 
 
@@ -7721,9 +7719,10 @@ func _ready_tile(sim: Sim, tx: int, ty: int) -> void:
 func _warm_party(sim: Sim, g: Golfer) -> void:
 	var party := Group.new()
 	party.kind = "public"
+	party.warm_set = true
 	party.members.append(g)
 	g.group = party
-	sim.visitors.practice_wait(party)
+	sim.visitors.begin_warmup(party)
 
 
 func _party_at(sim: Sim, hole_i: int) -> Group:
@@ -7920,6 +7919,9 @@ func _test_bay_wait() -> void:
 	sim._end_month(Defs.DAYS_PER_MONTH)
 	var row: Dictionary = sim.economy.history[sim.economy.history.size() - 1]
 	check(int(row.get("range_skips", 0)) == 1, "the month's books count that skip")
+	check(Panels.range_skip_line(int(row.get("range_skips", 0))) == "1 golfer skipped a full range", "the finances panel says a golfer skipped a full range")
+	check(Panels.range_skip_line(4) == "4 golfers skipped a full range", "the finances panel counts every golfer who skipped")
+	check(Panels.range_skip_line(0) == "", "a month with no skips adds no finances line")
 	book["bays"] = saved_bays
 	book["bay_wait"] = saved_wait
 
@@ -7929,6 +7931,8 @@ func _test_bay_frees() -> void:
 	var sim := _sim("sandbox", 16)
 	var book: Dictionary = sim.db.practice
 	var saved_bays: int = int(book.get("bays", 0))
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	var fee := float(book.get("bucket", 0.0))
 	book["bays"] = 1
 	_ready_tile(sim, 16, 24)
 	check(sim.place_object(16, 24, Defs.O.DRIVING_RANGE) == 1, "the expiry range is up")
@@ -7939,13 +7943,64 @@ func _test_bay_frees() -> void:
 	var third := _party_at(sim, 0)
 	first.step(0.02, sim)
 	second.step(0.02, sim)
-	check(hole != null and second.waiting_bay, "the second party is waiting when the third arrives")
-	sim.time += _clock_seconds(float(book.get("bucket_minutes", 0.0)))
+	third.step(0.02, sim)
+	check(hole != null and second.waiting_bay and third.waiting_bay, "two parties are waiting when the only bay is busy")
+	check(not second.members[0].rd.has("bay") and not third.members[0].rd.has("bay"), "neither waiting party has claimed yet")
+	sim.time += _clock_seconds(bucket_m)
 	var earned := float(sim.economy.income.get("range", 0.0))
 	third.step(0.02, sim)
-	check(third.members[0].rd.has("bay"), "after bucket_minutes a third party gets a bucket")
-	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)) - earned, float(book.get("bucket", 0.0))), "without bay_until.clear()")
-	check(not sim.visitors.bay_until.is_empty(), "the claim stays in the list")
+	check(not third.members[0].rd.has("bay") and third.waiting_bay, "the third party does not take a bay ahead of the party already waiting")
+	second.step(0.02, sim)
+	check(second.members[0].rd.has("bay"), "the earlier waiting party gets the bay when the first bucket ends")
+	check(not third.members[0].rd.has("bay") and third.waiting_bay, "the third party is still waiting")
+	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)) - earned, fee), "that bucket is booked when the waiting party is served, and the expired claim has fallen out of the count")
+	check(not sim.visitors.bay_until.is_empty(), "the new claim stays listed until its own time ends")
+	book["bays"] = saved_bays
+	_test_second_bay(book, saved_bays)
+
+
+func _test_second_bay(book: Dictionary, saved_bays: int) -> void:
+	print("-- a later bay still takes a full bucket")
+	var sim := _sim("sandbox", 19)
+	book["bays"] = 1
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	var hold := _clock_seconds(bucket_m)
+	_ready_tile(sim, 16, 24)
+	check(sim.place_object(16, 24, Defs.O.DRIVING_RANGE) == 1, "one bay for a two-golfer party")
+	_paint_field(sim, 16, 24)
+	var hole := sim.add_hole(sim.course.tile_center(36, 80), sim.course.tile_center(36, 60))
+	var party := _party_at(sim, 0)
+	var mate := sim.visitors.make_golfer("public", 0.4)
+	mate.persona = {}
+	mate.mood_good = 1.0
+	mate.mood_bad = 1.0
+	mate.satisfaction = 70.0
+	mate.group = party
+	var mate_spot := Group.arc_spot(hole, 1, 2)
+	mate.pos = mate_spot
+	mate.prev = mate_spot
+	party.members.append(mate)
+	var guard := 0
+	while guard < 800 and not party.members[1].rd.has("bay"):
+		sim.time += 0.05
+		party.step(0.05, sim)
+		guard += 1
+	check(party.members[0].rd.has("bay") and party.members[1].rd.has("bay"), "the second golfer hits when a bay frees")
+	check(party.warm_left >= hold - 0.001, "that claim still owes a full bucket")
+	var stood := 0.0
+	var half := hold * 0.5
+	while stood + 0.05 < half:
+		sim.time += 0.05
+		party.step(0.05, sim)
+		stood += 0.05
+	check(party.warm_left > 0.0 and party.state == Group.S.TO_TEE, "halfway through the second bucket the party is still on the tee")
+	var release := 0
+	while release < 800 and (party.warm_left > 0.0 or party.waiting_bay):
+		sim.time += 0.05
+		party.step(0.05, sim)
+		stood += 0.05
+		release += 1
+	check(stood + 0.001 >= hold, "the party leaves no sooner than bucket_minutes after the second golfer's claim")
 	book["bays"] = saved_bays
 
 
@@ -7958,8 +8013,11 @@ func _test_shut_range() -> void:
 	var why := sim.visitors.practice_shut_reason(Defs.O.DRIVING_RANGE, 30, 44)
 	var need: int = int(round(float(sim.db.practice.get("field_min", 0.0))))
 	check(why == "needs %d m of short grass, 0 m painted" % need, "the inspector says why: %s" % why)
+	sim.visitors.range_skips = 4
 	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	raw.erase("range_skips")
 	var loaded := Sim.from_dict(db, raw, gear)
+	check(loaded.visitors.range_skips == 0, "an old save, with no range_skips, loads with none")
 	check(int(loaded.course.objects[44 * loaded.course.w + 30]) == Defs.O.DRIVING_RANGE, "the save still has the range")
 	check(not loaded.visitors.range_ready(), "it loads shut")
 	var again := loaded.visitors.practice_shut_reason(Defs.O.DRIVING_RANGE, 30, 44)

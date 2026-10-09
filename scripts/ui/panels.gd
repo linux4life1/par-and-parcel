@@ -16,6 +16,16 @@ const OBJECT_TIPS := {
 	Defs.O.BAR: "Drinkers tip well and forgive a lot, but they play slowly, spray the ball and lose their tempers faster. A gamble, and the house takes $14 a round.",
 }
 
+## What the Finances panel says under a closed month when golfers gave up
+## on a full range. Empty when nobody did.
+static func range_skip_line(n: int) -> String:
+	if n <= 0:
+		return ""
+	if n == 1:
+		return "1 golfer skipped a full range"
+	return "%d golfers skipped a full range" % n
+
+
 var hud: Hud
 var _skill_branch := "manager"
 var _skill_pick := ""
@@ -1048,6 +1058,9 @@ func _money(body: VBoxContainer) -> Callable:
 			var r: Dictionary = e.history[i]
 			var net := float(r.net)
 			hist.add_child(UIKit.row(str(r.label), Defs.money(net), UIKit.GOOD if net >= 0.0 else UIKit.BAD))
+			var skipped := range_skip_line(int(r.get("range_skips", 0)))
+			if skipped != "":
+				hist.add_child(UIKit.label(skipped, 13, UIKit.MUTED))
 
 
 # ------------------------------------------------------------- tournaments
