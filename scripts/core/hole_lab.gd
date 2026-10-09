@@ -250,12 +250,42 @@ func test_shots(hole: Hole) -> void:
 			if ci < extra:
 				count += 1
 			var row := _class_named(str(labels[ci]))
+			var label := str(labels[ci])
 			for shot_i in count:
-				marks.append(_one_test_shot(hole, row))
+				var shot := _one_test_shot(hole, row)
+				shot["class"] = label
+				shot["sig"] = sig
+				marks.append(shot)
 	sim.rng.seed = saved_seed
 	sim.rng.state = saved_state
 	hole.test_marks = marks
 	sim.course.holes_changed.emit()
+
+
+## The Dismiss button. The marks go, and the picture is told.
+func clear_test(hole: Hole) -> void:
+	hole.test_marks.clear()
+	sim.course.holes_changed.emit()
+
+
+## Marks belong to the ground they were hit on. A new signature, from paint,
+## sculpt or an object, drops them. One rule covers all three.
+func drop_stale_marks() -> void:
+	var dropped := false
+	for hole in sim.course.holes:
+		if hole.test_marks.is_empty():
+			continue
+		var live := _signature(hole)
+		var stale := false
+		for mark in hole.test_marks:
+			if int(mark.get("sig", -1)) != live:
+				stale = true
+				break
+		if stale:
+			hole.test_marks.clear()
+			dropped = true
+	if dropped:
+		sim.course.holes_changed.emit()
 
 
 func _class_named(label: String) -> Array:

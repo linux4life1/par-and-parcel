@@ -1,5 +1,5 @@
 {
-	"_about": "The Test button on a hole card. It hits balls tee shots from the back tee, split in order across classes (names from the hole lab: all is the expert). Each ball is marked where it first landed and where it stopped. trouble is which of those finishes the card counts as trouble, drawn in the warning colour. The marks are not saved.",
+	"_about": "The Test button on a hole card. It hits balls tee shots from the back tee, split in order across classes (names from the hole lab: all is the expert). Each ball is marked where it first landed and where it stopped. trouble is which of those finishes the card counts as trouble, drawn in the warning colour. Each mark keeps its class and the hole's signature, and the marks drop when that signature changes. They are not saved.",
 	"balls": 10,
 	"classes": ["all", "average"],
 	"trouble": ["bunker", "waste", "water", "oob", "deep_rough", "trees"]

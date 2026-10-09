@@ -3097,6 +3097,14 @@ func _test_firm_marks(sim: Sim) -> Hole:
 		var widened := HoleLab.test_summary(firm, book)
 		check(all_n == firm.test_marks.size() and widened != text, "listing every finish changes the summary: %s" % widened)
 	book["trouble"] = saved_trouble
+	var rise_tile := sim.course.tile_of(firm.tee.x, firm.tee.z + Defs.TILE * 4.0)
+	sim.course.sculpt(float(rise_tile.x) * Defs.TILE, float(rise_tile.y) * Defs.TILE, 1.0, 0.8)
+	check(firm.test_marks.is_empty(), "sculpting one tile under the hole clears the marks")
+	sim.lab.test_shots(firm)
+	var tree_land: Vector2 = firm.test_marks[0].land
+	var tree_at := sim.course.tile_of(tree_land.x, tree_land.y)
+	var planted := sim.course.set_object(tree_at.x, tree_at.y, Defs.O.OAK)
+	check(planted and firm.test_marks.is_empty(), "placing a tree in the landing area clears the marks")
 	return firm
 
 
@@ -3157,6 +3165,107 @@ func _test_open_signal(sim: Sim) -> void:
 	check(closed_hole.open and closed_hole.test_marks.size() == balls, "Test works on an open hole")
 
 
+func _classes_are(hole: Hole, n0: int, a: String, n1: int, b: String) -> bool:
+	if hole.test_marks.size() != n0 + n1:
+		return false
+	for i in hole.test_marks.size():
+		var mark: Dictionary = hole.test_marks[i]
+		var want := a
+		if i >= n0:
+			want = b
+		if str(mark.get("class", "")) != want:
+			return false
+	return true
+
+
+func _test_mark_classes() -> void:
+	var sim := _sim("sandbox", 28)
+	var book: Dictionary = sim.db.test_hole
+	var saved_balls: int = int(book.get("balls", 0))
+	var hole := _lay_flat(sim, 40, 40, 24, Defs.T.FAIRWAY)
+	sim.lab.test_shots(hole)
+	check(_classes_are(hole, 5, "all", 5, "average"), "ten balls are five all, then five average")
+	book["balls"] = 3
+	sim.lab.test_shots(hole)
+	check(_classes_are(hole, 2, "all", 1, "average"), "three balls are two all, then one average")
+	book["balls"] = saved_balls
+
+
+func _test_rng_kept() -> void:
+	var sim := _sim("sandbox", 29)
+	var hole := _lay_flat(sim, 40, 40, 24, Defs.T.FAIRWAY)
+	sim.rng.randf()
+	var before: int = sim.rng.state
+	sim.lab.test_shots(hole)
+	check(sim.rng.state == before, "Test leaves the game's random numbers where they were")
+
+
+func _test_clear_marks() -> void:
+	var sim := _sim("sandbox", 30)
+	var hole := _lay_flat(sim, 40, 40, 24, Defs.T.FAIRWAY)
+	sim.lab.test_shots(hole)
+	check(not hole.test_marks.is_empty(), "Dismiss has marks to clear")
+	var heard := {"n": 0}
+	var on_clear := func() -> void:
+		heard["n"] = int(heard["n"]) + 1
+	sim.course.holes_changed.connect(on_clear)
+	sim.lab.clear_test(hole)
+	var fired: int = int(heard["n"])
+	sim.course.holes_changed.disconnect(on_clear)
+	check(hole.test_marks.is_empty() and fired == 1, "Dismiss clears the marks and fires holes_changed")
+
+
+func _gold_spots(view: WorldView) -> int:
+	var n := 0
+	var gold := Color(1.0, 0.95, 0.55)
+	for child in view.get_children():
+		if not child is MultiMeshInstance3D:
+			continue
+		var node := child as MultiMeshInstance3D
+		var mat := node.material_override as StandardMaterial3D
+		if mat != null and mat.albedo_color.is_equal_approx(gold):
+			n += node.multimesh.instance_count
+	return n
+
+
+func _mark_disc_count(view: WorldView) -> int:
+	var n := 0
+	var clean := Color(0.78, 0.9, 0.98)
+	var warn := UIKit.WARN
+	for child in view.get_children():
+		if not child is MultiMeshInstance3D:
+			continue
+		var node := child as MultiMeshInstance3D
+		var mat := node.material_override as StandardMaterial3D
+		if mat == null:
+			continue
+		if mat.albedo_color.is_equal_approx(clean) or mat.albedo_color.is_equal_approx(warn):
+			n += node.multimesh.instance_count
+	return n
+
+
+func _test_draft_draw() -> void:
+	var sim := _sim("sandbox", 31)
+	var hole := _lay_flat(sim, 40, 40, 24, Defs.T.FAIRWAY)
+	hole.open = false
+	sim.lab.rate_now(hole)
+	check(hole.spots.size() == 8, "a draft still records the eight expert rests")
+	sim.lab.test_shots(hole)
+	var view := WorldView.new()
+	add_child(view)
+	var rig := CameraRig.new()
+	add_child(rig)
+	view.bind(sim, rig)
+	view._rebuild_holes()
+	var gold := _gold_spots(view)
+	var discs := _mark_disc_count(view)
+	check(gold == 0 and discs == hole.test_marks.size() * 2, "a draft hole shows only test marks, a landing and a rest for each ball")
+	remove_child(view)
+	view.free()
+	remove_child(rig)
+	rig.free()
+
+
 func _test_mark_rules() -> void:
 	print("-- ten test balls")
 	var sim := _sim("sandbox", 21)
@@ -3164,6 +3273,10 @@ func _test_mark_rules() -> void:
 	_test_water_marks(sim)
 	_test_oob_marks(sim)
 	_test_open_signal(sim)
+	_test_mark_classes()
+	_test_rng_kept()
+	_test_clear_marks()
+	_test_draft_draw()
 
 
 func _test_draft_hole() -> void:

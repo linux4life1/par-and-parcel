@@ -35,11 +35,11 @@ var turns: Array[Vector3] = []
 ## Generated holes and old saves stay open.
 var open := true
 ## Where the expert test golfers' tee shots came to rest, the last time the
-## hole was rated. Only drawn while the hole is still a draft.
+## hole was rated. The picture uses the Test marks instead of these.
 var spots := PackedVector2Array()
-## The Test button's balls: where each first landed, where it stopped, and
-## what it finished in. Not saved. Cleared when the ground under the hole
-## changes, or when the marks are dismissed.
+## The Test button's balls: where each first landed, where it stopped, what
+## it finished in, which class hit it, and the hole's signature at the time.
+## Not saved. Cleared when that signature changes, or when the marks are dismissed.
 var test_marks: Array[Dictionary] = []
 ## Fingerprint of the ground the line was measured on. -1 until then.
 var line_sig := -1

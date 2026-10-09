@@ -39,7 +39,6 @@ var _ring := MeshInstance3D.new()
 var _mounds := MultiMeshInstance3D.new()
 var _litter: MultiMeshInstance3D
 var _litter_rev := -1
-var _spots: MultiMeshInstance3D
 var _mark_land: MultiMeshInstance3D
 var _mark_rest: MultiMeshInstance3D
 var _mark_land_bad: MultiMeshInstance3D
@@ -1336,14 +1335,6 @@ func _ready() -> void:
 	_litter.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_litter.visibility_range_end = 80.0
 	add_child(_litter)
-	_spots = MultiMeshInstance3D.new()
-	var spots_mm := MultiMesh.new()
-	spots_mm.transform_format = MultiMesh.TRANSFORM_3D
-	spots_mm.mesh = _sphere(0.42, 10, 6)
-	_spots.multimesh = spots_mm
-	_spots.material_override = glow(Color(1.0, 0.95, 0.55))
-	_spots.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(_spots)
 	_mark_land = _mark_discs(0.22, Color(0.78, 0.9, 0.98))
 	_mark_rest = _mark_discs(0.42, Color(0.78, 0.9, 0.98))
 	_mark_land_bad = _mark_discs(0.22, UIKit.WARN)
@@ -2050,30 +2041,7 @@ func _rebuild_holes() -> void:
 		tl.set_meta("base_y", 2.6)
 		tee_at.add_child(tl)
 		_hole_labels.append(tl)
-	_rebuild_spots()
 	_rebuild_test_marks()
-
-
-## Gold discs where the expert test golfers' tee shots stopped, on drafts only.
-func _rebuild_spots() -> void:
-	if _spots == null:
-		return
-	var mm := _spots.multimesh
-	var n := 0
-	for hole in sim.course.holes:
-		if not hole.open:
-			n += hole.spots.size()
-	mm.instance_count = n
-	var k := 0
-	for hole in sim.course.holes:
-		if hole.open:
-			continue
-		for i in hole.spots.size():
-			var p2: Vector2 = hole.spots[i]
-			var p := sim.course.on_ground(p2.x, p2.y)
-			p.y += 0.3
-			mm.set_instance_transform(k, Transform3D(Basis.IDENTITY, p))
-			k += 1
 
 
 func _mark_discs(radius: float, color: Color) -> MultiMeshInstance3D:

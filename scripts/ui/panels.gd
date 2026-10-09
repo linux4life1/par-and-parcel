@@ -431,8 +431,7 @@ func _holes(body: VBoxContainer) -> Callable:
 			draft_row.add_child(open_btn)
 		if not hole.test_marks.is_empty():
 			var dismiss_btn := UIKit.button("Dismiss", func() -> void:
-				hole.test_marks.clear()
-				sim.course.holes_changed.emit()
+				sim.lab.clear_test(hole)
 				hud.rebuild_dock(), "Clear the test marks")
 			dismiss_btn.add_theme_font_size_override("font_size", 12)
 			draft_row.add_child(dismiss_btn)
