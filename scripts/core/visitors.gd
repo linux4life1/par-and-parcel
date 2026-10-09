@@ -390,6 +390,10 @@ func quit(g: Golfer) -> void:
 			old.turn = null
 	untrack(g.ball)
 	send_home(g)
+	# The golfer who left may have been the last one waiting on a bay.
+	# Recount now, so the party does not sit at the head of the line
+	# until some later step happens to look.
+	_drop_finished_waiters()
 
 
 func depart(g: Golfer) -> void:
@@ -1022,6 +1026,7 @@ func begin_warmup(gr: Group) -> void:
 			_apply_putting(m)
 		gr.warm_left += _sim_minutes(float(book.get("green_minutes", 0.0)))
 	if not range_ready():
+		_release_shut_line()
 		return
 	# A party already in line takes the next free bay. A newcomer does not
 	# jump that queue, even when a bay looks free this instant.
@@ -1119,8 +1124,28 @@ func _live_bays() -> int:
 	return n
 
 
+## bays in the practice book is per open range. A second range that is
+## switched on and long enough doubles the course. A shut range adds none.
+func _open_ranges() -> int:
+	var course := sim.course
+	var n := 0
+	for i in course.objects.size():
+		if int(course.objects[i]) != Defs.O.DRIVING_RANGE or course.is_closed(i):
+			continue
+		var tx := i % course.w
+		var ty: int = int(i / course.w)
+		if range_is_open(tx, ty):
+			n += 1
+	return n
+
+
+func _bay_cap() -> int:
+	var each: int = int(sim.db.practice.get("bays", 0))
+	return each * _open_ranges()
+
+
 func _bays_free() -> int:
-	var cap: int = int(sim.db.practice.get("bays", 0))
+	var cap: int = _bay_cap()
 	var used: int = _live_bays()
 	if used >= cap:
 		return 0
@@ -1160,6 +1185,9 @@ func _cover_bay(gr: Group) -> void:
 
 
 func _fill_waiting(gr: Group) -> void:
+	if not range_ready():
+		_release_shut_line()
+		return
 	if not _first_waiter(gr):
 		return
 	for g in gr.members:
@@ -1174,6 +1202,25 @@ func _fill_waiting(gr: Group) -> void:
 		gr.waiting_bay = false
 		gr.bay_left = 0.0
 		bay_line.erase(gr)
+
+
+## The range closed, was demolished, or its field is no longer long enough.
+## Parties already waiting leave with no bucket and no charge. Each golfer
+## who never got a bay takes skip_mood, and that skip is counted.
+func _release_shut_line() -> void:
+	if range_ready():
+		return
+	var mood := float(sim.db.practice.get("skip_mood", 0.0))
+	for waiting in bay_line:
+		for member in waiting.members:
+			if member.kind != "public" or member.rd.has("bay"):
+				continue
+			member.feel(mood, "The range was closed, so we went straight to the tee.", "practice")
+			range_skips += 1
+		waiting.bay_need = 0
+		waiting.waiting_bay = false
+		waiting.bay_left = 0.0
+	bay_line.clear()
 
 
 func _skip_bays(gr: Group) -> void:
