@@ -1373,6 +1373,9 @@ func _show_structure(tile: Vector2i) -> void:
 	inspector_body.add_child(UIKit.row("Upkeep", "%s a month" % Defs.money(bill)))
 	if still:
 		inspector_body.add_child(UIKit.label("The saving starts next month.", 13, UIKit.MUTED))
+	var why := sim.visitors.practice_shut_reason(o, tile.x, tile.y)
+	if why != "":
+		inspector_body.add_child(UIKit.label(why, 13, UIKit.BAD))
 
 
 # ------------------------------------------------------------- per frame

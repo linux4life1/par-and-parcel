@@ -89,6 +89,7 @@ func _ready() -> void:
 	_test_tee_and_stake()
 	_test_rating()
 	_test_practice()
+	_test_practice_area()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -1670,6 +1671,8 @@ func _test_membership() -> void:
 	c.guard = true
 	sim.economy.money = 50000.0
 	check(sim.place_object(t.x, t.y, Defs.O.PUTTING_GREEN) == 1 and sim.place_object(t.x + 2, t.y, Defs.O.DRIVING_RANGE) == 1, "build a putting green and a range")
+	_paint_practice_green(sim, t.x, t.y)
+	_paint_field(sim, t.x + 2, t.y)
 	var g3 := mem.make_golfer(m)
 	g3.holes_played = 3
 	g3.satisfaction = 80.0
@@ -3671,6 +3674,8 @@ func _test_progress() -> void:
 	c.guard = true
 	sim.economy.money = 50000.0
 	check(sim.place_object(spot.x, spot.y, Defs.O.DRIVING_RANGE) == 1, "a driving range goes up")
+	_paint_field(sim, spot.x, spot.y)
+	check(sim.visitors.range_ready(), "the range used by regulars has a clear field")
 	var p2 := float(m.power)
 	var s2 := float(m.skill)
 	var ranged := sim.members.make_golfer(m)
@@ -3684,6 +3689,8 @@ func _test_progress() -> void:
 	c.set_object(spot.x + 3, spot.y, Defs.O.NONE)
 	c.guard = true
 	check(sim.place_object(spot.x + 3, spot.y, Defs.O.PUTTING_GREEN) == 1, "a practice green goes up")
+	_paint_practice_green(sim, spot.x + 3, spot.y)
+	check(sim.visitors.green_ready(), "the practice green used by regulars is not a hole's green")
 	var u2 := float(m.putting)
 	var power_at_green := float(m.power)
 	var green := sim.members.make_golfer(m)
@@ -3700,12 +3707,13 @@ func _test_progress() -> void:
 	c.set_object(spot.x, spot.y, Defs.O.NONE)
 	c.guard = true
 	check(sim.place_object(spot.x, spot.y, Defs.O.DRIVING_RANGE) == 1, "the range is back for the bucket")
-	sim.visitors._register(day)
+	_paint_field(sim, spot.x, spot.y)
+	_warm_party(sim, day)
 	check(day.power > stored and is_equal_approx(float(m.power), stored), "the bucket is not written onto the member; only a finished visit is")
 	var bucket := sim.visitors.make_golfer("public", 0.5)
 	bucket.power = 0.9
 	var bucket_acc := bucket.accuracy
-	sim.visitors._register(bucket)
+	_warm_party(sim, bucket)
 	check(is_equal_approx(bucket.power, 0.9 + float(sim.members.warmup.get("range_power", 0.0))) and is_equal_approx(bucket.accuracy, bucket_acc), "a bucket on the range adds length for the round, not accuracy")
 	sim.members.warmup["power_cap"] = 0.91
 	sim.members.warmup["skill_cap"] = 0.82
@@ -3717,7 +3725,8 @@ func _test_progress() -> void:
 	var capped := sim.visitors.make_golfer("public", 0.5)
 	capped.power = 1.0
 	capped.putting = 0.95
-	sim.visitors._register(capped)
+	_paint_practice_green(sim, spot.x + 3, spot.y)
+	_warm_party(sim, capped)
 	check(is_equal_approx(capped.power, 0.91) and is_equal_approx(capped.putting, 0.82), "the warm-up stops at the caps in its own data, not at a number written in the code")
 	c.guard = false
 	c.set_object(spot.x + 3, spot.y, Defs.O.NONE)
@@ -3727,7 +3736,7 @@ func _test_progress() -> void:
 	var cold_power := cold.power
 	var cold_acc := cold.accuracy
 	var cold_putt := cold.putting
-	sim.visitors._register(cold)
+	_warm_party(sim, cold)
 	check(is_equal_approx(cold.power, cold_power) and is_equal_approx(cold.accuracy, cold_acc) and is_equal_approx(cold.putting, cold_putt), "with no range and no practice green, arriving changes neither length nor putting")
 	m.power = float(spec.get("power_cap", 1.06))
 	m.skill = float(spec.get("skill_cap", 0.99))
@@ -7584,6 +7593,8 @@ func _test_practice() -> void:
 	var green_purse := sim.economy.money
 	check(sim.place_object(gx, gy, Defs.O.PUTTING_GREEN) == 1 and is_equal_approx(green_purse - sim.economy.money, green_cost), "the practice green costs its published price")
 	check(is_equal_approx(float(sim.economy.expense.get("construction", 0.0)), green_cost), "that price is booked as construction")
+	_paint_practice_green(sim, gx, gy)
+	check(sim.visitors.green_ready(), "the practice green opens once its own green is painted")
 	var putter := sim.visitors.make_golfer("public", 0.4)
 	putter.persona = {}
 	putter.mood_good = 1.0
@@ -7591,7 +7602,7 @@ func _test_practice() -> void:
 	var shop_before: float = float(sim.economy.income.get("pro_shop", 0.0))
 	var range_before: float = float(sim.economy.income.get("range", 0.0))
 	var putter_purse := sim.economy.money
-	sim.visitors._register(putter)
+	_warm_party(sim, putter)
 	var shop_gain: float = float(sim.economy.income.get("pro_shop", 0.0)) - shop_before
 	check(is_equal_approx(putter.satisfaction - 70.0, green_mood), "the practice green raises satisfaction by the amount in the data")
 	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)), range_before), "the practice green earns nothing on the range line")
@@ -7601,7 +7612,7 @@ func _test_practice() -> void:
 	putter2.persona = {}
 	putter2.mood_good = 1.0
 	putter2.satisfaction = 70.0
-	sim.visitors._register(putter2)
+	_warm_party(sim, putter2)
 	book["green_mood"] = green_mood
 	check(is_equal_approx(putter2.satisfaction - 70.0, green_mood + 2.0), "the satisfaction effect is read from the practice data")
 	var green_back := sim.economy.money
@@ -7614,6 +7625,8 @@ func _test_practice() -> void:
 	check(sim.undo.undo() and int(c.objects[ri]) == 0 and is_equal_approx(sim.economy.money, range_shift), "undo refunds the range's build cost")
 	var range_purse := sim.economy.money
 	check(sim.place_object(rx, ry, Defs.O.DRIVING_RANGE) == 1 and is_equal_approx(range_purse - sim.economy.money, range_cost), "the range costs its published price")
+	_paint_field(sim, rx, ry)
+	check(sim.visitors.range_ready(), "the range opens once its field is painted")
 	var driver := sim.visitors.make_golfer("public", 0.4)
 	driver.persona = {}
 	driver.mood_good = 1.0
@@ -7621,7 +7634,7 @@ func _test_practice() -> void:
 	var shop_r0: float = float(sim.economy.income.get("pro_shop", 0.0))
 	var range_line0: float = float(sim.economy.income.get("range", 0.0))
 	var driver_purse := sim.economy.money
-	sim.visitors._register(driver)
+	_warm_party(sim, driver)
 	var shop_r: float = float(sim.economy.income.get("pro_shop", 0.0)) - shop_r0
 	var booked: float = float(sim.economy.income.get("range", 0.0)) - range_line0
 	check(is_equal_approx(booked, bucket_fee), "the range charges the bucket fee from the practice data")
@@ -7633,7 +7646,7 @@ func _test_practice() -> void:
 	driver2.mood_good = 1.0
 	var line_before: float = float(sim.economy.income.get("range", 0.0))
 	var cash_before := sim.economy.money
-	sim.visitors._register(driver2)
+	_warm_party(sim, driver2)
 	var line_gain: float = float(sim.economy.income.get("range", 0.0)) - line_before
 	var cash_gain := sim.economy.money - cash_before
 	book["bucket"] = bucket_fee
@@ -7664,3 +7677,508 @@ func _test_practice() -> void:
 	check(not sim.can_switch(Defs.O.PUTTING_GREEN) and not c.set_closed(gx, gy, true), "setting green_upkeep to 0 makes the practice green unswitchable")
 	book["green_upkeep"] = green_upkeep
 	check(sim.can_switch(Defs.O.PUTTING_GREEN) and c.set_closed(gx, gy, true), "putting the upkeep back makes the practice green switchable again")
+
+
+func _clock_seconds(minutes: float) -> float:
+	return minutes * Defs.CLOCK_DAY_SECONDS / (24.0 * 60.0)
+
+
+func _paint_field(sim: Sim, tx: int, ty: int) -> void:
+	var tiles: int = int(ceil(float(sim.db.practice.get("field_min", 0.0)) / Defs.TILE))
+	_paint_column(sim, tx, ty, tiles, Defs.T.FAIRWAY)
+
+
+func _paint_practice_green(sim: Sim, tx: int, ty: int) -> void:
+	var need: int = int(sim.db.practice.get("green_min", 1))
+	_paint_column(sim, tx, ty, need, Defs.T.GREEN)
+
+
+func _paint_column(sim: Sim, tx: int, ty: int, tiles: int, ground: int) -> void:
+	var course := sim.course
+	course.guard = false
+	for n in tiles:
+		var y: int = ty - 1 - n
+		if course.in_bounds(tx, y):
+			var i: int = y * course.w + tx
+			if int(course.objects[i]) != 0 and int(course.objects[i]) != Defs.O.CLUBHOUSE:
+				course.set_object(tx, y, Defs.O.NONE)
+			course.set_terrain(tx, y, ground)
+	course.guard = true
+
+
+func _ready_tile(sim: Sim, tx: int, ty: int) -> void:
+	var course := sim.course
+	course.guard = false
+	if course.in_bounds(tx, ty) and int(course.objects[ty * course.w + tx]) != 0:
+		course.set_object(tx, ty, Defs.O.NONE)
+	if course.in_bounds(tx, ty):
+		course.set_terrain(tx, ty, Defs.T.ROUGH)
+	course.guard = true
+
+
+func _warm_party(sim: Sim, g: Golfer) -> void:
+	var party := Group.new()
+	party.kind = "public"
+	party.warm_set = true
+	party.members.append(g)
+	g.group = party
+	sim.visitors.begin_warmup(party)
+
+
+func _party_at(sim: Sim, hole_i: int) -> Group:
+	var hole: Hole = sim.course.holes[hole_i]
+	var party := Group.new()
+	party.kind = "public"
+	party.hole_i = hole_i
+	var g := sim.visitors.make_golfer("public", 0.4)
+	g.persona = {}
+	g.mood_good = 1.0
+	g.mood_bad = 1.0
+	g.satisfaction = 70.0
+	g.group = party
+	var spot := Group.arc_spot(hole, 0, 1)
+	g.pos = spot
+	g.prev = spot
+	party.members.append(g)
+	sim.visitors.groups.append(party)
+	return party
+
+
+func _test_practice_area() -> void:
+	print("-- real practice area")
+	_test_field_stops()
+	_test_green_hole()
+	_test_warmup_tee()
+	_test_bay_wait()
+	_test_bay_frees()
+	_test_bay_leaves()
+	_test_range_closes()
+	_test_bay_count()
+	_test_shut_range()
+
+
+func _test_field_stops() -> void:
+	print("-- practice field stops for routes and objects")
+	var sim := _sim("sandbox", 11)
+	var need := float(sim.db.practice.get("field_min", 0.0))
+	var tiles: int = int(need / Defs.TILE)
+	var c := sim.course
+	var ty := 40
+	var route_x := 24
+	var clear_x := 28
+	var obj_x := 32
+	_ready_tile(sim, route_x, ty)
+	_ready_tile(sim, clear_x, ty)
+	_ready_tile(sim, obj_x, ty)
+	check(sim.place_object(route_x, ty, Defs.O.DRIVING_RANGE) == 1, "a range stands in front of a hole")
+	_paint_field(sim, route_x, ty)
+	_paint_field(sim, clear_x, ty)
+	_paint_field(sim, obj_x, ty)
+	var hole := sim.add_hole(c.tile_center(route_x, ty - 1), c.tile_center(route_x, ty - 1 - tiles))
+	check(hole != null, "the hole in front of the range is laid out")
+	c.guard = false
+	var planted := c.set_object(obj_x, ty - 3, Defs.O.BOULDER)
+	c.guard = true
+	check(planted, "a boulder stands in the field")
+	check(Defs.is_fairway(int(c.terrain[(ty - 1) * c.w + route_x])), "the tile in front of the range is fairway")
+	check(is_equal_approx(sim.visitors.field_length(route_x, ty), 0.0), "a hole's route stops the field on the first tile")
+	check(not sim.visitors.range_is_open(route_x, ty) and not sim.visitors.range_ready(), "a hole's fairway in front of the range leaves it shut")
+	check(is_equal_approx(sim.visitors.field_length(clear_x, ty), need), "the same length of fairway with no route is the whole field")
+	check(sim.place_object(clear_x, ty, Defs.O.DRIVING_RANGE) == 1 and sim.visitors.range_ready(), "a range with that clear field opens")
+	check(is_equal_approx(sim.visitors.field_length(obj_x, ty), 2.0 * Defs.TILE), "an object on the field stops the measure at that tile")
+	check(not sim.visitors.range_is_open(obj_x, ty), "so a range with an object in the field stays shut")
+
+
+func _test_green_hole() -> void:
+	print("-- practice green is not a hole's green")
+	var sim := _sim("sandbox", 12)
+	var c := sim.course
+	var gx := 70
+	var gy := 50
+	var need: int = int(sim.db.practice.get("green_min", 0))
+	_ready_tile(sim, gx, gy)
+	check(sim.place_object(gx, gy, Defs.O.PUTTING_GREEN) == 1, "a practice green stands beside a hole")
+	c.guard = false
+	var span := 0
+	while span < 3:
+		c.set_terrain(gx + 1 + span, gy, Defs.T.GREEN)
+		span += 1
+	var painted := 0
+	while painted < need - 1:
+		c.set_terrain(gx, gy - 1 - painted, Defs.T.GREEN)
+		painted += 1
+	c.guard = true
+	var hole := sim.add_hole(c.tile_center(gx + 3, gy - 16), c.tile_center(gx + 3, gy))
+	check(hole != null, "the hole's design pin is on that green")
+	hole.pin = c.tile_center(gx + 3, gy - 16)
+	var count := sim.visitors.practice_green_count(gx, gy)
+	check(count == need - 1, "a hole green two tiles from the design pin is not practice ground (%d)" % count)
+	check(not sim.visitors.green_is_open(gx, gy) and not sim.visitors.green_ready(), "one tile short of green_min, beside the hole's edge, stays shut")
+	var short_why := sim.visitors.practice_shut_reason(Defs.O.PUTTING_GREEN, gx, gy)
+	check(short_why == "needs %d green tiles, %d painted" % [need, need - 1], "the inspector counts the shortfall: %s" % short_why)
+	c.guard = false
+	c.set_terrain(gx, gy - need, Defs.T.GREEN)
+	c.guard = true
+	check(sim.visitors.practice_green_count(gx, gy) == need and sim.visitors.green_ready(), "one more tile of the practice green opens it")
+	_ready_tile(sim, 90, gy)
+	c.guard = false
+	c.set_terrain(91, gy, Defs.T.GREEN)
+	c.set_terrain(92, gy, Defs.T.GREEN)
+	c.set_terrain(93, gy, Defs.T.GREEN)
+	c.guard = true
+	var other := sim.add_hole(c.tile_center(93, gy - 16), c.tile_center(93, gy))
+	check(other != null and sim.place_object(90, gy, Defs.O.PUTTING_GREEN) == 1, "a second green sits on a hole's edge")
+	var owned := sim.visitors.practice_shut_reason(Defs.O.PUTTING_GREEN, 90, gy)
+	check(owned == "that green belongs to a hole", "the inspector says that green belongs to a hole: %s" % owned)
+	check(sim.visitors.practice_green_count(90, gy) == 0, "the edge two tiles from the cup adds nothing")
+
+
+func _test_warmup_tee() -> void:
+	print("-- warm-up before the first tee")
+	var sim := _sim("sandbox", 13)
+	var book: Dictionary = sim.db.practice
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	var green_m := float(book.get("green_minutes", 0.0))
+	var c := sim.course
+	_ready_tile(sim, 20, 30)
+	_ready_tile(sim, 22, 30)
+	check(sim.place_object(20, 30, Defs.O.DRIVING_RANGE) == 1 and sim.place_object(22, 30, Defs.O.PUTTING_GREEN) == 1, "both facilities stand for the warm-up")
+	_paint_field(sim, 20, 30)
+	_paint_practice_green(sim, 22, 30)
+	check(sim.visitors.range_ready() and sim.visitors.green_ready(), "both are open")
+	var closed := sim.add_hole(c.tile_center(40, 70), c.tile_center(40, 50))
+	var open_h := sim.add_hole(c.tile_center(48, 70), c.tile_center(48, 50))
+	check(closed != null and open_h != null, "two holes, the first still a draft")
+	closed.open = false
+	var draft := _party_at(sim, 0)
+	var before := float(sim.economy.income.get("range", 0.0))
+	var power0 := draft.members[0].power
+	draft.step(0.05, sim)
+	check(draft.hole_i == 1, "hole 1 is a draft, so the party plays the next hole")
+	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)) - before, float(book.get("bucket", 0.0))), "the warm-up still happens on the first tee they play")
+	check(draft.members[0].power > power0, "and the bucket still adds length")
+	open_h.line.erase(draft)
+	draft.state = Group.S.GONE
+	var lead := _party_at(sim, 1)
+	var total := _clock_seconds(bucket_m + green_m)
+	lead.step(total * 0.5, sim)
+	check(open_h.teeing_group != lead and lead.warm_left > 0.0, "the lead is not teeing just before the warm-up runs out")
+	var left := lead.warm_left
+	lead.step(left, sim)
+	check(open_h.teeing_group != lead and lead.state == Group.S.QUEUE, "the warm-up ends on the tee, and they have not hit yet")
+	lead.step(0.05, sim)
+	check(open_h.teeing_group == lead, "they tee on the next step")
+	var pace_h := sim.add_hole(c.tile_center(56, 70), c.tile_center(56, 50))
+	var pace := _party_at(sim, 2)
+	pace.step(0.05, sim)
+	var rest := pace.warm_left
+	pace.step(rest, sim)
+	check(pace_h != null and Defs.pace_minutes(pace.hole_time) == int(bucket_m + green_m), "the warm-up is the data's minutes on the pace clock (%d)" % Defs.pace_minutes(pace.hole_time))
+	var bare := _sim("sandbox", 14)
+	var quiet := bare.add_hole(bare.course.tile_center(48, 70), bare.course.tile_center(48, 50))
+	var cold := _party_at(bare, 0)
+	cold.step(0.05, bare)
+	cold.step(0.05, bare)
+	check(quiet.teeing_group == cold, "with both facilities shut the lead tees at once")
+	check(Defs.pace_minutes(cold.hole_time) < int(bucket_m), "and that tee is not a warm-up")
+
+
+func _test_bay_wait() -> void:
+	print("-- waiting for a bay")
+	var sim := _sim("sandbox", 15)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	var saved_wait := float(book.get("bay_wait", 0.0))
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	var fee := float(book.get("bucket", 0.0))
+	var skip := float(book.get("skip_mood", 0.0))
+	book["bays"] = 1
+	var c := sim.course
+	_ready_tile(sim, 16, 24)
+	check(sim.place_object(16, 24, Defs.O.DRIVING_RANGE) == 1, "one range, one bay")
+	_paint_field(sim, 16, 24)
+	check(sim.visitors.range_ready() and not sim.visitors.green_ready(), "the range is open and the practice green is not")
+	var hole := sim.add_hole(c.tile_center(36, 80), c.tile_center(36, 60))
+	check(hole != null and saved_wait > bucket_m, "bay_wait outlasts one bucket")
+	var first := _party_at(sim, 0)
+	first.step(0.02, sim)
+	check(first.members[0].rd.has("bay"), "the first party takes the only bay")
+	var second := _party_at(sim, 0)
+	second.step(0.02, sim)
+	check(second.waiting_bay and not second.members[0].rd.has("bay"), "the second party waits instead of skipping")
+	sim.time += _clock_seconds(bucket_m)
+	var line0 := float(sim.economy.income.get("range", 0.0))
+	second.step(0.02, sim)
+	check(second.members[0].rd.has("bay"), "within bay_wait the second party gets the bay when the first bucket ends")
+	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)) - line0, fee), "that bay is a bucket, and nothing cleared the bay list")
+	check(not sim.visitors.bay_until.is_empty(), "the new claim is still in the list")
+	book["bay_wait"] = 2
+	var third := _party_at(sim, 0)
+	third.step(0.02, sim)
+	check(third.waiting_bay, "the third party finds the range busy")
+	third.step(_clock_seconds(2.0), sim)
+	check(not third.members[0].rd.has("bay"), "past bay_wait they still have no bay")
+	check(is_equal_approx(third.members[0].satisfaction - 70.0, skip), "and they take the skip mood from the data")
+	check(sim.visitors.range_skips == 1, "the skip is counted")
+	sim._end_month(Defs.DAYS_PER_MONTH)
+	var row: Dictionary = sim.economy.history[sim.economy.history.size() - 1]
+	check(int(row.get("range_skips", 0)) == 1, "the month's books count that skip")
+	check(Panels.range_skip_line(int(row.get("range_skips", 0))) == "1 golfer skipped a full range", "the finances panel says a golfer skipped a full range")
+	check(Panels.range_skip_line(4) == "4 golfers skipped a full range", "the finances panel counts every golfer who skipped")
+	check(Panels.range_skip_line(0) == "", "a month with no skips adds no finances line")
+	book["bays"] = saved_bays
+	book["bay_wait"] = saved_wait
+
+
+func _test_bay_frees() -> void:
+	print("-- a bay frees when its bucket ends")
+	var sim := _sim("sandbox", 16)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	var fee := float(book.get("bucket", 0.0))
+	book["bays"] = 1
+	_ready_tile(sim, 16, 24)
+	check(sim.place_object(16, 24, Defs.O.DRIVING_RANGE) == 1, "the expiry range is up")
+	_paint_field(sim, 16, 24)
+	var hole := sim.add_hole(sim.course.tile_center(36, 80), sim.course.tile_center(36, 60))
+	var first := _party_at(sim, 0)
+	var second := _party_at(sim, 0)
+	var third := _party_at(sim, 0)
+	first.step(0.02, sim)
+	second.step(0.02, sim)
+	third.step(0.02, sim)
+	check(hole != null and second.waiting_bay and third.waiting_bay, "two parties are waiting when the only bay is busy")
+	check(not second.members[0].rd.has("bay") and not third.members[0].rd.has("bay"), "neither waiting party has claimed yet")
+	sim.time += _clock_seconds(bucket_m)
+	var earned := float(sim.economy.income.get("range", 0.0))
+	third.step(0.02, sim)
+	check(not third.members[0].rd.has("bay") and third.waiting_bay, "the third party does not take a bay ahead of the party already waiting")
+	second.step(0.02, sim)
+	check(second.members[0].rd.has("bay"), "the earlier waiting party gets the bay when the first bucket ends")
+	check(not third.members[0].rd.has("bay") and third.waiting_bay, "the third party is still waiting")
+	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)) - earned, fee), "that bucket is booked when the waiting party is served, and the expired claim has fallen out of the count")
+	check(not sim.visitors.bay_until.is_empty(), "the new claim stays listed until its own time ends")
+	book["bays"] = saved_bays
+	_test_second_bay()
+
+
+func _test_second_bay() -> void:
+	print("-- a later bay still takes a full bucket")
+	var sim := _sim("sandbox", 19)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	book["bays"] = 1
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	var hold := _clock_seconds(bucket_m)
+	_ready_tile(sim, 16, 24)
+	check(sim.place_object(16, 24, Defs.O.DRIVING_RANGE) == 1, "one bay for a two-golfer party")
+	_paint_field(sim, 16, 24)
+	var hole := sim.add_hole(sim.course.tile_center(36, 80), sim.course.tile_center(36, 60))
+	var party := _party_at(sim, 0)
+	var mate := sim.visitors.make_golfer("public", 0.4)
+	mate.persona = {}
+	mate.mood_good = 1.0
+	mate.mood_bad = 1.0
+	mate.satisfaction = 70.0
+	mate.group = party
+	var mate_spot := Group.arc_spot(hole, 1, 2)
+	mate.pos = mate_spot
+	mate.prev = mate_spot
+	party.members.append(mate)
+	var guard := 0
+	while guard < 800 and not party.members[1].rd.has("bay"):
+		sim.time += 0.05
+		party.step(0.05, sim)
+		guard += 1
+	check(party.members[0].rd.has("bay") and party.members[1].rd.has("bay"), "the second golfer hits when a bay frees")
+	check(party.warm_left >= hold - 0.001, "that claim still owes a full bucket")
+	var stood := 0.0
+	var half := hold * 0.5
+	while stood + 0.05 < half:
+		sim.time += 0.05
+		party.step(0.05, sim)
+		stood += 0.05
+	check(party.warm_left > 0.0 and party.state == Group.S.TO_TEE, "halfway through the second bucket the party is still on the tee")
+	var release := 0
+	while release < 800 and (party.warm_left > 0.0 or party.waiting_bay):
+		sim.time += 0.05
+		party.step(0.05, sim)
+		stood += 0.05
+		release += 1
+	check(stood + 0.001 >= hold, "the party leaves no sooner than bucket_minutes after the second golfer's claim")
+	book["bays"] = saved_bays
+
+
+func _open_range(sim: Sim) -> Hole:
+	var book: Dictionary = sim.db.practice
+	book["bays"] = 1
+	_ready_tile(sim, 16, 24)
+	var placed := sim.place_object(16, 24, Defs.O.DRIVING_RANGE) == 1
+	_paint_field(sim, 16, 24)
+	var hole := sim.add_hole(sim.course.tile_center(36, 80), sim.course.tile_center(36, 60))
+	check(placed and hole != null and sim.visitors.range_ready(), "one bay is open for the line")
+	return hole
+
+
+func _test_bay_leaves() -> void:
+	print("-- a party that has left does not hold the line")
+	_test_leaving_waiter()
+	_test_lost_member()
+	_test_recount_home()
+
+
+func _test_leaving_waiter() -> void:
+	var sim := _sim("sandbox", 23)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	_open_range(sim)
+	var holder := _party_at(sim, 0)
+	var front := _party_at(sim, 0)
+	var nxt := _party_at(sim, 0)
+	holder.step(0.02, sim)
+	front.step(0.02, sim)
+	nxt.step(0.02, sim)
+	check(holder.members[0].rd.has("bay") and front.waiting_bay and nxt.waiting_bay, "two parties are waiting behind the party on the bay")
+	front.state = Group.S.LEAVING
+	sim.time += _clock_seconds(bucket_m)
+	nxt.step(0.02, sim)
+	check(nxt.members[0].rd.has("bay"), "once the party at the front has left, the next party takes the bay as soon as it frees")
+	check(sim.visitors.bay_line.is_empty(), "that party is off the line, and so is the party that left")
+	book["bays"] = saved_bays
+
+
+func _test_lost_member() -> void:
+	var sim := _sim("sandbox", 24)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	_open_range(sim)
+	var holder := _party_at(sim, 0)
+	var waiter := _party_at(sim, 0)
+	holder.step(0.02, sim)
+	waiter.step(0.02, sim)
+	check(waiter.waiting_bay and waiter.members.size() == 1, "a party with one golfer is waiting for the bay")
+	sim.time += _clock_seconds(bucket_m)
+	sim.visitors.quit(waiter.members[0])
+	var fresh := _party_at(sim, 0)
+	fresh.step(0.02, sim)
+	check(fresh.members[0].rd.has("bay"), "with nobody left who needed that bay, a newcomer claims the free one at once")
+	check(sim.visitors.bay_line.is_empty(), "the bay line is empty after the party that left and the party that lost its golfer")
+	book["bays"] = saved_bays
+
+
+func _test_recount_home() -> void:
+	var sim := _sim("sandbox", 25)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	var fee := float(book.get("bucket", 0.0))
+	var hole := _open_range(sim)
+	var party := _party_at(sim, 0)
+	var mate := sim.visitors.make_golfer("public", 0.4)
+	mate.persona = {}
+	mate.mood_good = 1.0
+	mate.mood_bad = 1.0
+	mate.satisfaction = 70.0
+	mate.group = party
+	var mate_spot := Group.arc_spot(hole, 1, 2)
+	mate.pos = mate_spot
+	mate.prev = mate_spot
+	party.members.append(mate)
+	party.step(0.02, sim)
+	check(party.members[0].rd.has("bay") and not party.members[1].rd.has("bay"), "with one bay, the first golfer takes it and the second waits")
+	check(sim.visitors.bay_line.has(party), "that party is on the bay line while the second golfer waits")
+	sim.visitors.quit(party.members[1])
+	check(not sim.visitors.bay_line.has(party), "sending the waiting golfer home takes the party off the line at once")
+	sim.time += _clock_seconds(bucket_m)
+	var earned := float(sim.economy.income.get("range", 0.0))
+	var fresh := _party_at(sim, 0)
+	fresh.step(0.02, sim)
+	check(fresh.members[0].rd.has("bay") and not fresh.waiting_bay, "a newcomer claims the next free bay without waiting out bay_wait")
+	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)) - earned, fee), "that claim is one bucket")
+	book["bays"] = saved_bays
+
+
+func _test_range_closes() -> void:
+	print("-- a waiting party leaves when the range shuts")
+	var sim := _sim("sandbox", 26)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	var skip := float(book.get("skip_mood", 0.0))
+	_open_range(sim)
+	var holder := _party_at(sim, 0)
+	var waiter := _party_at(sim, 0)
+	holder.step(0.02, sim)
+	waiter.step(0.02, sim)
+	check(holder.members[0].rd.has("bay") and waiter.waiting_bay, "a party is waiting behind the golfer on the only bay")
+	check(sim.visitors.bay_line.has(waiter), "the waiting party is on the bay line")
+	var earned := float(sim.economy.income.get("range", 0.0))
+	var sat := waiter.members[0].satisfaction
+	check(sim.course.set_closed(16, 24, true) and not sim.visitors.range_ready(), "the range is switched off")
+	waiter.step(0.02, sim)
+	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)), earned), "closing the range books no further range income")
+	check(not sim.visitors.bay_line.has(waiter) and not waiter.waiting_bay, "the waiting party is off the line")
+	check(not waiter.members[0].rd.has("bay"), "they leave with no bucket")
+	check(sim.visitors.range_skips == 1, "the golfer who had no bay is counted as a skip")
+	check(is_equal_approx(waiter.members[0].satisfaction - sat, skip), "and they take skip_mood")
+	book["bays"] = saved_bays
+
+
+func _test_bay_count() -> void:
+	print("-- bays are per open range")
+	var sim := _sim("sandbox", 27)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	var fee := float(book.get("bucket", 0.0))
+	book["bays"] = 1
+	_ready_tile(sim, 16, 24)
+	_ready_tile(sim, 22, 24)
+	var west := sim.place_object(16, 24, Defs.O.DRIVING_RANGE) == 1
+	var east := sim.place_object(22, 24, Defs.O.DRIVING_RANGE) == 1
+	_paint_field(sim, 16, 24)
+	_paint_field(sim, 22, 24)
+	var hole := sim.add_hole(sim.course.tile_center(36, 80), sim.course.tile_center(36, 60))
+	check(west and east and hole != null, "two ranges stand, each with a clear field")
+	check(sim.visitors.range_is_open(16, 24) and sim.visitors.range_is_open(22, 24), "both ranges are open")
+	var first := _party_at(sim, 0)
+	var second := _party_at(sim, 0)
+	var third := _party_at(sim, 0)
+	first.step(0.02, sim)
+	second.step(0.02, sim)
+	third.step(0.02, sim)
+	check(first.members[0].rd.has("bay") and second.members[0].rd.has("bay"), "two open ranges double the bays, so two golfers hit at once")
+	check(third.waiting_bay and not third.members[0].rd.has("bay"), "the third party waits for a bay")
+	check(sim.course.set_closed(22, 24, true), "one range is switched off")
+	check(sim.visitors.range_ready() and sim.course.is_closed(24 * sim.course.w + 22), "the other range is still open")
+	sim.time += _clock_seconds(bucket_m)
+	var earned := float(sim.economy.income.get("range", 0.0))
+	third.step(0.02, sim)
+	check(third.members[0].rd.has("bay"), "after the live claims end, one bay is free and the waiting party takes it")
+	var fourth := _party_at(sim, 0)
+	fourth.step(0.02, sim)
+	check(fourth.waiting_bay and not fourth.members[0].rd.has("bay"), "one open range is a single bay again, so the next party waits")
+	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)) - earned, fee), "shutting one range did not hand out a second bucket")
+	book["bays"] = saved_bays
+
+
+func _test_shut_range() -> void:
+	print("-- a range with no field")
+	var sim := _sim("sandbox", 17)
+	_ready_tile(sim, 30, 44)
+	check(sim.place_object(30, 44, Defs.O.DRIVING_RANGE) == 1, "an unpainted range is built")
+	check(not sim.visitors.range_ready(), "and it is shut")
+	var why := sim.visitors.practice_shut_reason(Defs.O.DRIVING_RANGE, 30, 44)
+	var need: int = int(round(float(sim.db.practice.get("field_min", 0.0))))
+	check(why == "needs %d m of short grass, 0 m painted" % need, "the inspector says why: %s" % why)
+	sim.visitors.range_skips = 4
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	raw.erase("range_skips")
+	var loaded := Sim.from_dict(db, raw, gear)
+	check(loaded.visitors.range_skips == 0, "an old save, with no range_skips, loads with none")
+	check(int(loaded.course.objects[44 * loaded.course.w + 30]) == Defs.O.DRIVING_RANGE, "the save still has the range")
+	check(not loaded.visitors.range_ready(), "it loads shut")
+	var again := loaded.visitors.practice_shut_reason(Defs.O.DRIVING_RANGE, 30, 44)
+	check(again == why, "and gives the same reason")
