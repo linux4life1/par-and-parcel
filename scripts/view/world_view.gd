@@ -39,7 +39,11 @@ var _ring := MeshInstance3D.new()
 var _mounds := MultiMeshInstance3D.new()
 var _litter: MultiMeshInstance3D
 var _litter_rev := -1
-var _spots: MultiMeshInstance3D
+var _mark_land: MultiMeshInstance3D
+var _mark_rest: MultiMeshInstance3D
+var _mark_land_bad: MultiMeshInstance3D
+var _mark_rest_bad: MultiMeshInstance3D
+var _mark_lines: MeshInstance3D
 var _mound_set := {}
 var _mound_cursor := 0
 var _mound_changed := false
@@ -1331,14 +1335,18 @@ func _ready() -> void:
 	_litter.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
 	_litter.visibility_range_end = 80.0
 	add_child(_litter)
-	_spots = MultiMeshInstance3D.new()
-	var spots_mm := MultiMesh.new()
-	spots_mm.transform_format = MultiMesh.TRANSFORM_3D
-	spots_mm.mesh = _sphere(0.42, 10, 6)
-	_spots.multimesh = spots_mm
-	_spots.material_override = glow(Color(1.0, 0.95, 0.55))
-	_spots.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	add_child(_spots)
+	_mark_land = _mark_discs(0.22, Color(0.78, 0.9, 0.98))
+	_mark_rest = _mark_discs(0.42, Color(0.78, 0.9, 0.98))
+	_mark_land_bad = _mark_discs(0.22, UIKit.WARN)
+	_mark_rest_bad = _mark_discs(0.42, UIKit.WARN)
+	_mark_lines = MeshInstance3D.new()
+	var line_mat := StandardMaterial3D.new()
+	line_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	line_mat.vertex_color_use_as_albedo = true
+	line_mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_mark_lines.material_override = line_mat
+	_mark_lines.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_mark_lines)
 	var smm := MultiMesh.new()
 	smm.transform_format = MultiMesh.TRANSFORM_3D
 	smm.mesh = mesh("stake")
@@ -2033,29 +2041,94 @@ func _rebuild_holes() -> void:
 		tl.set_meta("base_y", 2.6)
 		tee_at.add_child(tl)
 		_hole_labels.append(tl)
-	_rebuild_spots()
+	_rebuild_test_marks()
 
 
-## Gold discs where the expert test golfers' tee shots stopped, on drafts only.
-func _rebuild_spots() -> void:
-	if _spots == null:
+func _mark_discs(radius: float, color: Color) -> MultiMeshInstance3D:
+	var node := MultiMeshInstance3D.new()
+	var mm := MultiMesh.new()
+	mm.transform_format = MultiMesh.TRANSFORM_3D
+	mm.mesh = _sphere(radius, 10, 6)
+	node.multimesh = mm
+	node.material_override = glow(color)
+	node.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(node)
+	return node
+
+
+## Landing and resting discs for the Test button, with a thin line between
+## them. Trouble uses the warning colour. Rebuilt when the marks change,
+## not every frame.
+func _rebuild_test_marks() -> void:
+	if _mark_land == null:
 		return
-	var mm := _spots.multimesh
-	var n := 0
+	var clean_land: Array[Vector3] = []
+	var clean_rest: Array[Vector3] = []
+	var bad_land: Array[Vector3] = []
+	var bad_rest: Array[Vector3] = []
+	var lines: Array[Dictionary] = []
+	var trouble: Array = sim.db.test_hole.get("trouble", [])
+	var flat := Basis.from_scale(Vector3(1.0, 0.22, 1.0))
 	for hole in sim.course.holes:
-		if not hole.open:
-			n += hole.spots.size()
-	mm.instance_count = n
-	var k := 0
-	for hole in sim.course.holes:
-		if hole.open:
+		for mark in hole.test_marks:
+			var land2: Vector2 = mark.get("land", Vector2.ZERO)
+			var rest2: Vector2 = mark.get("rest", Vector2.ZERO)
+			var outcome := str(mark.get("outcome", ""))
+			var bad := trouble.has(outcome)
+			var land_p := sim.course.on_ground(land2.x, land2.y)
+			land_p.y += 0.28
+			var rest_p := sim.course.on_ground(rest2.x, rest2.y)
+			rest_p.y += 0.32
+			if bad:
+				bad_land.append(land_p)
+				bad_rest.append(rest_p)
+			else:
+				clean_land.append(land_p)
+				clean_rest.append(rest_p)
+			lines.append({"a": land_p, "b": rest_p, "bad": bad})
+	_place_discs(_mark_land.multimesh, clean_land, flat)
+	_place_discs(_mark_rest.multimesh, clean_rest, flat)
+	_place_discs(_mark_land_bad.multimesh, bad_land, flat)
+	_place_discs(_mark_rest_bad.multimesh, bad_rest, flat)
+	_mark_lines.mesh = _test_lines(lines)
+	_mark_lines.visible = not lines.is_empty()
+
+
+func _place_discs(mm: MultiMesh, pts: Array[Vector3], flat: Basis) -> void:
+	mm.instance_count = pts.size()
+	for i in pts.size():
+		mm.set_instance_transform(i, Transform3D(flat, pts[i]))
+
+
+func _test_lines(lines: Array[Dictionary]) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var drew := false
+	for line in lines:
+		var a: Vector3 = line.a
+		var b: Vector3 = line.b
+		var span := Vector2(b.x - a.x, b.z - a.z)
+		if span.length() < 0.05:
 			continue
-		for i in hole.spots.size():
-			var p2: Vector2 = hole.spots[i]
-			var p := sim.course.on_ground(p2.x, p2.y)
-			p.y += 0.3
-			mm.set_instance_transform(k, Transform3D(Basis.IDENTITY, p))
-			k += 1
+		var side := Vector2(-span.y, span.x).normalized() * 0.045
+		var ink := Color(0.78, 0.9, 0.98)
+		if bool(line.bad):
+			ink = UIKit.WARN
+		st.set_color(ink)
+		var a0 := a + Vector3(side.x, 0.0, side.y)
+		var a1 := a - Vector3(side.x, 0.0, side.y)
+		var b0 := b + Vector3(side.x, 0.0, side.y)
+		var b1 := b - Vector3(side.x, 0.0, side.y)
+		st.add_vertex(a0)
+		st.add_vertex(b0)
+		st.add_vertex(b1)
+		st.add_vertex(a0)
+		st.add_vertex(b1)
+		st.add_vertex(a1)
+		drew = true
+	if not drew:
+		return ArrayMesh.new()
+	return st.commit()
 
 
 func _label(text: String, at: Vector3, color: Color) -> Label3D:

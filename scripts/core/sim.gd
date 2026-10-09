@@ -157,6 +157,7 @@ func _init(data: DataDB, scen: Dictionary, seed_value: int = 0, shared_gear: Gea
 	members = Members.new(self)
 	stories = Stories.new(self)
 	lab = HoleLab.new(self)
+	_bind_marks()
 	feats = Accomplishments.new(self)
 	wildlife = Wildlife.new(self)
 	wildlife.populate()
@@ -1000,6 +1001,22 @@ func _bind_undo() -> void:
 	course.watch_edits(Callable(undo, "note_tile"), Callable(undo, "note_height"), Callable(undo, "clear"))
 
 
+## Test marks follow the hole's signature. Paint, sculpt and objects all
+## tell the lab, which drops a mark when that signature has moved.
+func _bind_marks() -> void:
+	course.tiles_changed.connect(_marks_after_rect)
+	course.heights_changed.connect(_marks_after_rect)
+	course.objects_changed.connect(_marks_after_object)
+
+
+func _marks_after_rect(_r: Rect2i) -> void:
+	lab.drop_stale_marks()
+
+
+func _marks_after_object() -> void:
+	lab.drop_stale_marks()
+
+
 ## Paint terrain with a round brush. Returns tiles changed, or -1 if broke.
 func paint(tx: int, ty: int, radius: int, t: int) -> int:
 	if t == Defs.T.STREAM:
@@ -1781,6 +1798,7 @@ func install_course(course_d: Dictionary) -> void:
 	course = Course.from_dict(course_d)
 	course.biome = biome
 	course.bind_switch(Callable(self, "can_switch"))
+	_bind_marks()
 	nav = Nav.new(course)
 	if undo != null:
 		undo.clear()

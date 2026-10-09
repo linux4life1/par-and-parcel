@@ -343,7 +343,7 @@ func _design_tip(hole: Hole, worst: String) -> String:
 
 func _holes(body: VBoxContainer) -> Callable:
 	var sim := hud.sim
-	body.add_child(UIKit.para("You don't set green fees. Golfers pay as they walk off each green, and how much depends on how much they enjoyed the hole. Build holes people love, keep them in good shape, and they pay more. A hole you lay out starts closed. Test plays it with the lab golfers and marks their tee shots; Open lets the public on."))
+	body.add_child(UIKit.para("You don't set green fees. Golfers pay as they walk off each green, and how much depends on how much they enjoyed the hole. Build holes people love, keep them in good shape, and they pay more. A hole you lay out starts closed. Test hits a bucket of balls from the back tee and marks where they land and where they stop. Open lets the public on."))
 	var top := UIKit.hbox()
 	body.add_child(top)
 	var takings := UIKit.label("", 14, UIKit.MUTED)
@@ -426,19 +426,25 @@ func _holes(body: VBoxContainer) -> Callable:
 			hud.rig.center_on(hole.point_along(0.5, sim.course), clampf(hole.length * 1.1, 80.0, 500.0)), "Move the camera to this hole")
 		view.add_theme_font_size_override("font_size", 12)
 		h2.add_child(view)
+		var draft_row := UIKit.hbox(6)
+		cv.add_child(draft_row)
+		var test_btn := UIKit.button("Test", func() -> void:
+			sim.lab.test_shots(hole)
+			hud.rebuild_dock(), "Hit test balls from the back tee, and mark where they land and where they stop")
+		test_btn.add_theme_font_size_override("font_size", 12)
+		draft_row.add_child(test_btn)
 		if not hole.open:
-			var draft_row := UIKit.hbox(6)
-			cv.add_child(draft_row)
-			var test_btn := UIKit.button("Test", func() -> void:
-				sim.lab.rate_now(hole)
-				hud.rebuild_dock(), "Play the hole now with test golfers, and mark where their tee shots land")
-			test_btn.add_theme_font_size_override("font_size", 12)
-			draft_row.add_child(test_btn)
 			var open_btn := UIKit.button("Open", func() -> void:
 				sim.course.set_open(hole, true)
 				hud.rebuild_dock(), "Let paying golfers onto this hole")
 			open_btn.add_theme_font_size_override("font_size", 12)
 			draft_row.add_child(open_btn)
+		if not hole.test_marks.is_empty():
+			var dismiss_btn := UIKit.button("Dismiss", func() -> void:
+				sim.lab.clear_test(hole)
+				hud.rebuild_dock(), "Clear the test marks")
+			dismiss_btn.add_theme_font_size_override("font_size", 12)
+			draft_row.add_child(dismiss_btn)
 		var close := UIKit.button("X", func() -> void:
 			hud.show_dialog("Close hole %d?" % (i + 1), "The tee and pin are removed. The grass stays. Golfers on the hole move on.", [
 				["Keep it", Callable()],
@@ -586,6 +592,9 @@ func _holes(body: VBoxContainer) -> Callable:
 				txt += "\nNo lights. Golfers pay less for it after dark."
 			if hole.lab_ready and not hole.expect.is_empty():
 				txt += "\nExpected score: beginner %.1f, average %.1f, expert %.1f" % [float(hole.expect.beginner), float(hole.expect.average), float(hole.expect.expert)]
+			var summary := HoleLab.test_summary(hole, sim.db.test_hole)
+			if summary != "":
+				txt += "\n" + summary
 			if not hole.play_times.is_empty():
 				txt += "\nAbout %s a group, waiting included" % Defs.pace_text(hole.average_time())
 			(row[2] as Label).text = txt
