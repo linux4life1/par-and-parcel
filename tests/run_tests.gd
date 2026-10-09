@@ -7740,6 +7740,7 @@ func _party_at(sim: Sim, hole_i: int) -> Group:
 	g.pos = spot
 	g.prev = spot
 	party.members.append(g)
+	sim.visitors.groups.append(party)
 	return party
 
 
@@ -7750,6 +7751,7 @@ func _test_practice_area() -> void:
 	_test_warmup_tee()
 	_test_bay_wait()
 	_test_bay_frees()
+	_test_bay_leaves()
 	_test_shut_range()
 
 
@@ -7956,12 +7958,14 @@ func _test_bay_frees() -> void:
 	check(is_equal_approx(float(sim.economy.income.get("range", 0.0)) - earned, fee), "that bucket is booked when the waiting party is served, and the expired claim has fallen out of the count")
 	check(not sim.visitors.bay_until.is_empty(), "the new claim stays listed until its own time ends")
 	book["bays"] = saved_bays
-	_test_second_bay(book, saved_bays)
+	_test_second_bay()
 
 
-func _test_second_bay(book: Dictionary, saved_bays: int) -> void:
+func _test_second_bay() -> void:
 	print("-- a later bay still takes a full bucket")
 	var sim := _sim("sandbox", 19)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
 	book["bays"] = 1
 	var bucket_m := float(book.get("bucket_minutes", 0.0))
 	var hold := _clock_seconds(bucket_m)
@@ -8001,6 +8005,64 @@ func _test_second_bay(book: Dictionary, saved_bays: int) -> void:
 		stood += 0.05
 		release += 1
 	check(stood + 0.001 >= hold, "the party leaves no sooner than bucket_minutes after the second golfer's claim")
+	book["bays"] = saved_bays
+
+
+func _open_range(sim: Sim) -> Hole:
+	var book: Dictionary = sim.db.practice
+	book["bays"] = 1
+	_ready_tile(sim, 16, 24)
+	var placed := sim.place_object(16, 24, Defs.O.DRIVING_RANGE) == 1
+	_paint_field(sim, 16, 24)
+	var hole := sim.add_hole(sim.course.tile_center(36, 80), sim.course.tile_center(36, 60))
+	check(placed and hole != null and sim.visitors.range_ready(), "one bay is open for the line")
+	return hole
+
+
+func _test_bay_leaves() -> void:
+	print("-- a party that has left does not hold the line")
+	_test_leaving_waiter()
+	_test_lost_member()
+
+
+func _test_leaving_waiter() -> void:
+	var sim := _sim("sandbox", 23)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	_open_range(sim)
+	var holder := _party_at(sim, 0)
+	var front := _party_at(sim, 0)
+	var nxt := _party_at(sim, 0)
+	holder.step(0.02, sim)
+	front.step(0.02, sim)
+	nxt.step(0.02, sim)
+	check(holder.members[0].rd.has("bay") and front.waiting_bay and nxt.waiting_bay, "two parties are waiting behind the party on the bay")
+	front.state = Group.S.LEAVING
+	sim.time += _clock_seconds(bucket_m)
+	nxt.step(0.02, sim)
+	check(nxt.members[0].rd.has("bay"), "once the party at the front has left, the next party takes the bay as soon as it frees")
+	check(sim.visitors.bay_line.is_empty(), "that party is off the line, and so is the party that left")
+	book["bays"] = saved_bays
+
+
+func _test_lost_member() -> void:
+	var sim := _sim("sandbox", 24)
+	var book: Dictionary = sim.db.practice
+	var saved_bays: int = int(book.get("bays", 0))
+	var bucket_m := float(book.get("bucket_minutes", 0.0))
+	_open_range(sim)
+	var holder := _party_at(sim, 0)
+	var waiter := _party_at(sim, 0)
+	holder.step(0.02, sim)
+	waiter.step(0.02, sim)
+	check(waiter.waiting_bay and waiter.members.size() == 1, "a party with one golfer is waiting for the bay")
+	sim.time += _clock_seconds(bucket_m)
+	sim.visitors.quit(waiter.members[0])
+	var fresh := _party_at(sim, 0)
+	fresh.step(0.02, sim)
+	check(fresh.members[0].rd.has("bay"), "with nobody left who needed that bay, a newcomer claims the free one at once")
+	check(sim.visitors.bay_line.is_empty(), "the bay line is empty after the party that left and the party that lost its golfer")
 	book["bays"] = saved_bays
 
 

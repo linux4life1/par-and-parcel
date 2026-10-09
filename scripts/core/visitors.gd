@@ -1012,6 +1012,8 @@ func practice_shut_reason(o: int, tx: int, ty: int) -> String:
 func begin_warmup(gr: Group) -> void:
 	if gr.kind != "public":
 		return
+	if gr.state == Group.S.LEAVING or gr.state == Group.S.GONE or gr.members.is_empty():
+		return
 	var book := sim.db.practice
 	if green_ready():
 		for m in gr.members:
@@ -1024,17 +1026,15 @@ func begin_warmup(gr: Group) -> void:
 	# A party already in line takes the next free bay. A newcomer does not
 	# jump that queue, even when a bay looks free this instant.
 	var queued := _someone_waiting(gr)
-	var waiting := 0
 	for g in gr.members:
 		if g.kind != "public":
 			continue
 		if queued or _bays_free() <= 0:
-			waiting += 1
-		else:
-			_take_bay(g)
-			_cover_bay(gr)
-	gr.bay_need = waiting
-	if waiting > 0:
+			continue
+		_take_bay(g)
+		_cover_bay(gr)
+	gr.bay_need = _members_waiting(gr)
+	if gr.bay_need > 0:
 		gr.waiting_bay = true
 		gr.bay_left = _sim_minutes(float(book.get("bay_wait", 0.0)))
 		if not bay_line.has(gr):
@@ -1042,7 +1042,7 @@ func begin_warmup(gr: Group) -> void:
 
 
 func tick_warmup(gr: Group, dt: float) -> void:
-	var owed := gr.bay_need
+	var owed := _members_waiting(gr)
 	if gr.waiting_bay:
 		_fill_waiting(gr)
 		if gr.waiting_bay:
@@ -1053,20 +1053,56 @@ func tick_warmup(gr: Group, dt: float) -> void:
 		gr.warm_left = maxf(0.0, gr.warm_left - dt)
 	# A bay taken during this step still owes its full bucket. The step's
 	# own tick must not eat into that time.
-	if gr.bay_need < owed:
+	if _members_waiting(gr) < owed:
 		_cover_bay(gr)
 
 
-func _someone_waiting(gr: Group) -> bool:
+## How many of this party's golfers still have no bay. Counted from the
+## members present now, so a golfer who has left cannot keep a claim alive.
+func _members_waiting(gr: Group) -> int:
+	var n := 0
+	for g in gr.members:
+		if g.kind != "public" or g.rd.has("bay"):
+			continue
+		n += 1
+	return n
+
+
+## A party that has gone home, lost its golfers, or left the course must not
+## stay at the head of the line. Otherwise the next party never starts.
+func _drop_finished_waiters() -> void:
+	var kept: Array[Group] = []
 	for other in bay_line:
-		if other != gr and other.waiting_bay and other.bay_need > 0:
+		var left := other.state == Group.S.LEAVING or other.state == Group.S.GONE
+		var missing := other.members.is_empty() or not groups.has(other)
+		if left or missing:
+			other.waiting_bay = false
+			other.bay_need = 0
+			other.bay_left = 0.0
+			continue
+		other.bay_need = _members_waiting(other)
+		if other.bay_need <= 0:
+			other.waiting_bay = false
+			other.bay_left = 0.0
+			continue
+		kept.append(other)
+	bay_line = kept
+
+
+func _someone_waiting(gr: Group) -> bool:
+	_drop_finished_waiters()
+	for other in bay_line:
+		if other != gr and other.bay_need > 0:
 			return true
 	return false
 
 
 func _first_waiter(gr: Group) -> bool:
+	_drop_finished_waiters()
+	if not bay_line.has(gr):
+		return false
 	for other in bay_line:
-		if other.waiting_bay and other.bay_need > 0:
+		if other.bay_need > 0:
 			return other == gr
 	return true
 
@@ -1127,13 +1163,13 @@ func _fill_waiting(gr: Group) -> void:
 	if not _first_waiter(gr):
 		return
 	for g in gr.members:
-		if gr.bay_need <= 0 or _bays_free() <= 0:
+		if _members_waiting(gr) <= 0 or _bays_free() <= 0:
 			break
 		if g.kind != "public" or g.rd.has("bay"):
 			continue
 		_take_bay(g)
-		gr.bay_need -= 1
 		_cover_bay(gr)
+	gr.bay_need = _members_waiting(gr)
 	if gr.bay_need <= 0:
 		gr.waiting_bay = false
 		gr.bay_left = 0.0

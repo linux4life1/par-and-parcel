@@ -24,7 +24,7 @@ var warm_set := false      # the first tee of the round has started its warm-up
 var warm_left := 0.0       # sim seconds of that warm-up still to stand
 var waiting_bay := false   # the range is open and this party still wants a bay
 var bay_left := 0.0        # sim seconds they will wait for one
-var bay_need := 0          # members still without a bay
+var bay_need := 0          # members still without a bay, recounted each tick
 var bay_timed := false     # the bucket's minutes are already on the warm-up
 
 const LINE_FIRST := 8.0    # metres behind the tee where the next party waits
