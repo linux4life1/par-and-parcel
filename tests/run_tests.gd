@@ -2765,6 +2765,129 @@ func _test_dogleg() -> void:
 	sim.refresh_hole_lines()
 	check(hole.par == 3 and hole.length <= Hole.PAR_3, "painting the corner fairway shortens the hole to a par 3 (%d yd)" % Defs.yards(hole.length))
 	check(int(hole.tally.get("1", 0)) == 1, "the 4 already recorded becomes a bogey on the new par")
+	_test_tree_sixty()
+	_test_canopy_band()
+
+
+## A wide fairway, one oak 60 m short of a pin 80 m away.
+func _lay_sixty(sim: Sim) -> Hole:
+	var c := sim.course
+	for i in c.heights.size():
+		c.heights[i] = 0.0
+	for i in c.terrain.size():
+		if c.hot[i] == 0:
+			c.terrain[i] = Defs.T.ROUGH
+			c.objects[i] = 0
+	for ty in range(82, 102):
+		for tx in range(30, 51):
+			c.terrain[ty * c.w + tx] = Defs.T.FAIRWAY
+	c.terrain[100 * c.w + 40] = Defs.T.TEE
+	for dy in range(-2, 3):
+		for dx in range(-2, 3):
+			c.terrain[(84 + dy) * c.w + (40 + dx)] = Defs.T.GREEN
+	c.objects[88 * c.w + 40] = Defs.O.OAK
+	c.revision += 1
+	c.objects_touched()
+	return sim.add_hole(c.tile_center(40, 100), c.tile_center(40, 84))
+
+
+func _test_tree_sixty() -> void:
+	print("-- a tree sixty metres out")
+	var sim := _sim("sandbox", 3)
+	var hole := _lay_sixty(sim)
+	check(hole != null, "the sixty-metre hole is laid out")
+	if hole == null:
+		return
+	var c := sim.course
+	var tee := Vector2(hole.tee.x, hole.tee.z)
+	var pin := Vector2(hole.pin.x, hole.pin.z)
+	var chord := pin - tee
+	var tree_at := c.tile_center(40, 88)
+	var tree_d := Vector2(tree_at.x - hole.tee.x, tree_at.z - hole.tee.z).length()
+	check(absf(tree_d - 60.0) < 1.0, "the tree stands 60 m down the line (%.1f m)" % tree_d)
+	var dir := chord.normalized()
+	var layup := 80.0
+	check(ShotAI._line_block(c, tee, dir, layup) > ShotAI._line_block(c, tee, dir, 40.0), "the tree at 60 m adds a penalty the first 40 m do not")
+	check(ShotAI.under_canopy(c, tee, dir, layup), "a straight layup meets that tree under its canopy")
+	check(ShotAI._line_block(c, tee, dir, layup) > 0.0, "the full shot, not a 40 m cap, prices that tree")
+
+
+## Shot length whose simple arc is between `lo` and `hi` metres at `s` metres out.
+func _length_for_height(s: float, lo: float, hi: float) -> float:
+	var length := 50.0
+	while length < 280.0:
+		var h := ShotAI._ball_height(s, length)
+		if h > lo and h < hi:
+			return length
+		length += 0.5
+	return -1.0
+
+
+## One tree on an otherwise empty line, so the penalty is that tree alone.
+func _plant_on_line(sim: Sim, tile: int, kind: int) -> Dictionary:
+	var c := sim.course
+	var tx := tile % c.w
+	var ty := int(tile / c.w)
+	var centre := c.tile_center(tx, ty)
+	var along := 56.0
+	var origin := Vector2(centre.x, centre.z + along)
+	var dir := Vector2(0.0, -1.0)
+	var s := 6.0
+	while s < 280.0:
+		var q := origin + dir * s
+		var i := c.index_at(q.x, q.y)
+		if i >= 0:
+			c.objects[i] = 0
+		s += Defs.TILE
+	c.objects[tile] = kind
+	c.revision += 1
+	c.objects_touched()
+	return {"from": origin, "dir": dir, "at": along, "top": c.solids.tree_top(tile)}
+
+
+func _test_canopy_band() -> void:
+	print("-- each tree's own canopy")
+	var sim := _sim("sandbox", 4)
+	var c := sim.course
+	var pine_i := -1
+	var oak_i := -1
+	for i in c.terrain.size():
+		var sy := Defs.plant_scale(i).y
+		if pine_i < 0 and 10.6 * sy > 12.0:
+			pine_i = i
+		if oak_i < 0 and 8.6 * sy < 7.5:
+			oak_i = i
+		if pine_i >= 0 and oak_i >= 0:
+			break
+	check(pine_i >= 0 and oak_i >= 0, "the map has a tall pine and a short oak to measure")
+	if pine_i < 0 or oak_i < 0:
+		return
+	var pine: Dictionary = _plant_on_line(sim, pine_i, Defs.O.PINE)
+	var top := float(pine.top)
+	var at := float(pine.at)
+	var origin: Vector2 = pine["from"]
+	var dir: Vector2 = pine.dir
+	check(top > 12.0, "that pine's canopy is its own leaves, above the old 10 m guess (%.1f m)" % top)
+	var low := _length_for_height(at, 2.0, 6.0)
+	var mid := _length_for_height(at, 10.2, minf(top - 0.4, 13.0))
+	var high := _length_for_height(at, top + 0.6, top + 6.0)
+	check(low > 0.0 and mid > 0.0 and high > 0.0, "the arc can fly under, through and over that canopy")
+	var under_price := ShotAI._line_block(c, origin, dir, low)
+	var mid_price := ShotAI._line_block(c, origin, dir, mid)
+	var over_price := ShotAI._line_block(c, origin, dir, high)
+	var mid_h := ShotAI._ball_height(at, mid)
+	check(mid_price == under_price and mid_price > over_price, "a ball between 10 m and this canopy pays the under-canopy price (%.1f m high, %.0f against %.0f under and %.0f over)" % [mid_h, mid_price, under_price, over_price])
+	var oak: Dictionary = _plant_on_line(sim, oak_i, Defs.O.OAK)
+	var oak_top := float(oak.top)
+	var oak_at := float(oak.at)
+	var oak_from: Vector2 = oak["from"]
+	var oak_dir: Vector2 = oak.dir
+	check(oak_top > 0.0 and oak_top < 7.5, "that oak's canopy is under the old 10 m guess (%.1f m)" % oak_top)
+	var between := _length_for_height(oak_at, oak_top + 0.4, 9.6)
+	check(between > 0.0, "the arc can fly above that oak while still under 10 m")
+	var between_h := ShotAI._ball_height(oak_at, between)
+	var between_price := ShotAI._line_block(c, oak_from, oak_dir, between)
+	check(between_price == over_price and between_price < under_price, "a ball over a short canopy is not charged as if the canopy were 10 m (%.1f m high, canopy %.1f m, price %.0f)" % [between_h, oak_top, between_price])
 
 
 func _test_hole_preview() -> void:
