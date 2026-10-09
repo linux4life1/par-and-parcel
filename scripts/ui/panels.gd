@@ -16,6 +16,10 @@ const OBJECT_TIPS := {
 	Defs.O.BAR: "Drinkers tip well and forgive a lot, but they play slowly, spray the ball and lose their tempers faster. A gamble, and the house takes $14 a round.",
 }
 
+## The Holes panel's opening paragraph. Test hits the balls in the test
+## data from the back tee and marks where each lands and where it stops.
+const HOLES_INTRO := "You don't set green fees. Golfers pay as they walk off each green, and how much depends on how much they enjoyed the hole. Build holes people love, keep them in good shape, and they pay more. A hole you lay out starts closed. Test hits test balls from the back tee and marks where they land and where they stop. Open lets the public on."
+
 ## What the Finances panel says under a closed month when golfers gave up
 ## on a full range. Empty when nobody did.
 static func range_skip_line(n: int) -> String:
@@ -24,6 +28,25 @@ static func range_skip_line(n: int) -> String:
 	if n == 1:
 		return "1 golfer skipped a full range"
 	return "%d golfers skipped a full range" % n
+
+
+## The scorecard's trouble cell. Blank for a draft, or until enough public
+## rounds are in. The number is the share of shots that finished in trouble.
+static func target_line(hole: Hole, book: Dictionary) -> String:
+	if hole == null or not hole.open:
+		return ""
+	var need := int(book.get("min_rounds", 1))
+	if hole.target_rounds.size() < need:
+		return ""
+	var share := hole.trouble_share()
+	if share < 0.0:
+		return ""
+	var tag := "fair"
+	if share < float(book.get("easy_below", 0.0)):
+		tag = "too easy"
+	elif share > float(book.get("penal_above", 1.0)):
+		tag = "too penal"
+	return "%d%% %s" % [int(round(share * 100.0)), tag]
 
 
 var hud: Hud
@@ -343,7 +366,7 @@ func _design_tip(hole: Hole, worst: String) -> String:
 
 func _holes(body: VBoxContainer) -> Callable:
 	var sim := hud.sim
-	body.add_child(UIKit.para("You don't set green fees. Golfers pay as they walk off each green, and how much depends on how much they enjoyed the hole. Build holes people love, keep them in good shape, and they pay more. A hole you lay out starts closed. Test hits a bucket of balls from the back tee and marks where they land and where they stop. Open lets the public on."))
+	body.add_child(UIKit.para(HOLES_INTRO))
 	var top := UIKit.hbox()
 	body.add_child(top)
 	var takings := UIKit.label("", 14, UIKit.MUTED)
@@ -655,6 +678,7 @@ func _scorecard(box: VBoxContainer) -> void:
 	var favourite := -1
 	var least := -1
 	var slow := sim.course.bottleneck()
+	var notes: Array[String] = []
 	for i in holes.size():
 		var h := holes[i]
 		par_total += h.par
@@ -681,6 +705,9 @@ func _scorecard(box: VBoxContainer) -> void:
 			Defs.money(h.average_paid()) if h.payers > 0 else "–",
 			Defs.pace_text(h.average_time(), true) if not h.play_times.is_empty() else "–",
 		]
+		var trouble_txt := target_line(h, sim.db.hole_target)
+		if trouble_txt != "":
+			notes.append("Hole %d: %s" % [i + 1, trouble_txt])
 		for c in cells.size():
 			var cl := UIKit.label(cells[c], 12, UIKit.TEXT if c > 0 else UIKit.GOLD)
 			cl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if c > 0 else HORIZONTAL_ALIGNMENT_LEFT
@@ -697,7 +724,6 @@ func _scorecard(box: VBoxContainer) -> void:
 		var fl := UIKit.label(foot[c], 12, UIKit.MUTED)
 		fl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT if c > 0 else HORIZONTAL_ALIGNMENT_LEFT
 		grid.add_child(fl)
-	var notes: Array[String] = []
 	if hardest >= 0 and easiest >= 0 and hardest != easiest:
 		notes.append("Hardest: hole %d, %.1f over par. Easiest: hole %d, %+.1f." % [hardest + 1, holes[hardest].average_score() - holes[hardest].par, easiest + 1, holes[easiest].average_score() - holes[easiest].par])
 	if favourite >= 0 and least >= 0 and favourite != least and holes[favourite].fun - holes[least].fun > 4.0:

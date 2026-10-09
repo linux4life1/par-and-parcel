@@ -46,11 +46,10 @@ var line_sig := -1
 var earned := 0.0               # green fees golfers have paid for this hole
 var payers := 0                 # how many times a golfer has finished it and been asked
 var plays := 0
-## Real shots that have come to rest on this hole, and how many of them
-## finished in trouble. The share is trouble over shots. Both zero means
-## there is no share yet, which is also how an older save loads.
-var shots_n := 0
-var trouble_n := 0
+## Public rounds on this hole, newest last. Each is the shots and the
+## trouble from tee to hole-out. The share is the sum of trouble over the
+## sum of shots. Empty is how an older save loads.
+var target_rounds: Array[Dictionary] = []
 var strokes_total := 0
 var best := 0
 var tally := {}                 # score against par -> how many times: "-2", "-1", "0", "1", "2", "3" (3 is three over or worse)
@@ -972,7 +971,7 @@ func to_dict() -> Dictionary:
 		"pin_due": pin_due,
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
-		"shots": shots_n, "trouble": trouble_n,
+		"target": target_rounds.duplicate(true),
 		"tally": tally, "aces": aces,
 		"name": name, "award": award, "themes": themes, "gap": gap, "comments": comments, "open": open,
 		"play_times": play_times,
@@ -998,6 +997,7 @@ static var _known_themes := {}
 static var _known_themes_read := false
 
 static var _cached_on_line := -1.0
+static var _cached_target_window := -1
 
 
 ## How far, in metres, a turning point may sit off the line. data/turns.json.
@@ -1011,6 +1011,35 @@ static func turn_on_line() -> float:
 		limit = float(book.get("on_line", 3.0))
 	_cached_on_line = limit
 	return _cached_on_line
+
+
+## How many public rounds stay on a hole. data/hole_target.json.
+static func target_window() -> int:
+	if _cached_target_window >= 0:
+		return _cached_target_window
+	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/hole_target.json"))
+	var n := 12
+	if parsed is Dictionary:
+		var book: Dictionary = parsed
+		n = int(book.get("window", 12))
+	if n < 1:
+		n = 1
+	_cached_target_window = n
+	return _cached_target_window
+
+
+## Trouble shots over every shot in the rolling rounds. Negative when
+## there is nothing to divide, which is not a share of zero.
+func trouble_share() -> float:
+	var shots := 0
+	var trouble := 0
+	for round_row in target_rounds:
+		var rec: Dictionary = round_row
+		shots += int(rec.get("shots", 0))
+		trouble += int(rec.get("trouble", 0))
+	if shots <= 0:
+		return -1.0
+	return float(trouble) / float(shots)
 
 
 ## Theme ids from data/awards.json, read once. A load walks every hole.
@@ -1053,8 +1082,17 @@ static func from_dict(d: Dictionary) -> Hole:
 	hole.earned = float(d.get("earned", 0.0))
 	hole.payers = int(d.get("payers", 0))
 	hole.plays = int(d.get("plays", 0))
-	hole.shots_n = int(d.get("shots", 0))
-	hole.trouble_n = int(d.get("trouble", 0))
+	var saved_rounds: Array = d.get("target", [])
+	for round_row in saved_rounds:
+		if round_row is Dictionary:
+			var round_rec: Dictionary = round_row
+			hole.target_rounds.append({
+				"shots": int(round_rec.get("shots", 0)),
+				"trouble": int(round_rec.get("trouble", 0)),
+			})
+	var keep := target_window()
+	while hole.target_rounds.size() > keep:
+		hole.target_rounds.pop_front()
 	hole.strokes_total = int(d.get("strokes", 0))
 	hole.best = int(d.get("best", 0))
 	hole.fun = float(d.get("fun", 60.0))

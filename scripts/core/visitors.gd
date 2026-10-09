@@ -3,8 +3,6 @@ extends RefCounted
 ## Everyone on the course who is not staff: arrivals, green fees, moods,
 ## flying balls, and people getting hit by them.
 
-## A golfer this good is bored by a course that never asks a question.
-const SKILLED := 0.7
 const GOOD_REASONS := {
 	"scenery": "Beautiful scenery.", "score": "Played the round of my life.", "drink": "Cold drinks out on the course.",
 	"greens": "The greens were perfect.", "celebrity": "I even spotted a celebrity.",
@@ -1249,74 +1247,71 @@ func on_holed(g: Golfer, hole: Hole, hole_i: int) -> void:
 		sim.sound.emit("ovation", g.pos, 1.0)
 	elif not bool(g.plan.get("putt", false)) or float(g.plan.get("dist", 0.0)) > 7.0:
 		sim.sound.emit("cheer", g.pos, 0.55)      # a chip-in, or a putt from right across the green
+	_commit_target(g, hole, hole_i)
 
 
-## Mood after a shot comes to rest, driven by what the ball is sitting in.
-## A real shot has stopped. Lab shots are not play. The finish is read
-## before any penalty drop, and a skilled golfer speaks if the hole's
-## trouble share sits outside the band in the data.
-func note_shot(g: Golfer, hole: Hole, hole_i: int) -> void:
-	if g.kind == "lab":
+## A public shot has stopped. Count it on this round before a penalty
+## drop moves the ball. Lab shots and play-mode shots are left out.
+## The hole is judged when the golfer holes out, not after each shot.
+func note_shot(g: Golfer, _hole: Hole, _hole_i: int) -> void:
+	if g.kind == "lab" or g.kind == "player":
 		return
-	var finish := _shot_finish(g)
-	hole.shots_n += 1
-	if _finish_trouble(finish):
-		hole.trouble_n += 1
-	_say_target(g, hole, hole_i)
+	var finish := HoleLab.test_outcome(g.ball, sim.course)
+	g.round_shots += 1
+	if _listed_trouble(finish):
+		g.round_trouble += 1
 
 
-## Where this shot ended, in the names the target data uses.
-func _shot_finish(g: Golfer) -> String:
-	var b := g.ball
-	var course := sim.course
-	if b.state == Ball.S.WATER:
-		return "water"
-	if b.state == Ball.S.OOB:
-		return "oob"
-	var ti := course.index_at(b.pos.x, b.pos.z)
-	if ti < 0 or course.locked[ti] != 0:
-		return "oob"
-	if Defs.is_tree(int(course.objects[ti])) or b.tree_tile == ti:
-		return "trees"
-	if b.state == Ball.S.HOLED or Defs.is_green(int(course.terrain[ti])):
-		return "green"
-	var ground: int = int(course.terrain[ti])
-	if Defs.is_fairway(ground):
-		return "fairway"
-	if ground == Defs.T.ROUGH:
-		return "rough"
-	if ground == Defs.T.DEEP_ROUGH:
-		return "deep_rough"
-	if ground == Defs.T.BUNKER:
-		return "bunker"
-	if ground == Defs.T.WASTE:
-		return "waste"
-	return "rough"
-
-
-func _finish_trouble(finish: String) -> bool:
-	var listed: Array = sim.db.hole_target.get("trouble", [])
+func _listed_trouble(finish: String) -> bool:
+	var listed: Array = sim.db.test_hole.get("trouble", [])
 	return listed.has(finish)
 
 
-## Under low is too easy, over high is too penal. On either line, or with
-## no shots recorded, a golfer says nothing. Skill below the data stays quiet.
-func _say_target(g: Golfer, hole: Hole, hole_i: int) -> void:
-	if hole.shots_n <= 0:
+## Fold this round into the hole and, if it can be judged, say so once.
+func _commit_target(g: Golfer, hole: Hole, hole_i: int) -> void:
+	if g.kind == "lab" or g.kind == "player":
+		return
+	if g.round_shots <= 0:
 		return
 	var book: Dictionary = sim.db.hole_target
-	if g.skill < float(book.get("skill", 1.0)):
+	var window := int(book.get("window", 1))
+	if window < 1:
+		window = 1
+	hole.target_rounds.append({"shots": g.round_shots, "trouble": g.round_trouble})
+	g.round_shots = 0
+	g.round_trouble = 0
+	while hole.target_rounds.size() > window:
+		hole.target_rounds.pop_front()
+	_judge_target(g, hole, hole_i, book)
+
+
+## Too easy only for a skilled golfer under the line. Too penal for anyone
+## over the line. On either line, a draft, or too few rounds, nobody speaks.
+func _judge_target(g: Golfer, hole: Hole, hole_i: int, book: Dictionary) -> void:
+	if not hole.open:
 		return
-	var share := float(hole.trouble_n) / float(hole.shots_n)
-	var low := float(book.get("low", 0.0))
-	var high := float(book.get("high", 1.0))
+	var need := int(book.get("min_rounds", 1))
+	if hole.target_rounds.size() < need:
+		return
+	var share := hole.trouble_share()
+	if share < 0.0:
+		return
 	var n := hole_i + 1
-	if share < low:
-		g.feel(0.0, "Hole %d is too easy." % n, "target")
-	elif share > high:
-		g.feel(0.0, "Hole %d is too penal." % n, "target")
+	var skilled := float(book.get("skilled", 1.0))
+	var easy_below := float(book.get("easy_below", 0.0))
+	var penal_above := float(book.get("penal_above", 1.0))
+	if share < easy_below and g.skill >= skilled:
+		if g.said_course_easy:
+			return
+		# This breather is about to get the course line. One easy complaint here.
+		if hole.lab_ready and hole.kind == 0 and _breather_heavy():
+			return
+		g.feel(float(book.get("easy_mood", 0.0)), "Hole %d is too easy." % n, "target")
+	elif share > penal_above:
+		g.feel(float(book.get("penal_mood", 0.0)), "Hole %d is too penal." % n, "target")
 
 
+## Mood after a shot comes to rest, driven by what the ball is sitting in.
 func react_to_lie(g: Golfer, hole: Hole, hole_i: int) -> void:
 	var course := sim.course
 	var b := g.ball
@@ -1476,8 +1471,11 @@ func _judge_design(g: Golfer, hole: Hole, n: int) -> void:
 				g.feel(1.6, "Hole %d suits my game." % n, "suits")
 			elif have < 0.3:
 				g.feel(-1.5, "Hole %d asks for %s I just don't have." % [n, str(a[2])], "hard")
-		if hole.kind == 0 and g.skill >= SKILLED and _breather_heavy():
-			g.feel(-1.8, "This course is too easy for me.", "easy")
+		var target_book: Dictionary = sim.db.hole_target
+		var skilled := float(target_book.get("skilled", 1.0))
+		if hole.kind == 0 and g.skill >= skilled and _breather_heavy():
+			g.said_course_easy = true
+			g.feel(float(target_book.get("easy_mood", 0.0)), "This course is too easy for me.", "easy")
 		elif hole.kind == 0 and g.last_kind > 0 and g.last_kind != 0:
 			g.feel(1.0, "A breather after that last hole. Lovely.", "suits")
 		if g.last_kind >= 0:

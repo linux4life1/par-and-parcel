@@ -233,6 +233,8 @@ func _begin_hole(sim: Sim, hole: Hole) -> void:
 	var washer := sim.visitors.facility_near("washer", hole.tee, 18.0)
 	for m in members:
 		m.begin_hole()
+		if hole_i == 0:
+			m.said_course_easy = false
 		var box := hole.playing_tee(m.skill, sim.db.tees)
 		m.ball.place(sim.course.on_ground(box.x, box.z))
 		m.clean_ball = washer
