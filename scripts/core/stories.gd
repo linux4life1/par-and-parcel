@@ -422,9 +422,7 @@ func _fire(r: Dictionary, s: Dictionary, what: Dictionary) -> bool:
 		var b: Dictionary = s.bubble
 		var g := golfer_of(r, str(b.get("role", "")))
 		if g != null:
-			g.bubble = _fill(r, str(b.get("text", "")))
-			g.bubble_t = 5.0
-			g.bubble_mood = 0
+			g.say(_fill(r, str(b.get("text", ""))), 5.0, 0)
 	if s.has("toast"):
 		var t: Dictionary = s.toast
 		sim.toast.emit(_fill(r, str(t.get("text", ""))), str(t.get("kind", "info")))
@@ -704,9 +702,7 @@ func describe(r: Dictionary) -> Dictionary:
 ## moment, so the owner can spot them.
 func _show_bubble(r: Dictionary, g: Golfer) -> void:
 	if g.bubble == "":
-		g.bubble = str(def_of(r).get("title", "A story"))
-		g.bubble_t = 4.0
-		g.bubble_mood = 0
+		g.say(str(def_of(r).get("title", "A story")), 4.0, 0)
 
 
 # ------------------------------------------------------------ save and load

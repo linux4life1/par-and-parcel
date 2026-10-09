@@ -565,17 +565,13 @@ func _tantrum(g: Golfer) -> void:
 	if partner != null and sim.rng.randf() < 0.3:
 		partner.hit_t = 2.6
 		partner.feel(-10.0, "%s just punched me!" % g.name, "hit")
-		g.bubble = "That's IT!"
-		g.bubble_t = 3.0
-		g.bubble_mood = -1
+		g.say("That's IT!", 3.0, -1)
 		sim.popup.emit(partner.pos, "POW!", "hit")
 		sim.feed.say("tantrum_punch", partner, {"hole": n}, true)
 		sim.toast.emit("%s punched a playing partner on hole %d." % [g.name, n], "bad")
 	else:
 		g.tossed = true
-		g.bubble = "This club is going in the lake."
-		g.bubble_t = 3.5
-		g.bubble_mood = -1
+		g.say("This club is going in the lake.", 3.5, -1)
 		sim.popup.emit(g.pos, "CLUB TOSS!", "hit")
 		sim.feed.say("tantrum_toss", g, {"hole": n}, true)
 		for other in golfers:
@@ -585,9 +581,7 @@ func _tantrum(g: Golfer) -> void:
 					sim.feed.say("tantrum_seen", other)
 	if sim.rng.randf() < 0.6:
 		g.storming = true
-		g.bubble = "I'm DONE with this place!"
-		g.bubble_t = 6.0
-		g.bubble_mood = -1
+		g.say("I'm DONE with this place!", 6.0, -1)
 		sim.feed.say("storm_off", g, {"hole": n}, true)
 		quit(g)
 

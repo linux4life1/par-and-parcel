@@ -274,19 +274,30 @@ func feel(delta: float, text: String = "", tag: String = "") -> void:
 	thoughts.append({"text": text, "delta": delta, "pos": pos, "hole": hole_i})
 	if thoughts.size() > 12:
 		thoughts.pop_front()
-	_note_here(text)
+	say(text, 3.5, 1 if delta > 0.0 else (-1 if delta < 0.0 else 0))
+
+
+## A line over this golfer's head. The same call keeps it on the hole when
+## the party is queued or playing there, so a tantrum or a story uses the
+## same path as a remark from feel.
+func say(text: String, seconds: float, mood: int) -> void:
 	bubble = text
-	bubble_t = 3.5
-	bubble_mood = 1 if delta > 0.0 else (-1 if delta < 0.0 else 0)
+	bubble_t = seconds
+	bubble_mood = mood
+	_note_here(text)
 
 
-## A public remark on the hole this golfer is playing. Lab remarks and the
+## A public remark on the hole this golfer is playing, kept only while the
+## party is in the queue or playing that hole. Arrival and practice lines
+## are said before that, so they stay off the list. Lab remarks and the
 ## owner's play-mode remarks are left out. The hole keeps the words, the
 ## name, the day and the tile.
 func _note_here(text: String) -> void:
 	if kind == "lab" or kind == "player":
 		return
 	if sim == null or course == null or group == null:
+		return
+	if group.state != Group.S.QUEUE and group.state != Group.S.PLAY:
 		return
 	var hi := group.hole_i
 	if hi < 0 or hi >= course.holes.size():

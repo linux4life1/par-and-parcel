@@ -77,7 +77,14 @@ static func thoughts_stamp(hole: Hole) -> String:
 	var stamp := "1" if hole.open else "0"
 	for rec in hole.thoughts_here:
 		var row: Dictionary = rec
-		stamp += "|" + str(row.get("text", ""))
+		var tile: Array = row.get("tile", [])
+		var tx := 0
+		var ty := 0
+		if tile.size() > 0:
+			tx = int(tile[0])
+		if tile.size() > 1:
+			ty = int(tile[1])
+		stamp += "|%s|%d|%d|%d" % [str(row.get("text", "")), int(row.get("day", 0)), tx, ty]
 	return stamp
 
 
