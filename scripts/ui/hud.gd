@@ -23,10 +23,6 @@ var top_box: VBoxContainer
 var _refresh := Callable()
 var _refresh_t := 0.0
 var _tool_buttons := {}
-func tool_button(id: String) -> Button:
-	return _tool_buttons[id] as Button
-
-
 var undo_btn: Button
 
 var l_name: Label
@@ -89,6 +85,11 @@ const OVERLAY_TIPS: Array[String] = [
 	"Where the floodlights and lamps reach. Brighter ground is lit after dark.",
 	"How steep the ground is, and which way it falls. Greens use a finer scale, so a slope of 1 to 4% still shows.",
 ]
+
+
+## The toolbar button for a panel id.
+func tool_button(id: String) -> Button:
+	return _tool_buttons[id] as Button
 
 
 func _ready() -> void:
