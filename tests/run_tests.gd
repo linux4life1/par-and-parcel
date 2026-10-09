@@ -510,7 +510,7 @@ func _test_collisions() -> void:
 		probe.biome = bio
 		for o in range(1, Defs.O_NAMES.size()):
 			var kind := probe.kind_of(o)
-			if not Solids.data().kinds.has(kind) and Defs.O_COST[o] > 0 and not (o in [Defs.O.BRIDGE, Defs.O.PUTTING_GREEN, Defs.O.HOME_SITE, Defs.O.TENNIS]):
+			if not Solids.data().kinds.has(kind) and (Defs.O_COST[o] > 0 or o == Defs.O.DRIVING_RANGE) and not (o in [Defs.O.BRIDGE, Defs.O.PUTTING_GREEN, Defs.O.HOME_SITE, Defs.O.TENNIS]):
 				missing.append("%s/%s" % [bio.id, kind])
 	check(missing.is_empty(), "every solid object in every biome can be hit %s" % str(missing))
 	# a whole course plays with it
