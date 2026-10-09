@@ -187,6 +187,24 @@ func _each_bucket(s: Shape, add: bool) -> void:
 					_buckets[j] = null
 
 
+## The top of the tree on this tile, in metres above the ground where it
+## stands. Leaves set the canopy. A bare trunk uses its own top. Zero when
+## the tile has no shape. Each plant's own size is already in the shape.
+func tree_top(tile: int) -> float:
+	var leaves := 0.0
+	var any := 0.0
+	if not _owned.has(tile):
+		return 0.0
+	for s: Shape in _owned[tile]:
+		if s.y1 > any:
+			any = s.y1
+		if s.kind == K.LEAVES and s.y1 > leaves:
+			leaves = s.y1
+	if leaves > 0.0:
+		return leaves
+	return any
+
+
 ## The shapes reaching into a tile, or null when there are none.
 func bucket(tile: int) -> Variant:
 	if tile < 0 or tile >= _buckets.size():
