@@ -453,6 +453,8 @@ func _resolve(sim: Sim, g: Golfer, hole: Hole) -> void:
 		g.done = true
 		g.picked_up = true
 		g.feel(-3.0, "I'm picking up on hole %d. That's enough." % n, "hard")
+		# A pick-up never holes out. The round still counts, judged the same way.
+		sim.visitors.on_picked_up(g, hole, hole_i)
 
 
 ## Where to drop after a water ball: back on dry land near where it crossed.

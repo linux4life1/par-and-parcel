@@ -1796,6 +1796,9 @@ func course_dict() -> Dictionary:
 ## Throw away the blank course this sim was built on, and play `course_d`.
 func install_course(course_d: Dictionary) -> void:
 	course = Course.from_dict(course_d)
+	var keep := int(db.hole_target.get("window", 1))
+	for loaded in course.holes:
+		loaded.trim_target(keep)
 	course.biome = biome
 	course.bind_switch(Callable(self, "can_switch"))
 	_bind_marks()

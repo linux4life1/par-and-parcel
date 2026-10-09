@@ -47,8 +47,9 @@ var earned := 0.0               # green fees golfers have paid for this hole
 var payers := 0                 # how many times a golfer has finished it and been asked
 var plays := 0
 ## Public rounds on this hole, newest last. Each is the shots and the
-## trouble from tee to hole-out. The share is the sum of trouble over the
-## sum of shots. Empty is how an older save loads.
+## trouble from the tee until the golfer holes out or picks up. The share
+## is the sum of trouble over the sum of shots. Empty is how an older save
+## loads. A longer list is cut to the window in the database on load.
 var target_rounds: Array[Dictionary] = []
 var strokes_total := 0
 var best := 0
@@ -997,7 +998,6 @@ static var _known_themes := {}
 static var _known_themes_read := false
 
 static var _cached_on_line := -1.0
-static var _cached_target_window := -1
 
 
 ## How far, in metres, a turning point may sit off the line. data/turns.json.
@@ -1013,21 +1013,6 @@ static func turn_on_line() -> float:
 	return _cached_on_line
 
 
-## How many public rounds stay on a hole. data/hole_target.json.
-static func target_window() -> int:
-	if _cached_target_window >= 0:
-		return _cached_target_window
-	var parsed: Variant = JSON.parse_string(FileAccess.get_file_as_string("res://data/hole_target.json"))
-	var n := 12
-	if parsed is Dictionary:
-		var book: Dictionary = parsed
-		n = int(book.get("window", 12))
-	if n < 1:
-		n = 1
-	_cached_target_window = n
-	return _cached_target_window
-
-
 ## Trouble shots over every shot in the rolling rounds. Negative when
 ## there is nothing to divide, which is not a share of zero.
 func trouble_share() -> float:
@@ -1040,6 +1025,16 @@ func trouble_share() -> float:
 	if shots <= 0:
 		return -1.0
 	return float(trouble) / float(shots)
+
+
+## Keep the newest `window` rounds. The window comes from the database, the
+## same number a new round is trimmed with. A window under 1 keeps one.
+func trim_target(window: int) -> void:
+	var keep := window
+	if keep < 1:
+		keep = 1
+	while target_rounds.size() > keep:
+		target_rounds.pop_front()
 
 
 ## Theme ids from data/awards.json, read once. A load walks every hole.
@@ -1090,9 +1085,6 @@ static func from_dict(d: Dictionary) -> Hole:
 				"shots": int(round_rec.get("shots", 0)),
 				"trouble": int(round_rec.get("trouble", 0)),
 			})
-	var keep := target_window()
-	while hole.target_rounds.size() > keep:
-		hole.target_rounds.pop_front()
 	hole.strokes_total = int(d.get("strokes", 0))
 	hole.best = int(d.get("best", 0))
 	hole.fun = float(d.get("fun", 60.0))

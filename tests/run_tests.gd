@@ -8547,6 +8547,7 @@ func _test_hole_target() -> void:
 	print("-- hole trouble share")
 	_test_target_record()
 	_test_target_window()
+	_test_target_pickup()
 	_test_target_judge()
 	_test_target_mood()
 	_test_target_both()
@@ -8614,8 +8615,9 @@ func _test_target_record() -> void:
 	check(hole.target_rounds.size() == 1, "a play-mode shot is not a public round")
 	var pro := _target_golfer(sim, 0.2)
 	pro.kind = "pro"
+	_public_shot(sim, pro, hole, Defs.T.BUNKER, Ball.S.REST)
 	_public_shot(sim, pro, hole, Defs.T.GREEN, Ball.S.HOLED)
-	check(hole.target_rounds.size() == 2, "a pro's round counts")
+	check(hole.target_rounds.size() == 1 and pro.round_shots == 0, "a pro's round does not change the rolling list")
 	var saved_trouble: Array = listed.duplicate()
 	sim.db.test_hole["trouble"] = ["water"]
 	var again := _target_golfer(sim, 0.2)
@@ -8647,6 +8649,54 @@ func _test_target_window() -> void:
 	check(int(kept_old.get("shots", 0)) == 4 and int(kept_old.get("trouble", 0)) == 3, "the clean round has dropped, and the bunker round is now the oldest")
 	check(int(kept_new.get("shots", 0)) == 1 and int(kept_new.get("trouble", 0)) == 0, "the newest round stays")
 	check(is_equal_approx(hole.trouble_share(), 3.0 / 5.0), "the share is summed across the rounds still in the window")
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var course_d: Dictionary = raw.course
+	var rows: Array = course_d.holes
+	var filed: Dictionary = rows[0]
+	filed["target"] = [
+		{"shots": 9, "trouble": 9},
+		{"shots": 8, "trouble": 1},
+		{"shots": 7, "trouble": 0},
+		{"shots": 6, "trouble": 2},
+	]
+	var loaded := Sim.from_dict(db, raw, gear)
+	var back: Hole = loaded.course.holes[0]
+	check(back.target_rounds.size() == int(book.get("window", 0)), "a save with more rounds than the window is cut to the window")
+	var loaded_old: Dictionary = back.target_rounds[0]
+	var loaded_new: Dictionary = back.target_rounds[1]
+	check(int(loaded_old.get("shots", 0)) == 7 and int(loaded_new.get("shots", 0)) == 6, "the newest rounds are the ones kept, and the window is the database value")
+	sim.db.hole_target = saved
+
+
+func _test_target_pickup() -> void:
+	var sim := _sim("sandbox", 48)
+	var book: Dictionary = sim.db.hole_target
+	var saved: Dictionary = book.duplicate(true)
+	book["window"] = 4
+	book["min_rounds"] = 2
+	book["easy_below"] = 0.02
+	book["penal_above"] = 0.4
+	book["skilled"] = 0.7
+	book["easy_mood"] = -1.8
+	book["penal_mood"] = -2.2
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	var calm := _target_golfer(sim, 0.4)
+	_public_shot(sim, calm, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(hole.target_rounds.size() == 1 and is_equal_approx(hole.trouble_share(), 0.0), "the hole starts from one clean round")
+	var g := _target_golfer(sim, 0.4)
+	_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g, hole, Defs.T.DEEP_ROUGH, Ball.S.REST)
+	check(hole.target_rounds.size() == 1 and g.round_shots == 3 and g.round_trouble == 3 and not g.picked_up, "trouble shots sit on the round until the golfer picks up")
+	g.strokes = hole.par + 5
+	_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	check(g.picked_up and g.done, "par plus five picks the ball up")
+	check(hole.target_rounds.size() == 2, "a pick-up adds the round")
+	var row: Dictionary = hole.target_rounds[1]
+	check(int(row.get("shots", 0)) == 4 and int(row.get("trouble", 0)) == 4, "the picked-up round keeps its trouble shots")
+	check(is_equal_approx(hole.trouble_share(), 4.0 / 5.0), "that round moves the share")
+	check(_said(g, "Hole 1 is too penal.") and is_equal_approx(float(g.gripes.get("target", 0.0)), float(book.get("penal_mood", 0.0))), "a pick-up can say the hole is too penal, with penal_mood")
 	sim.db.hole_target = saved
 
 

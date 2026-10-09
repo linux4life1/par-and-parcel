@@ -1250,16 +1250,27 @@ func on_holed(g: Golfer, hole: Hole, hole_i: int) -> void:
 	_commit_target(g, hole, hole_i)
 
 
+## A golfer who picks up at par plus five never reaches on_holed. The round
+## is still added, and it is judged the same way as a hole-out.
+func on_picked_up(g: Golfer, hole: Hole, hole_i: int) -> void:
+	_commit_target(g, hole, hole_i)
+
+
 ## A public shot has stopped. Count it on this round before a penalty
-## drop moves the ball. Lab shots and play-mode shots are left out.
-## The hole is judged when the golfer holes out, not after each shot.
+## drop moves the ball. Lab shots, play-mode shots and tournament pros are
+## left out. The hole is judged when the golfer holes out or picks up, not
+## after each shot.
 func note_shot(g: Golfer, _hole: Hole, _hole_i: int) -> void:
-	if g.kind == "lab" or g.kind == "player":
+	if not _public_round(g):
 		return
 	var finish := HoleLab.test_outcome(g.ball, sim.course)
 	g.round_shots += 1
 	if _listed_trouble(finish):
 		g.round_trouble += 1
+
+
+func _public_round(g: Golfer) -> bool:
+	return g.kind != "lab" and g.kind != "player" and g.kind != "pro"
 
 
 func _listed_trouble(finish: String) -> bool:
@@ -1269,19 +1280,16 @@ func _listed_trouble(finish: String) -> bool:
 
 ## Fold this round into the hole and, if it can be judged, say so once.
 func _commit_target(g: Golfer, hole: Hole, hole_i: int) -> void:
-	if g.kind == "lab" or g.kind == "player":
+	if not _public_round(g):
 		return
 	if g.round_shots <= 0:
 		return
 	var book: Dictionary = sim.db.hole_target
 	var window := int(book.get("window", 1))
-	if window < 1:
-		window = 1
 	hole.target_rounds.append({"shots": g.round_shots, "trouble": g.round_trouble})
 	g.round_shots = 0
 	g.round_trouble = 0
-	while hole.target_rounds.size() > window:
-		hole.target_rounds.pop_front()
+	hole.trim_target(window)
 	_judge_target(g, hole, hole_i, book)
 
 
