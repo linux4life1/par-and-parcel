@@ -46,6 +46,11 @@ var line_sig := -1
 var earned := 0.0               # green fees golfers have paid for this hole
 var payers := 0                 # how many times a golfer has finished it and been asked
 var plays := 0
+## Public rounds on this hole, newest last. Each is the shots and the
+## trouble from the tee until the golfer holes out or picks up. The share
+## is the sum of trouble over the sum of shots. Empty is how an older save
+## loads. A longer list is cut to the window in the database on load.
+var target_rounds: Array[Dictionary] = []
 var strokes_total := 0
 var best := 0
 var tally := {}                 # score against par -> how many times: "-2", "-1", "0", "1", "2", "3" (3 is three over or worse)
@@ -967,6 +972,7 @@ func to_dict() -> Dictionary:
 		"pin_due": pin_due,
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
+		"target": target_rounds.duplicate(true),
 		"tally": tally, "aces": aces,
 		"name": name, "award": award, "themes": themes, "gap": gap, "comments": comments, "open": open,
 		"play_times": play_times,
@@ -1005,6 +1011,30 @@ static func turn_on_line() -> float:
 		limit = float(book.get("on_line", 3.0))
 	_cached_on_line = limit
 	return _cached_on_line
+
+
+## Trouble shots over every shot in the rolling rounds. Negative when
+## there is nothing to divide, which is not a share of zero.
+func trouble_share() -> float:
+	var shots := 0
+	var trouble := 0
+	for round_row in target_rounds:
+		var rec: Dictionary = round_row
+		shots += int(rec.get("shots", 0))
+		trouble += int(rec.get("trouble", 0))
+	if shots <= 0:
+		return -1.0
+	return float(trouble) / float(shots)
+
+
+## Keep the newest `window` rounds. The window comes from the database, the
+## same number a new round is trimmed with. A window under 1 keeps one.
+func trim_target(window: int) -> void:
+	var keep := window
+	if keep < 1:
+		keep = 1
+	while target_rounds.size() > keep:
+		target_rounds.pop_front()
 
 
 ## Theme ids from data/awards.json, read once. A load walks every hole.
@@ -1047,6 +1077,14 @@ static func from_dict(d: Dictionary) -> Hole:
 	hole.earned = float(d.get("earned", 0.0))
 	hole.payers = int(d.get("payers", 0))
 	hole.plays = int(d.get("plays", 0))
+	var saved_rounds: Array = d.get("target", [])
+	for round_row in saved_rounds:
+		if round_row is Dictionary:
+			var round_rec: Dictionary = round_row
+			hole.target_rounds.append({
+				"shots": int(round_rec.get("shots", 0)),
+				"trouble": int(round_rec.get("trouble", 0)),
+			})
 	hole.strokes_total = int(d.get("strokes", 0))
 	hole.best = int(d.get("best", 0))
 	hole.fun = float(d.get("fun", 60.0))

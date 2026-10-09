@@ -1,0 +1,10 @@
+{
+	"_about": "How hard a hole has played, from public rounds. A tournament pro is not a public round. Each round is the shots from the tee until the golfer holes out or picks up at par plus five, putts included, and how many of those shots finished in trouble. Which finishes count as trouble is data/test_hole.json. The share is the trouble over the shots across the last window rounds. A hole is judged when a golfer holes out or picks up, once it is open and has at least min_rounds rounds. A pick-up is judged the same way as a hole-out. A golfer at or above skilled says it is too easy when the share is under easy_below, and the mood is easy_mood. easy_below is under the trouble share of an ordinary hole. On the three-hole course that share is only a few percent, so a little trouble is still fair. A share over penal_above is too penal, and the mood is penal_mood. A share on either line is fair. A golfer under skilled never says too easy. easy_mood is also what a skilled golfer feels when the whole course is breathers. On that course the breather line is the easy complaint, so the per-hole too-easy line stays quiet. The breather line may repeat on the next breather. Too penal may sit beside it.",
+	"window": 12,
+	"min_rounds": 3,
+	"easy_below": 0.02,
+	"penal_above": 0.45,
+	"skilled": 0.7,
+	"easy_mood": -1.8,
+	"penal_mood": -2.2
+}

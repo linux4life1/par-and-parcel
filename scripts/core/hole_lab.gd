@@ -317,15 +317,15 @@ func _one_test_shot(hole: Hole, row: Array) -> Dictionary:
 	return {
 		"land": Vector2(b.carry.x, b.carry.z),
 		"rest": Vector2(b.pos.x, b.pos.z),
-		"outcome": _test_outcome(b),
+		"outcome": test_outcome(b, sim.course),
 	}
 
 
 ## What the ball finished in. A clip through a tree that stops on the
 ## fairway is fairway. Ground the card has no name for is called rough, so
 ## the summary still has a word, and it is not trouble unless listed.
-func _test_outcome(b: Ball) -> String:
-	var course := sim.course
+## Shared with the trouble share, so the two never disagree.
+static func test_outcome(b: Ball, course: Course) -> String:
 	if b.state == Ball.S.WATER:
 		return "water"
 	if b.state == Ball.S.OOB:

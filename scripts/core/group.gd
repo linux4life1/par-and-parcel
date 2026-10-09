@@ -233,6 +233,8 @@ func _begin_hole(sim: Sim, hole: Hole) -> void:
 	var washer := sim.visitors.facility_near("washer", hole.tee, 18.0)
 	for m in members:
 		m.begin_hole()
+		if hole_i == 0:
+			m.said_course_easy = false
 		var box := hole.playing_tee(m.skill, sim.db.tees)
 		m.ball.place(sim.course.on_ground(box.x, box.z))
 		m.clean_ball = washer
@@ -417,6 +419,8 @@ func _danger(sim: Sim, g: Golfer) -> int:
 func _resolve(sim: Sim, g: Golfer, hole: Hole) -> void:
 	var b := g.ball
 	var n := hole_i + 1
+	# Count the finish before a penalty drop moves the ball back into play.
+	sim.visitors.note_shot(g, hole, hole_i)
 	match b.state:
 		Ball.S.HOLED:
 			g.done = true
@@ -449,6 +453,8 @@ func _resolve(sim: Sim, g: Golfer, hole: Hole) -> void:
 		g.done = true
 		g.picked_up = true
 		g.feel(-3.0, "I'm picking up on hole %d. That's enough." % n, "hard")
+		# A pick-up never holes out. The round still counts, judged the same way.
+		sim.visitors.on_picked_up(g, hole, hole_i)
 
 
 ## Where to drop after a water ball: back on dry land near where it crossed.

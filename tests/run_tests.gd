@@ -90,6 +90,7 @@ func _ready() -> void:
 	_test_rating()
 	_test_practice()
 	_test_practice_area()
+	_test_hole_target()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -8499,3 +8500,416 @@ func _test_shut_range() -> void:
 	check(not loaded.visitors.range_ready(), "it loads shut")
 	var again := loaded.visitors.practice_shut_reason(Defs.O.DRIVING_RANGE, 30, 44)
 	check(again == why, "and gives the same reason")
+
+
+func _said(g: Golfer, what: String) -> bool:
+	for thought in g.thoughts:
+		var row: Dictionary = thought
+		if str(row.get("text", "")).contains(what):
+			return true
+	return false
+
+
+func _target_golfer(sim: Sim, skill: float) -> Golfer:
+	var g := sim.visitors.make_golfer("public", 0.4)
+	g.persona = {}
+	g.mood_bad = 1.0
+	g.mood_good = 1.0
+	g.drunk = 0.0
+	g.skill = skill
+	g.thoughts.clear()
+	g.gripes = {}
+	var party := Group.new()
+	party.kind = "public"
+	party.hole_i = 0
+	party.members.append(g)
+	g.group = party
+	return g
+
+
+func _public_shot(sim: Sim, g: Golfer, hole: Hole, ground: int, ball_state: int) -> void:
+	_rest_at(sim, g, 40, 40, ground, ball_state)
+	g.group._resolve(sim, g, hole)
+
+
+func _rest_at(sim: Sim, g: Golfer, tx: int, ty: int, ground: int, ball_state: int) -> void:
+	var course := sim.course
+	course.guard = false
+	course.set_terrain(tx, ty, ground)
+	course.guard = true
+	var spot := course.tile_center(tx, ty)
+	g.ball.pos = course.on_ground(spot.x, spot.z)
+	g.ball.state = ball_state
+	g.ball.tree_tile = -1
+
+
+func _test_hole_target() -> void:
+	print("-- hole trouble share")
+	_test_target_record()
+	_test_target_window()
+	_test_target_pickup()
+	_test_target_judge()
+	_test_target_mood()
+	_test_target_both()
+	_test_target_save()
+	_test_target_card()
+	_test_holes_intro()
+
+
+func _test_target_record() -> void:
+	var sim := _sim("sandbox", 41)
+	var book: Dictionary = sim.db.hole_target
+	var listed: Array = sim.db.test_hole.get("trouble", [])
+	check(not book.has("trouble"), "the hole-target data does not keep its own trouble list")
+	check(listed.has("bunker") and listed.has("waste") and listed.has("water") and listed.has("oob") and listed.has("deep_rough") and listed.has("trees"), "trouble finishes come from the test-hole data")
+	check(is_equal_approx(float(book.get("skilled", 0.0)), 0.7), "skilled is the 0.7 line, read from the data")
+	check(is_equal_approx(float(book.get("easy_mood", 0.0)), -1.8), "easy_mood is the breather mood, read from the data")
+	check(float(book.get("penal_mood", 0.0)) < 0.0 and not is_equal_approx(float(book.get("penal_mood", 0.0)), float(book.get("easy_mood", 0.0))), "penal_mood is its own negative")
+	check(int(book.get("window", 0)) >= 1 and int(book.get("min_rounds", 0)) >= 1 and float(book.get("penal_above", 0.0)) > float(book.get("easy_below", 1.0)), "window, min_rounds and the band are in the data")
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	check(hole != null, "a hole is laid out")
+	var g := _target_golfer(sim, 0.2)
+	_public_shot(sim, g, hole, Defs.T.FAIRWAY, Ball.S.REST)
+	check(hole.target_rounds.is_empty() and g.round_shots == 1 and g.round_trouble == 0 and not _said(g, "too easy") and not _said(g, "too penal"), "a fairway shot is counted on the round, is not trouble, and is not judged yet")
+	_rest_at(sim, g, 40, 40, Defs.T.FAIRWAY, Ball.S.REST)
+	var ti := sim.course.index_at(g.ball.pos.x, g.ball.pos.z)
+	g.ball.tree_tile = ti + 1
+	check(HoleLab.test_outcome(g.ball, sim.course) == "fairway", "a clip through a tree that stops on the fairway is fairway")
+	g.group._resolve(sim, g, hole)
+	check(g.round_shots == 2 and g.round_trouble == 0, "that clip counts as a shot and not as trouble")
+	_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	check(g.round_trouble == 1, "a bunker shot is trouble")
+	_public_shot(sim, g, hole, Defs.T.FAIRWAY, Ball.S.WATER)
+	check(g.round_trouble == 2, "a ball in the water is trouble, counted where it went in")
+	_public_shot(sim, g, hole, Defs.T.FAIRWAY, Ball.S.OOB)
+	check(g.round_trouble == 3, "out of bounds is trouble")
+	_public_shot(sim, g, hole, Defs.T.DEEP_ROUGH, Ball.S.REST)
+	check(g.round_trouble == 4, "deep rough is trouble")
+	_public_shot(sim, g, hole, Defs.T.WASTE, Ball.S.REST)
+	check(g.round_trouble == 5, "waste is trouble")
+	_rest_at(sim, g, 40, 40, Defs.T.FAIRWAY, Ball.S.REST)
+	sim.course.guard = false
+	var planted := sim.course.set_object(40, 40, Defs.O.OAK)
+	sim.course.guard = true
+	check(planted and HoleLab.test_outcome(g.ball, sim.course) == "trees", "a ball that stops in a tree finishes in trees")
+	g.group._resolve(sim, g, hole)
+	check(g.round_shots == 8 and g.round_trouble == 6, "a ball that stops in a tree is trouble")
+	_rest_at(sim, g, 40, 40, Defs.T.GREEN, Ball.S.REST)
+	check(HoleLab.test_outcome(g.ball, sim.course) == "green", "a putt that stays on the green finishes on the green")
+	g.group._resolve(sim, g, hole)
+	check(g.round_shots == 9 and g.round_trouble == 6 and hole.target_rounds.is_empty(), "a putt counts as a shot and is not trouble, and the round is still open")
+	_public_shot(sim, g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(hole.target_rounds.size() == 1, "holing out commits the round")
+	var row: Dictionary = hole.target_rounds[0]
+	check(int(row.get("shots", 0)) == 10 and int(row.get("trouble", 0)) == 6, "the round is every shot from the tee through the holing stroke")
+	check(is_equal_approx(hole.trouble_share(), 0.6), "the share is the sum of trouble over the sum of shots, and putts are in the sum")
+	var lab := _target_golfer(sim, 0.2)
+	lab.kind = "lab"
+	_public_shot(sim, lab, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, lab, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(hole.target_rounds.size() == 1, "a lab shot is not a public round")
+	var owner := _target_golfer(sim, 0.2)
+	owner.kind = "player"
+	_public_shot(sim, owner, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, owner, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(hole.target_rounds.size() == 1, "a play-mode shot is not a public round")
+	var pro := _target_golfer(sim, 0.2)
+	pro.kind = "pro"
+	_public_shot(sim, pro, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, pro, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(hole.target_rounds.size() == 1 and pro.round_shots == 0, "a pro's round does not change the rolling list")
+	var saved_trouble: Array = listed.duplicate()
+	sim.db.test_hole["trouble"] = ["water"]
+	var again := _target_golfer(sim, 0.2)
+	_public_shot(sim, again, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, again, hole, Defs.T.GREEN, Ball.S.HOLED)
+	var last: Dictionary = hole.target_rounds[-1]
+	check(int(last.get("shots", 0)) == 2 and int(last.get("trouble", 0)) == 0, "a finish left out of the test-hole data is not trouble")
+	sim.db.test_hole["trouble"] = saved_trouble
+
+
+func _test_target_window() -> void:
+	var sim := _sim("sandbox", 42)
+	var book: Dictionary = sim.db.hole_target
+	var saved: Dictionary = book.duplicate(true)
+	book["window"] = 2
+	book["min_rounds"] = 9
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	var g := _target_golfer(sim, 0.4)
+	for drop_i in 3:
+		_public_shot(sim, g, hole, Defs.T.FAIRWAY, Ball.S.REST)
+	_public_shot(sim, g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	for drop_j in 3:
+		_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	_public_shot(sim, g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(hole != null and hole.target_rounds.size() == 2, "one round past the window drops the oldest")
+	var kept_old: Dictionary = hole.target_rounds[0]
+	var kept_new: Dictionary = hole.target_rounds[1]
+	check(int(kept_old.get("shots", 0)) == 4 and int(kept_old.get("trouble", 0)) == 3, "the clean round has dropped, and the bunker round is now the oldest")
+	check(int(kept_new.get("shots", 0)) == 1 and int(kept_new.get("trouble", 0)) == 0, "the newest round stays")
+	check(is_equal_approx(hole.trouble_share(), 3.0 / 5.0), "the share is summed across the rounds still in the window")
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var course_d: Dictionary = raw.course
+	var rows: Array = course_d.holes
+	var filed: Dictionary = rows[0]
+	filed["target"] = [
+		{"shots": 9, "trouble": 9},
+		{"shots": 8, "trouble": 1},
+		{"shots": 7, "trouble": 0},
+		{"shots": 6, "trouble": 2},
+	]
+	var loaded := Sim.from_dict(db, raw, gear)
+	var back: Hole = loaded.course.holes[0]
+	check(back.target_rounds.size() == int(book.get("window", 0)), "a save with more rounds than the window is cut to the window")
+	var loaded_old: Dictionary = back.target_rounds[0]
+	var loaded_new: Dictionary = back.target_rounds[1]
+	check(int(loaded_old.get("shots", 0)) == 7 and int(loaded_new.get("shots", 0)) == 6, "the newest rounds are the ones kept, and the window is the database value")
+	sim.db.hole_target = saved
+
+
+func _test_target_pickup() -> void:
+	var sim := _sim("sandbox", 48)
+	var book: Dictionary = sim.db.hole_target
+	var saved: Dictionary = book.duplicate(true)
+	book["window"] = 4
+	book["min_rounds"] = 2
+	book["easy_below"] = 0.02
+	book["penal_above"] = 0.4
+	book["skilled"] = 0.7
+	book["easy_mood"] = -1.8
+	book["penal_mood"] = -2.2
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	var calm := _target_golfer(sim, 0.4)
+	_public_shot(sim, calm, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(hole.target_rounds.size() == 1 and is_equal_approx(hole.trouble_share(), 0.0), "the hole starts from one clean round")
+	var g := _target_golfer(sim, 0.4)
+	_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g, hole, Defs.T.DEEP_ROUGH, Ball.S.REST)
+	check(hole.target_rounds.size() == 1 and g.round_shots == 3 and g.round_trouble == 3 and not g.picked_up, "trouble shots sit on the round until the golfer picks up")
+	g.strokes = hole.par + 5
+	_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	check(g.picked_up and g.done, "par plus five picks the ball up")
+	check(hole.target_rounds.size() == 2, "a pick-up adds the round")
+	var row: Dictionary = hole.target_rounds[1]
+	check(int(row.get("shots", 0)) == 4 and int(row.get("trouble", 0)) == 4, "the picked-up round keeps its trouble shots")
+	check(is_equal_approx(hole.trouble_share(), 4.0 / 5.0), "that round moves the share")
+	check(_said(g, "Hole 1 is too penal.") and is_equal_approx(float(g.gripes.get("target", 0.0)), float(book.get("penal_mood", 0.0))), "a pick-up can say the hole is too penal, with penal_mood")
+	sim.db.hole_target = saved
+
+
+func _test_target_judge() -> void:
+	var sim := _sim("sandbox", 43)
+	var book: Dictionary = sim.db.hole_target
+	var saved: Dictionary = book.duplicate(true)
+	book["window"] = 4
+	book["min_rounds"] = 2
+	book["easy_below"] = 0.5
+	book["penal_above"] = 0.5
+	book["skilled"] = 0.7
+	book["easy_mood"] = -1.8
+	book["penal_mood"] = -2.2
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	var early := _target_golfer(sim, 0.9)
+	_public_shot(sim, early, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(not _said(early, "too easy") and not _said(early, "too penal") and Panels.target_line(hole, book) == "", "min_rounds minus one is not judged, and the scorecard is blank")
+	var ready := _target_golfer(sim, 0.9)
+	_public_shot(sim, ready, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(_said(ready, "Hole 1 is too easy.") and not _said(ready, "too penal"), "the round that reaches min_rounds is judged from the hole-out")
+	check(is_equal_approx(float(ready.gripes.get("target", 0.0)), -1.8), "too easy uses easy_mood, not zero")
+	check(Panels.target_line(hole, book) == "0% too easy", "the scorecard tags a judged easy hole")
+	var line_hole := sim.add_hole(sim.course.tile_center(24, 20), sim.course.tile_center(24, 36))
+	line_hole.open = true
+	var on_line := _target_golfer(sim, 0.9)
+	_public_shot(sim, on_line, line_hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, on_line, line_hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(line_hole.target_rounds.size() == 1 and is_equal_approx(line_hole.trouble_share(), 0.5), "one bunker and the holing stroke is a share of one half")
+	var second := _target_golfer(sim, 0.9)
+	_public_shot(sim, second, line_hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, second, line_hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(not _said(second, "too easy") and not _said(second, "too penal"), "holing out on the line draws neither complaint")
+	check(Panels.target_line(line_hole, book) == "50% fair", "a share on the line is tagged fair")
+	var draft := sim.add_hole(sim.course.tile_center(28, 20), sim.course.tile_center(28, 36))
+	draft.open = false
+	var hidden := _target_golfer(sim, 0.9)
+	_public_shot(sim, hidden, draft, Defs.T.GREEN, Ball.S.HOLED)
+	_public_shot(sim, hidden, draft, Defs.T.GREEN, Ball.S.HOLED)
+	check(draft.target_rounds.size() == 2 and not _said(hidden, "too easy") and not _said(hidden, "too penal") and Panels.target_line(draft, book) == "", "a draft keeps the rounds and is not judged")
+	var poor := _target_golfer(sim, 0.69)
+	_public_shot(sim, poor, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(not _said(poor, "too easy") and not _said(poor, "too penal"), "a golfer under skilled does not say too easy")
+	var hard := sim.add_hole(sim.course.tile_center(32, 20), sim.course.tile_center(32, 36))
+	hard.open = true
+	var lesser := _target_golfer(sim, 0.69)
+	_public_shot(sim, lesser, hard, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, lesser, hard, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, lesser, hard, Defs.T.GREEN, Ball.S.HOLED)
+	check(not _said(lesser, "too easy"), "the same golfer still does not say too easy")
+	var again := _target_golfer(sim, 0.69)
+	_public_shot(sim, again, hard, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, again, hard, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, again, hard, Defs.T.GREEN, Ball.S.HOLED)
+	check(_said(again, "Hole 1 is too penal.") and is_equal_approx(float(again.gripes.get("target", 0.0)), -2.2), "a golfer under skilled can say too penal, and the mood is penal_mood")
+	sim.db.hole_target = saved
+
+
+func _test_target_mood() -> void:
+	var sim := _sim("sandbox", 44)
+	var book: Dictionary = sim.db.hole_target
+	var saved: Dictionary = book.duplicate(true)
+	book["window"] = 1
+	book["min_rounds"] = 1
+	book["easy_below"] = 0.5
+	book["penal_above"] = 0.5
+	book["skilled"] = 0.7
+	book["easy_mood"] = -3.3
+	book["penal_mood"] = -4.4
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	var g := _target_golfer(sim, 0.8)
+	_public_shot(sim, g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(is_equal_approx(float(g.gripes.get("target", 0.0)), -3.3) and _said(g, "Hole 1 is too easy."), "easy_mood from the data is what too easy feels like")
+	book["easy_mood"] = -5.5
+	var g2 := _target_golfer(sim, 0.8)
+	_public_shot(sim, g2, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(is_equal_approx(float(g2.gripes.get("target", 0.0)), -5.5), "changing easy_mood changes the complaint")
+	book["skilled"] = 0.95
+	var g3 := _target_golfer(sim, 0.8)
+	_public_shot(sim, g3, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(not _said(g3, "too easy") and not _said(g3, "too penal"), "raising skilled above this golfer stops too easy")
+	book["skilled"] = 0.7
+	book["penal_mood"] = -4.4
+	var g4 := _target_golfer(sim, 0.8)
+	_public_shot(sim, g4, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g4, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g4, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(is_equal_approx(float(g4.gripes.get("target", 0.0)), -4.4) and _said(g4, "too penal"), "penal_mood from the data is what too penal feels like")
+	book["penal_mood"] = -6.6
+	var g5 := _target_golfer(sim, 0.8)
+	_public_shot(sim, g5, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g5, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g5, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(is_equal_approx(float(g5.gripes.get("target", 0.0)), -6.6), "changing penal_mood changes the complaint")
+	sim.db.hole_target = saved
+
+
+func _test_target_both() -> void:
+	var sim := _sim("sandbox", 45)
+	var book: Dictionary = sim.db.hole_target
+	var saved: Dictionary = book.duplicate(true)
+	book["window"] = 4
+	book["min_rounds"] = 1
+	book["easy_below"] = 0.5
+	book["penal_above"] = 0.5
+	book["skilled"] = 0.7
+	book["easy_mood"] = -1.8
+	book["penal_mood"] = -2.2
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	var other := sim.add_hole(sim.course.tile_center(30, 20), sim.course.tile_center(30, 36))
+	hole.open = true
+	hole.lab_ready = true
+	hole.kind = 5
+	other.open = true
+	other.lab_ready = true
+	other.kind = 5
+	var skilled_g := _target_golfer(sim, 0.85)
+	_public_shot(sim, skilled_g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(_said(skilled_g, "Hole 1 is too easy."), "a hole that is not a breather says so when the golfer holes out")
+	check(not _said(skilled_g, "This course is too easy for me."), "that hole-out does not itself use the course line")
+	hole.kind = 0
+	other.kind = 0
+	var breather_g := _target_golfer(sim, 0.85)
+	_public_shot(sim, breather_g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(not _said(breather_g, "Hole 1 is too easy."), "a breather does not also get the hole line")
+	sim.visitors._judge_design(breather_g, hole, 1)
+	check(_said(breather_g, "This course is too easy for me."), "the course line is the easy complaint on that breather")
+	var course_g := _target_golfer(sim, 0.85)
+	sim.visitors._judge_design(course_g, other, 2)
+	check(_said(course_g, "This course is too easy for me.") and float(course_g.gripes.get("easy", 0.0)) < -1.0, "the course line still fires on its own, with easy_mood")
+	sim.visitors._judge_design(course_g, other, 2)
+	check(is_equal_approx(float(course_g.gripes.get("easy", 0.0)), -3.6), "the course line still lands again on the next breather")
+	_public_shot(sim, course_g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	check(not _said(course_g, "Hole 1 is too easy."), "a golfer who already said the course is too easy does not also get the hole line")
+	other.kind = 5
+	_public_shot(sim, course_g, other, Defs.T.GREEN, Ball.S.HOLED)
+	check(not _said(course_g, "Hole 1 is too easy."), "after the course line, a hole that is not a breather stays quiet too")
+	var hard := sim.add_hole(sim.course.tile_center(34, 20), sim.course.tile_center(34, 36))
+	hard.open = true
+	var penal_g := _target_golfer(sim, 0.85)
+	sim.visitors._judge_design(penal_g, hole, 1)
+	_public_shot(sim, penal_g, hard, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, penal_g, hard, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, penal_g, hard, Defs.T.GREEN, Ball.S.HOLED)
+	check(_said(penal_g, "This course is too easy for me.") and _said(penal_g, "is too penal."), "too penal may sit beside the course line in the same round")
+	sim.db.hole_target = saved
+
+
+func _test_target_save() -> void:
+	var sim := _sim("sandbox", 46)
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	var g := _target_golfer(sim, 0.4)
+	_public_shot(sim, g, hole, Defs.T.FAIRWAY, Ball.S.REST)
+	_public_shot(sim, g, hole, Defs.T.BUNKER, Ball.S.REST)
+	_public_shot(sim, g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	_public_shot(sim, g, hole, Defs.T.GREEN, Ball.S.HOLED)
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var loaded := Sim.from_dict(db, raw, gear)
+	var back: Hole = loaded.course.holes[0]
+	check(hole != null and back.target_rounds.size() == 2, "a save keeps the rolling rounds")
+	var first: Dictionary = back.target_rounds[0]
+	var second: Dictionary = back.target_rounds[1]
+	check(int(first.get("shots", 0)) == 3 and int(first.get("trouble", 0)) == 1, "the first saved round keeps its shots and its trouble")
+	check(int(second.get("shots", 0)) == 1 and int(second.get("trouble", 0)) == 0, "the second saved round keeps its shots and its trouble")
+	var course_d: Dictionary = raw.course
+	var rows: Array = course_d.holes
+	var row: Dictionary = rows[0]
+	row.erase("target")
+	row["shots"] = 99
+	row["trouble"] = 40
+	var old := Sim.from_dict(db, raw, gear)
+	var blank: Hole = old.course.holes[0]
+	check(blank.target_rounds.is_empty(), "an old save, with no round list, loads empty even if it still has shot counters")
+	check(Panels.target_line(blank, old.db.hole_target) == "", "an old save's hole is not tagged")
+	var quiet := _target_golfer(old, 0.99)
+	_public_shot(old, quiet, blank, Defs.T.GREEN, Ball.S.HOLED)
+	check(blank.target_rounds.size() == 1 and not _said(quiet, "too easy") and not _said(quiet, "too penal"), "one round on an old save is not a share of zero, so nobody calls the hole too easy")
+
+
+func _test_target_card() -> void:
+	var sim := _sim("sandbox", 47)
+	var book: Dictionary = sim.db.hole_target
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.open = true
+	check(float(book.get("easy_below", 1.0)) < 0.25 and float(book.get("penal_above", 0.0)) > 0.25, "a quarter of shots in trouble sits inside the fair band")
+	var need := int(book.get("min_rounds", 1))
+	var short: Array[Dictionary] = []
+	for short_i in need - 1:
+		short.append({"shots": 4, "trouble": 1})
+	hole.target_rounds = short
+	check(Panels.target_line(hole, book) == "", "fewer than min_rounds rounds leaves the scorecard blank")
+	var fair_rows: Array[Dictionary] = []
+	for fair_i in need:
+		fair_rows.append({"shots": 4, "trouble": 1})
+	hole.target_rounds = fair_rows
+	check(Panels.target_line(hole, book) == "25% fair", "the scorecard shows the trouble share and a fair tag")
+	var easy_rows: Array[Dictionary] = []
+	for easy_i in need:
+		easy_rows.append({"shots": 4, "trouble": 0})
+	hole.target_rounds = easy_rows
+	check(Panels.target_line(hole, book) == "0% too easy", "the scorecard tags a low share too easy")
+	var penal_rows: Array[Dictionary] = []
+	for penal_i in need:
+		penal_rows.append({"shots": 4, "trouble": 4})
+	hole.target_rounds = penal_rows
+	check(Panels.target_line(hole, book) == "100% too penal", "the scorecard tags a high share too penal")
+	hole.open = false
+	check(Panels.target_line(hole, book) == "", "a draft leaves the scorecard blank")
+
+
+func _test_holes_intro() -> void:
+	var intro := Panels.HOLES_INTRO
+	check(intro.contains("starts closed") and intro.contains("Test hits test balls from the back tee and marks where they land and where they stop") and intro.contains("Open lets the public on"), "the holes intro says test balls are marked where they land and where they stop")
+	check(not intro.contains("bucket") and not intro.contains("lab golfers") and not intro.contains("tee shots"), "the holes intro does not call that a bucket or a lab tee shot")

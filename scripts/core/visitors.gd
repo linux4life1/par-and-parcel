@@ -3,8 +3,6 @@ extends RefCounted
 ## Everyone on the course who is not staff: arrivals, green fees, moods,
 ## flying balls, and people getting hit by them.
 
-## A golfer this good is bored by a course that never asks a question.
-const SKILLED := 0.7
 const GOOD_REASONS := {
 	"scenery": "Beautiful scenery.", "score": "Played the round of my life.", "drink": "Cold drinks out on the course.",
 	"greens": "The greens were perfect.", "celebrity": "I even spotted a celebrity.",
@@ -1249,6 +1247,76 @@ func on_holed(g: Golfer, hole: Hole, hole_i: int) -> void:
 		sim.sound.emit("ovation", g.pos, 1.0)
 	elif not bool(g.plan.get("putt", false)) or float(g.plan.get("dist", 0.0)) > 7.0:
 		sim.sound.emit("cheer", g.pos, 0.55)      # a chip-in, or a putt from right across the green
+	_commit_target(g, hole, hole_i)
+
+
+## A golfer who picks up at par plus five never reaches on_holed. The round
+## is still added, and it is judged the same way as a hole-out.
+func on_picked_up(g: Golfer, hole: Hole, hole_i: int) -> void:
+	_commit_target(g, hole, hole_i)
+
+
+## A public shot has stopped. Count it on this round before a penalty
+## drop moves the ball. Lab shots, play-mode shots and tournament pros are
+## left out. The hole is judged when the golfer holes out or picks up, not
+## after each shot.
+func note_shot(g: Golfer, _hole: Hole, _hole_i: int) -> void:
+	if not _public_round(g):
+		return
+	var finish := HoleLab.test_outcome(g.ball, sim.course)
+	g.round_shots += 1
+	if _listed_trouble(finish):
+		g.round_trouble += 1
+
+
+func _public_round(g: Golfer) -> bool:
+	return g.kind != "lab" and g.kind != "player" and g.kind != "pro"
+
+
+func _listed_trouble(finish: String) -> bool:
+	var listed: Array = sim.db.test_hole.get("trouble", [])
+	return listed.has(finish)
+
+
+## Fold this round into the hole and, if it can be judged, say so once.
+func _commit_target(g: Golfer, hole: Hole, hole_i: int) -> void:
+	if not _public_round(g):
+		return
+	if g.round_shots <= 0:
+		return
+	var book: Dictionary = sim.db.hole_target
+	var window := int(book.get("window", 1))
+	hole.target_rounds.append({"shots": g.round_shots, "trouble": g.round_trouble})
+	g.round_shots = 0
+	g.round_trouble = 0
+	hole.trim_target(window)
+	_judge_target(g, hole, hole_i, book)
+
+
+## Too easy only for a skilled golfer under the line. Too penal for anyone
+## over the line. On either line, a draft, or too few rounds, nobody speaks.
+func _judge_target(g: Golfer, hole: Hole, hole_i: int, book: Dictionary) -> void:
+	if not hole.open:
+		return
+	var need := int(book.get("min_rounds", 1))
+	if hole.target_rounds.size() < need:
+		return
+	var share := hole.trouble_share()
+	if share < 0.0:
+		return
+	var n := hole_i + 1
+	var skilled := float(book.get("skilled", 1.0))
+	var easy_below := float(book.get("easy_below", 0.0))
+	var penal_above := float(book.get("penal_above", 1.0))
+	if share < easy_below and g.skill >= skilled:
+		if g.said_course_easy:
+			return
+		# This breather is about to get the course line. One easy complaint here.
+		if hole.lab_ready and hole.kind == 0 and _breather_heavy():
+			return
+		g.feel(float(book.get("easy_mood", 0.0)), "Hole %d is too easy." % n, "target")
+	elif share > penal_above:
+		g.feel(float(book.get("penal_mood", 0.0)), "Hole %d is too penal." % n, "target")
 
 
 ## Mood after a shot comes to rest, driven by what the ball is sitting in.
@@ -1411,8 +1479,11 @@ func _judge_design(g: Golfer, hole: Hole, n: int) -> void:
 				g.feel(1.6, "Hole %d suits my game." % n, "suits")
 			elif have < 0.3:
 				g.feel(-1.5, "Hole %d asks for %s I just don't have." % [n, str(a[2])], "hard")
-		if hole.kind == 0 and g.skill >= SKILLED and _breather_heavy():
-			g.feel(-1.8, "This course is too easy for me.", "easy")
+		var target_book: Dictionary = sim.db.hole_target
+		var skilled := float(target_book.get("skilled", 1.0))
+		if hole.kind == 0 and g.skill >= skilled and _breather_heavy():
+			g.said_course_easy = true
+			g.feel(float(target_book.get("easy_mood", 0.0)), "This course is too easy for me.", "easy")
 		elif hole.kind == 0 and g.last_kind > 0 and g.last_kind != 0:
 			g.feel(1.0, "A breather after that last hole. Lovely.", "suits")
 		if g.last_kind >= 0:

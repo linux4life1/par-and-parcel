@@ -95,6 +95,12 @@ var drunk := 0.0                # 0 sober .. 1 legless; set at the bar, wears of
 var vip := ""                   # commissioner, heiress or investor
 var last_kind := -1             # the kind of hole they played last
 var last_par := 0
+## Shots and trouble so far on the hole being played. Committed on a hole-out.
+var round_shots := 0
+var round_trouble := 0
+## The course line already landed this round, so a later hole does not
+## also get the too-easy line.
+var said_course_easy := false
 var seen_animals := {}
 var saw_celebrity := false
 var shirt := Color.WHITE
@@ -328,6 +334,8 @@ func begin_hole() -> void:
 	phase = P.IDLE
 	sat_at_tee = satisfaction
 	gripes_at_tee = gripes.duplicate()
+	round_shots = 0
+	round_trouble = 0
 
 
 func to_par() -> int:
