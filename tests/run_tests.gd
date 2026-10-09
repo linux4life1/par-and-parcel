@@ -2959,6 +2959,330 @@ func _test_mood_map() -> void:
 	check(old.course.mood[i] == 0.0, "an old save without a mood map loads as calm ground")
 
 
+func _marks_match(a: Array[Dictionary], b: Array[Dictionary]) -> bool:
+	if a.size() != b.size():
+		return false
+	for i in a.size():
+		var left: Dictionary = a[i]
+		var right: Dictionary = b[i]
+		var land_a: Vector2 = left.land
+		var land_b: Vector2 = right.land
+		var rest_a: Vector2 = left.rest
+		var rest_b: Vector2 = right.rest
+		if land_a.distance_to(land_b) > 0.001 or rest_a.distance_to(rest_b) > 0.001:
+			return false
+		if str(left.outcome) != str(right.outcome):
+			return false
+	return true
+
+
+func _trouble_count(hole: Hole, trouble: Array) -> int:
+	var n := 0
+	for mark in hole.test_marks:
+		if trouble.has(str(mark.get("outcome", ""))):
+			n += 1
+	return n
+
+
+func _level_rect(course: Course, x0: int, y0: int, x1: int, y1: int, level: float) -> void:
+	for vy in range(y0, y1 + 1):
+		for vx in range(x0, x1 + 1):
+			if vx >= 0 and vy >= 0 and vx <= course.w and vy <= course.h:
+				course.heights[vy * (course.w + 1) + vx] = level
+
+
+func _paint_rect(course: Course, x0: int, y0: int, x1: int, y1: int, ground: int) -> void:
+	course.guard = false
+	for ty in range(y0, y1 + 1):
+		for tx in range(x0, x1 + 1):
+			if course.in_bounds(tx, ty):
+				course.set_terrain(tx, ty, ground)
+	course.guard = true
+
+
+func _lay_flat(sim: Sim, tx: int, ty: int, length_tiles: int, ground: int) -> Hole:
+	var course := sim.course
+	var center := course.tile_center(tx, ty)
+	var level := course.height_at(center.x, center.z)
+	_level_rect(course, tx - 28, ty - 2, tx + 28, ty + length_tiles + 2, level)
+	_paint_rect(course, tx - 24, ty - 1, tx + 24, ty + length_tiles, ground)
+	course.guard = false
+	course.set_terrain(tx, ty, Defs.T.TEE)
+	course.set_terrain(tx, ty + length_tiles, Defs.T.GREEN)
+	course.set_terrain(tx + 1, ty + length_tiles, Defs.T.GREEN)
+	course.guard = true
+	return sim.add_hole(course.tile_center(tx, ty), course.tile_center(tx, ty + length_tiles))
+
+
+func _test_lab_untouched(sim: Sim) -> void:
+	var short: Hole = sim.course.holes[1]
+	short.open = false
+	sim.lab.rate_now(short)
+	var landed := false
+	for spot_i in short.spots.size():
+		var spot: Vector2 = short.spots[spot_i]
+		if spot.distance_to(Vector2(short.tee.x, short.tee.z)) > 20.0:
+			landed = true
+	var kind0 := short.kind
+	var len0 := short.test_length
+	var acc0 := short.test_accuracy
+	var img0 := short.test_imagination
+	var ready0 := short.lab_ready
+	var sig0 := short.lab_sig
+	var exp0: Dictionary = short.expect.duplicate(true)
+	var spots0 := short.spots.duplicate()
+	var money0 := sim.economy.money
+	var steps0 := sim.undo.steps()
+	sim.lab.test_shots(short)
+	var same := short.kind == kind0 and is_equal_approx(short.test_length, len0) and is_equal_approx(short.test_accuracy, acc0) and is_equal_approx(short.test_imagination, img0) and short.lab_ready == ready0 and short.lab_sig == sig0 and short.expect == exp0 and short.spots == spots0
+	var balls: int = int(sim.db.test_hole.get("balls", 0))
+	check(ready0 and spots0.size() == 8 and landed and same, "the lab still rates a draft and keeps its eight expert tee shots")
+	check(short.test_marks.size() == balls, "Test marks the data's balls without replacing that rating (%d)" % short.test_marks.size())
+	check(is_equal_approx(sim.economy.money, money0) and sim.undo.steps() == steps0, "Test is free and is not an undo step")
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var course_d: Dictionary = raw.course
+	var rows: Array = course_d.holes
+	var row: Dictionary = rows[1]
+	check(not row.has("test_marks"), "a save stores no test marks")
+	var loaded := Sim.from_dict(db, raw, gear)
+	check(loaded.course.holes[1].test_marks.is_empty(), "loading that save leaves the marks behind")
+	short.open = true
+
+
+func _test_firm_marks(sim: Sim) -> Hole:
+	var book: Dictionary = sim.db.test_hole
+	var balls: int = int(book.get("balls", 0))
+	var firm := _lay_flat(sim, 30, 15, 80, Defs.T.FIRM)
+	check(firm != null and firm.open, "Test is available on an open hole")
+	var money0 := sim.economy.money
+	var steps0 := sim.undo.steps()
+	sim.lab.test_shots(firm)
+	check(firm.test_marks.size() == balls, "there are exactly the data's balls (%d)" % firm.test_marks.size())
+	check(is_equal_approx(sim.economy.money, money0) and sim.undo.steps() == steps0, "those shots do not spend money or take an undo step")
+	var roll_ok := true
+	var shortest := 1000.0
+	var tee2 := Vector2(firm.tee.x, firm.tee.z)
+	for firm_mark in firm.test_marks:
+		var land: Vector2 = firm_mark.land
+		var rest: Vector2 = firm_mark.rest
+		var roll := land.distance_to(rest)
+		if roll < shortest:
+			shortest = roll
+		if roll <= 5.0 or land.distance_to(tee2) + 0.05 >= rest.distance_to(tee2):
+			roll_ok = false
+	check(roll_ok, "on a flat firm fairway the landing is nearer the tee and more than 5 m short of the rest (shortest %.1f)" % shortest)
+	var first: Array[Dictionary] = []
+	for kept in firm.test_marks:
+		var copy: Dictionary = kept
+		first.append({"land": copy.land, "rest": copy.rest, "outcome": str(copy.outcome)})
+	sim.lab.test_shots(firm)
+	check(_marks_match(first, firm.test_marks), "a second Test on the same ground gives the same marks")
+	var tile := sim.course.tile_of(firm.tee.x, firm.tee.z)
+	var painted := sim.course.paint(tile.x, tile.y + 4, 0, Defs.T.DEEP_ROUGH)
+	check(painted > 0 and firm.test_marks.is_empty(), "painting one hole tile clears the marks")
+	book["balls"] = 4
+	sim.lab.test_shots(firm)
+	check(firm.test_marks.size() == 4, "changing balls in the data changes the count")
+	book["balls"] = balls
+	sim.lab.test_shots(firm)
+	check(firm.test_marks.size() == balls, "restoring balls restores the count")
+	var trouble: Array = book.get("trouble", [])
+	var saved_trouble: Array = trouble.duplicate()
+	var before := _trouble_count(firm, saved_trouble)
+	var text := HoleLab.test_summary(firm, book)
+	check(text.begins_with("%d test balls:" % balls) and text.ends_with("%d found trouble." % before), "the summary counts every ball whose finish is in trouble: %s" % text)
+	book["trouble"] = []
+	var cleared := HoleLab.test_summary(firm, book)
+	if before > 0:
+		check(cleared != text and cleared.ends_with("0 found trouble."), "clearing trouble changes the summary")
+	else:
+		book["trouble"] = ["fairway", "green", "rough", "deep_rough", "bunker", "waste", "water", "oob", "trees"]
+		var all_n := _trouble_count(firm, book["trouble"])
+		var widened := HoleLab.test_summary(firm, book)
+		check(all_n == firm.test_marks.size() and widened != text, "listing every finish changes the summary: %s" % widened)
+	book["trouble"] = saved_trouble
+	var rise_tile := sim.course.tile_of(firm.tee.x, firm.tee.z + Defs.TILE * 4.0)
+	sim.course.sculpt(float(rise_tile.x) * Defs.TILE, float(rise_tile.y) * Defs.TILE, 1.0, 0.8)
+	check(firm.test_marks.is_empty(), "sculpting one tile under the hole clears the marks")
+	sim.lab.test_shots(firm)
+	var tree_land: Vector2 = firm.test_marks[0].land
+	var tree_at := sim.course.tile_of(tree_land.x, tree_land.y)
+	var planted := sim.course.set_object(tree_at.x, tree_at.y, Defs.O.OAK)
+	check(planted and firm.test_marks.is_empty(), "placing a tree in the landing area clears the marks")
+	return firm
+
+
+func _test_water_marks(sim: Sim) -> void:
+	var wet := _lay_flat(sim, 120, 15, 80, Defs.T.FIRM)
+	_paint_rect(sim.course, 90, 18, 150, 75, Defs.T.WATER)
+	check(wet != null, "a hole plays across a pond")
+	sim.lab.test_shots(wet)
+	var water_ok := false
+	var seen := 0
+	for water_mark in wet.test_marks:
+		if str(water_mark.get("outcome", "")) != "water":
+			continue
+		seen += 1
+		var rest: Vector2 = water_mark.rest
+		var ti := sim.course.index_at(rest.x, rest.y)
+		if ti >= 0 and Defs.is_liquid(int(sim.course.terrain[ti])):
+			water_ok = true
+	check(water_ok, "at least one ball is in the pond, and the mark is that water, not the drop (%d)" % seen)
+
+
+func _test_oob_marks(sim: Sim) -> void:
+	var wide := _lay_flat(sim, 80, 120, 30, Defs.T.FIRM)
+	var tee_tile := sim.course.tile_of(wide.tee.x, wide.tee.z)
+	var stake := tee_tile.y + 4
+	for oob_y in range(stake, sim.course.h):
+		for oob_x in range(tee_tile.x - 30, tee_tile.x + 31):
+			if sim.course.in_bounds(oob_x, oob_y):
+				sim.course.locked[oob_y * sim.course.w + oob_x] = 1
+	sim.lab.test_shots(wide)
+	var oob_ok := false
+	var stake_z := float(stake) * Defs.TILE
+	var tee_v := Vector2(wide.tee.x, wide.tee.z)
+	var oob_n := 0
+	for oob_mark in wide.test_marks:
+		if str(oob_mark.get("outcome", "")) != "oob":
+			continue
+		oob_n += 1
+		var orest: Vector2 = oob_mark.rest
+		if orest.y > stake_z and orest.distance_to(tee_v) > 5.0:
+			oob_ok = true
+	check(wide != null and oob_ok, "a short out-of-bounds line marks the ball past the stakes, not back at the tee (%d)" % oob_n)
+
+
+func _test_open_signal(sim: Sim) -> void:
+	var closed_hole := _lay_flat(sim, 30, 120, 16, Defs.T.FAIRWAY)
+	closed_hole.open = false
+	var heard := {"n": 0}
+	var on_holes := func() -> void:
+		heard["n"] = int(heard["n"]) + 1
+	sim.course.holes_changed.connect(on_holes)
+	sim.course.set_open(closed_hole, true)
+	var fired: int = int(heard["n"])
+	sim.course.holes_changed.disconnect(on_holes)
+	check(closed_hole.open and fired == 1, "Open fires holes_changed through set_open")
+	var balls: int = int(sim.db.test_hole.get("balls", 0))
+	sim.lab.test_shots(closed_hole)
+	check(closed_hole.open and closed_hole.test_marks.size() == balls, "Test works on an open hole")
+
+
+func _classes_are(hole: Hole, n0: int, a: String, n1: int, b: String) -> bool:
+	if hole.test_marks.size() != n0 + n1:
+		return false
+	for i in hole.test_marks.size():
+		var mark: Dictionary = hole.test_marks[i]
+		var want := a
+		if i >= n0:
+			want = b
+		if str(mark.get("class", "")) != want:
+			return false
+	return true
+
+
+func _test_mark_classes() -> void:
+	var sim := _sim("sandbox", 28)
+	var book: Dictionary = sim.db.test_hole
+	var saved_balls: int = int(book.get("balls", 0))
+	var hole := _lay_flat(sim, 40, 40, 24, Defs.T.FAIRWAY)
+	sim.lab.test_shots(hole)
+	check(_classes_are(hole, 5, "all", 5, "average"), "ten balls are five all, then five average")
+	book["balls"] = 3
+	sim.lab.test_shots(hole)
+	check(_classes_are(hole, 2, "all", 1, "average"), "three balls are two all, then one average")
+	book["balls"] = saved_balls
+
+
+func _test_rng_kept() -> void:
+	var sim := _sim("sandbox", 29)
+	var hole := _lay_flat(sim, 40, 40, 24, Defs.T.FAIRWAY)
+	sim.rng.randf()
+	var before: int = sim.rng.state
+	sim.lab.test_shots(hole)
+	check(sim.rng.state == before, "Test leaves the game's random numbers where they were")
+
+
+func _test_clear_marks() -> void:
+	var sim := _sim("sandbox", 30)
+	var hole := _lay_flat(sim, 40, 40, 24, Defs.T.FAIRWAY)
+	sim.lab.test_shots(hole)
+	check(not hole.test_marks.is_empty(), "Dismiss has marks to clear")
+	var heard := {"n": 0}
+	var on_clear := func() -> void:
+		heard["n"] = int(heard["n"]) + 1
+	sim.course.holes_changed.connect(on_clear)
+	sim.lab.clear_test(hole)
+	var fired: int = int(heard["n"])
+	sim.course.holes_changed.disconnect(on_clear)
+	check(hole.test_marks.is_empty() and fired == 1, "Dismiss clears the marks and fires holes_changed")
+
+
+func _gold_spots(view: WorldView) -> int:
+	var n := 0
+	var gold := Color(1.0, 0.95, 0.55)
+	for child in view.get_children():
+		if not child is MultiMeshInstance3D:
+			continue
+		var node := child as MultiMeshInstance3D
+		var mat := node.material_override as StandardMaterial3D
+		if mat != null and mat.albedo_color.is_equal_approx(gold):
+			n += node.multimesh.instance_count
+	return n
+
+
+func _mark_disc_count(view: WorldView) -> int:
+	var n := 0
+	var clean := Color(0.78, 0.9, 0.98)
+	var warn := UIKit.WARN
+	for child in view.get_children():
+		if not child is MultiMeshInstance3D:
+			continue
+		var node := child as MultiMeshInstance3D
+		var mat := node.material_override as StandardMaterial3D
+		if mat == null:
+			continue
+		if mat.albedo_color.is_equal_approx(clean) or mat.albedo_color.is_equal_approx(warn):
+			n += node.multimesh.instance_count
+	return n
+
+
+func _test_draft_draw() -> void:
+	var sim := _sim("sandbox", 31)
+	var hole := _lay_flat(sim, 40, 40, 24, Defs.T.FAIRWAY)
+	hole.open = false
+	sim.lab.rate_now(hole)
+	check(hole.spots.size() == 8, "a draft still records the eight expert rests")
+	sim.lab.test_shots(hole)
+	var view := WorldView.new()
+	add_child(view)
+	var rig := CameraRig.new()
+	add_child(rig)
+	view.bind(sim, rig)
+	view._rebuild_holes()
+	var gold := _gold_spots(view)
+	var discs := _mark_disc_count(view)
+	check(gold == 0 and discs == hole.test_marks.size() * 2, "a draft hole shows only test marks, a landing and a rest for each ball")
+	remove_child(view)
+	view.free()
+	remove_child(rig)
+	rig.free()
+
+
+func _test_mark_rules() -> void:
+	print("-- ten test balls")
+	var sim := _sim("sandbox", 21)
+	_test_firm_marks(sim)
+	_test_water_marks(sim)
+	_test_oob_marks(sim)
+	_test_open_signal(sim)
+	_test_mark_classes()
+	_test_rng_kept()
+	_test_clear_marks()
+	_test_draft_draw()
+
+
 func _test_draft_hole() -> void:
 	print("-- draft holes")
 	var sim := _sim("three_holes", 4)
@@ -2992,16 +3316,7 @@ func _test_draft_hole() -> void:
 	tools._click_hole(bc.tile_center(30, 52))
 	check(bc.holes.size() == 1 and not bc.holes[0].open, "a hole laid out by hand starts closed")
 	tools.free()
-	var short: Hole = sim.course.holes[1]
-	short.open = false
-	sim.lab.rate_now(short)
-	var landed := false
-	for i in short.spots.size():
-		var p: Vector2 = short.spots[i]
-		if p.distance_to(Vector2(short.tee.x, short.tee.z)) > 20.0:
-			landed = true
-	check(short.lab_ready and short.spots.size() == 8 and landed, "Test Hole rates a draft and marks the eight expert tee shots")
-	short.open = true
+	_test_lab_untouched(sim)
 	var saved: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
 	var back := Sim.from_dict(db, saved, gear)
 	check(back.course.holes[0].open and back.course.holes[1].open, "a save remembers that the holes were opened")
@@ -3014,6 +3329,7 @@ func _test_draft_hole() -> void:
 	hd.erase("open")
 	var legacy := Sim.from_dict(db, saved, gear)
 	check(legacy.course.holes[0].open, "an old save, with no open flag, stays open to the public")
+	check(legacy.course.holes[0].test_marks.is_empty(), "an old save loads with no test marks")
 	for h in sim.course.holes:
 		h.open = false
 	var waiting := sim.visitors.groups.size()
@@ -3023,6 +3339,7 @@ func _test_draft_hole() -> void:
 	check(sim.rating == 0.0, "a course with nothing open is unrated")
 	var tutor := FileAccess.get_file_as_string("res://data/tutorial.json")
 	check(tutor.contains("starts closed") and tutor.contains("press Open"), "the tutorial tells you to open a hole before anyone pays")
+	_test_mark_rules()
 
 
 func _finish_timed(sim: Sim, hole_i: int, seconds: float) -> void:

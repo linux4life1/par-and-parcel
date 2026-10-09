@@ -680,7 +680,8 @@ func _heights_edited(cvx: int, cvy: int, r: int) -> void:
 	revision += 1
 	for hole in holes:
 		hole.snap_to_ground(self)
-	heights_changed.emit(Rect2i(cvx - r - 1, cvy - r - 1, r * 2 + 3, r * 2 + 3))
+	var rect := Rect2i(cvx - r - 1, cvy - r - 1, r * 2 + 3, r * 2 + 3)
+	heights_changed.emit(rect)
 
 
 # ------------------------------------------------------------------ holes
