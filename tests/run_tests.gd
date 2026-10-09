@@ -99,12 +99,45 @@ func _ready() -> void:
 
 
 
-func _drop_main(host: Main) -> void:
-	var nodes: Array[Node] = [host.terrain, host.grass, host.world, host.arrows, host.crowd, host.fx, host.rig, host.sky, host.volcano, host.tools, host.play, host.hud, host.desk, host.pad]
-	for n in nodes:
-		if n != null and is_instance_valid(n) and n.get_parent() == null:
-			n.free()
-	host.free()
+## Main.new() builds the views, and each view builds its camera, controls and
+## meshes, but only parents them in _ready. A test that never adds Main to the
+## tree has to free those nodes itself, or their render ids leak at exit.
+func _release(node: Node) -> void:
+	var pending: Array[Node] = [node]
+	var seen := {}
+	while pending.size() > 0:
+		var next: Variant = pending.pop_back()
+		if not is_instance_valid(next) or not next is Node:
+			continue
+		var n := next as Node
+		var id := n.get_instance_id()
+		if seen.has(id):
+			continue
+		seen[id] = true
+		var extra: Array[Node] = []
+		for prop in n.get_property_list():
+			var usage := int(prop.get("usage", 0))
+			if usage & PROPERTY_USAGE_SCRIPT_VARIABLE == 0:
+				continue
+			var key := String(prop.get("name", ""))
+			_collect_nodes(n.get(key), extra)
+		for e in extra:
+			if is_instance_valid(e) and e != n and not seen.has(e.get_instance_id()):
+				pending.append(e)
+		n.free()
+
+
+func _collect_nodes(v: Variant, into: Array[Node]) -> void:
+	if v is Node:
+		var n := v as Node
+		if is_instance_valid(n):
+			into.append(n)
+	elif v is Array:
+		for item in v as Array:
+			_collect_nodes(item, into)
+	elif v is Dictionary:
+		for item in (v as Dictionary).values():
+			_collect_nodes(item, into)
 
 
 func _demo_child(host: Main) -> DemoDriver:
@@ -215,11 +248,14 @@ func _test_demo_driver() -> void:
 	var cheer := DemoDriver.new()
 	cheer.tests(0.1)
 	check(heard.has("ovation"), "cheertest plays the gallery sound (%s)" % str(heard))
+	var drivers: Array[DemoDriver] = [lights, weeds, windy, dated, staff, zoomed, bursts, poses, rage, cheer]
+	for d in drivers:
+		d.free()
 	fx.free()
-	rig.free()
-	_drop_main(bare)
-	_drop_main(clocked)
-	_drop_main(shown)
+	_release(rig)
+	_release(bare)
+	_release(clocked)
+	_release(shown)
 	Game.args = saved_args
 	Game.sim = saved_sim
 
