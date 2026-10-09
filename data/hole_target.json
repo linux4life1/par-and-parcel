@@ -1,0 +1,7 @@
+{
+	"_about": "How hard a hole has played, from the shots golfers actually hit. trouble is which finishes count. The share is those shots over every real shot on that hole. low and high are the band a skilled golfer accepts: under low they say the hole is too easy, over high they say it is too penal. A share on either line stays quiet. skill is how good a golfer must be, from 0 to 1, before they say so. A hole with no shots yet has no share, and an older save loads that way.",
+	"low": 0.15,
+	"high": 0.45,
+	"skill": 0.75,
+	"trouble": ["bunker", "waste", "water", "oob", "deep_rough", "trees"]
+}

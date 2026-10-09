@@ -417,6 +417,8 @@ func _danger(sim: Sim, g: Golfer) -> int:
 func _resolve(sim: Sim, g: Golfer, hole: Hole) -> void:
 	var b := g.ball
 	var n := hole_i + 1
+	# Count the finish before a penalty drop moves the ball back into play.
+	sim.visitors.note_shot(g, hole, hole_i)
 	match b.state:
 		Ball.S.HOLED:
 			g.done = true

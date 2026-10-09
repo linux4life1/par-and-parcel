@@ -90,6 +90,7 @@ func _ready() -> void:
 	_test_rating()
 	_test_practice()
 	_test_practice_area()
+	_test_hole_target()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
 
@@ -8182,3 +8183,163 @@ func _test_shut_range() -> void:
 	check(not loaded.visitors.range_ready(), "it loads shut")
 	var again := loaded.visitors.practice_shut_reason(Defs.O.DRIVING_RANGE, 30, 44)
 	check(again == why, "and gives the same reason")
+
+
+func _said(g: Golfer, what: String) -> bool:
+	for thought in g.thoughts:
+		var row: Dictionary = thought
+		if str(row.get("text", "")).contains(what):
+			return true
+	return false
+
+
+func _target_golfer(sim: Sim, skill: float) -> Golfer:
+	var g := sim.visitors.make_golfer("public", 0.4)
+	g.persona = {}
+	g.skill = skill
+	g.thoughts.clear()
+	var party := Group.new()
+	party.kind = "public"
+	party.hole_i = 0
+	party.members.append(g)
+	g.group = party
+	return g
+
+
+func _rest_at(sim: Sim, g: Golfer, tx: int, ty: int, ground: int, ball_state: int) -> void:
+	var course := sim.course
+	course.guard = false
+	course.set_terrain(tx, ty, ground)
+	course.guard = true
+	var spot := course.tile_center(tx, ty)
+	g.ball.pos = course.on_ground(spot.x, spot.z)
+	g.ball.state = ball_state
+	g.ball.tree_tile = -1
+
+
+func _test_hole_target() -> void:
+	print("-- hole trouble share")
+	_test_target_record()
+	_test_target_voice()
+	_test_target_save()
+
+
+func _test_target_record() -> void:
+	var sim := _sim("sandbox", 41)
+	var book: Dictionary = sim.db.hole_target
+	var low := float(book.get("low", 0.0))
+	var high := float(book.get("high", 1.0))
+	var skill := float(book.get("skill", 1.0))
+	var listed: Array = book.get("trouble", [])
+	check(high > low and skill > 0.0 and skill < 1.0, "low, high and skill are a band in the data")
+	check(listed.has("bunker") and listed.has("waste") and listed.has("water") and listed.has("oob") and listed.has("deep_rough") and listed.has("trees"), "the data names the trouble finishes")
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	var g := _target_golfer(sim, 0.2)
+	_rest_at(sim, g, 40, 40, Defs.T.FAIRWAY, Ball.S.REST)
+	g.group._resolve(sim, g, hole)
+	check(hole != null and hole.shots_n == 1 and hole.trouble_n == 0, "a fairway shot counts, and it is not trouble")
+	_rest_at(sim, g, 41, 40, Defs.T.BUNKER, Ball.S.REST)
+	g.group._resolve(sim, g, hole)
+	check(hole.shots_n == 2 and hole.trouble_n == 1, "a bunker shot is trouble")
+	_rest_at(sim, g, 42, 40, Defs.T.FAIRWAY, Ball.S.WATER)
+	g.group._resolve(sim, g, hole)
+	check(hole.shots_n == 3 and hole.trouble_n == 2, "a ball in the water is trouble, counted where it went in")
+	_rest_at(sim, g, 43, 40, Defs.T.FAIRWAY, Ball.S.OOB)
+	g.group._resolve(sim, g, hole)
+	check(hole.shots_n == 4 and hole.trouble_n == 3, "out of bounds is trouble")
+	_rest_at(sim, g, 44, 40, Defs.T.DEEP_ROUGH, Ball.S.REST)
+	g.group._resolve(sim, g, hole)
+	check(hole.shots_n == 5 and hole.trouble_n == 4, "deep rough is trouble")
+	_rest_at(sim, g, 45, 40, Defs.T.WASTE, Ball.S.REST)
+	g.group._resolve(sim, g, hole)
+	check(hole.shots_n == 6 and hole.trouble_n == 5, "waste is trouble")
+	_rest_at(sim, g, 46, 40, Defs.T.FAIRWAY, Ball.S.REST)
+	sim.course.guard = false
+	var planted := sim.course.set_object(46, 40, Defs.O.OAK)
+	sim.course.guard = true
+	g.group._resolve(sim, g, hole)
+	check(planted and hole.shots_n == 7 and hole.trouble_n == 6, "a ball that stops in a tree is trouble")
+	var lab := _target_golfer(sim, 0.2)
+	lab.kind = "lab"
+	_rest_at(sim, lab, 41, 40, Defs.T.BUNKER, Ball.S.REST)
+	lab.group._resolve(sim, lab, hole)
+	check(hole.shots_n == 7 and hole.trouble_n == 6, "a lab shot is not real play and is not counted")
+	var saved: Array = listed.duplicate()
+	book["trouble"] = ["water"]
+	_rest_at(sim, g, 41, 40, Defs.T.BUNKER, Ball.S.REST)
+	g.group._resolve(sim, g, hole)
+	check(hole.shots_n == 8 and hole.trouble_n == 6, "a finish left out of the data is not trouble")
+	book["trouble"] = saved
+
+
+func _test_target_voice() -> void:
+	var sim := _sim("sandbox", 42)
+	var book: Dictionary = sim.db.hole_target
+	var saved_low := float(book.get("low", 0.0))
+	var saved_high := float(book.get("high", 1.0))
+	var saved_skill := float(book.get("skill", 1.0))
+	book["low"] = 0.2
+	book["high"] = 0.5
+	book["skill"] = 0.6
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	var g := _target_golfer(sim, 0.6)
+	sim.visitors._say_target(g, hole, 0)
+	check(hole != null and g.thoughts.is_empty(), "with no shots recorded, a skilled golfer says nothing")
+	hole.shots_n = 10
+	hole.trouble_n = 2
+	sim.visitors._say_target(g, hole, 0)
+	check(not _said(g, "too easy") and not _said(g, "too penal"), "a share on the low line is not too easy")
+	g.thoughts.clear()
+	hole.trouble_n = 1
+	sim.visitors._say_target(g, hole, 0)
+	check(_said(g, "Hole 1 is too easy.") and not _said(g, "too penal"), "under the low line, a skilled golfer says the hole is too easy")
+	g.thoughts.clear()
+	hole.trouble_n = 5
+	sim.visitors._say_target(g, hole, 0)
+	check(not _said(g, "too easy") and not _said(g, "too penal"), "a share on the high line is not too penal")
+	g.thoughts.clear()
+	hole.trouble_n = 6
+	sim.visitors._say_target(g, hole, 0)
+	check(_said(g, "Hole 1 is too penal.") and not _said(g, "too easy"), "over the high line, a skilled golfer says the hole is too penal")
+	g.thoughts.clear()
+	g.skill = 0.59
+	hole.trouble_n = 1
+	sim.visitors._say_target(g, hole, 0)
+	check(g.thoughts.is_empty(), "a golfer under the skill line says neither")
+	var played := _target_golfer(sim, 0.6)
+	hole.shots_n = 4
+	hole.trouble_n = 0
+	_rest_at(sim, played, 40, 40, Defs.T.FAIRWAY, Ball.S.REST)
+	played.group._resolve(sim, played, hole)
+	check(hole.shots_n == 5 and hole.trouble_n == 0 and _said(played, "Hole 1 is too easy."), "a real shot updates the share, and the skilled golfer says too easy")
+	var quiet := _target_golfer(sim, 0.59)
+	hole.shots_n = 4
+	hole.trouble_n = 0
+	_rest_at(sim, quiet, 40, 40, Defs.T.FAIRWAY, Ball.S.REST)
+	quiet.group._resolve(sim, quiet, hole)
+	check(hole.shots_n == 5 and not _said(quiet, "too easy") and not _said(quiet, "too penal"), "the same shot from a lesser golfer draws no such remark")
+	book["low"] = saved_low
+	book["high"] = saved_high
+	book["skill"] = saved_skill
+
+
+func _test_target_save() -> void:
+	var sim := _sim("sandbox", 43)
+	var hole := sim.add_hole(sim.course.tile_center(20, 20), sim.course.tile_center(20, 36))
+	hole.shots_n = 8
+	hole.trouble_n = 3
+	var raw: Dictionary = JSON.parse_string(JSON.stringify(sim.to_dict()))
+	var loaded := Sim.from_dict(db, raw, gear)
+	var back: Hole = loaded.course.holes[0]
+	check(hole != null and back.shots_n == 8 and back.trouble_n == 3, "a save keeps the shot count and the trouble count")
+	var course_d: Dictionary = raw.course
+	var rows: Array = course_d.holes
+	var row: Dictionary = rows[0]
+	row.erase("shots")
+	row.erase("trouble")
+	var old := Sim.from_dict(db, raw, gear)
+	var blank: Hole = old.course.holes[0]
+	check(blank.shots_n == 0 and blank.trouble_n == 0, "an old save, with no counts, loads as no data")
+	var g := _target_golfer(old, 0.99)
+	old.visitors._say_target(g, blank, 0)
+	check(g.thoughts.is_empty(), "no data is not a share of zero, so nobody calls the hole too easy")

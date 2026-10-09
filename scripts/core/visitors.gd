@@ -1252,6 +1252,71 @@ func on_holed(g: Golfer, hole: Hole, hole_i: int) -> void:
 
 
 ## Mood after a shot comes to rest, driven by what the ball is sitting in.
+## A real shot has stopped. Lab shots are not play. The finish is read
+## before any penalty drop, and a skilled golfer speaks if the hole's
+## trouble share sits outside the band in the data.
+func note_shot(g: Golfer, hole: Hole, hole_i: int) -> void:
+	if g.kind == "lab":
+		return
+	var finish := _shot_finish(g)
+	hole.shots_n += 1
+	if _finish_trouble(finish):
+		hole.trouble_n += 1
+	_say_target(g, hole, hole_i)
+
+
+## Where this shot ended, in the names the target data uses.
+func _shot_finish(g: Golfer) -> String:
+	var b := g.ball
+	var course := sim.course
+	if b.state == Ball.S.WATER:
+		return "water"
+	if b.state == Ball.S.OOB:
+		return "oob"
+	var ti := course.index_at(b.pos.x, b.pos.z)
+	if ti < 0 or course.locked[ti] != 0:
+		return "oob"
+	if Defs.is_tree(int(course.objects[ti])) or b.tree_tile == ti:
+		return "trees"
+	if b.state == Ball.S.HOLED or Defs.is_green(int(course.terrain[ti])):
+		return "green"
+	var ground: int = int(course.terrain[ti])
+	if Defs.is_fairway(ground):
+		return "fairway"
+	if ground == Defs.T.ROUGH:
+		return "rough"
+	if ground == Defs.T.DEEP_ROUGH:
+		return "deep_rough"
+	if ground == Defs.T.BUNKER:
+		return "bunker"
+	if ground == Defs.T.WASTE:
+		return "waste"
+	return "rough"
+
+
+func _finish_trouble(finish: String) -> bool:
+	var listed: Array = sim.db.hole_target.get("trouble", [])
+	return listed.has(finish)
+
+
+## Under low is too easy, over high is too penal. On either line, or with
+## no shots recorded, a golfer says nothing. Skill below the data stays quiet.
+func _say_target(g: Golfer, hole: Hole, hole_i: int) -> void:
+	if hole.shots_n <= 0:
+		return
+	var book: Dictionary = sim.db.hole_target
+	if g.skill < float(book.get("skill", 1.0)):
+		return
+	var share := float(hole.trouble_n) / float(hole.shots_n)
+	var low := float(book.get("low", 0.0))
+	var high := float(book.get("high", 1.0))
+	var n := hole_i + 1
+	if share < low:
+		g.feel(0.0, "Hole %d is too easy." % n, "target")
+	elif share > high:
+		g.feel(0.0, "Hole %d is too penal." % n, "target")
+
+
 func react_to_lie(g: Golfer, hole: Hole, hole_i: int) -> void:
 	var course := sim.course
 	var b := g.ball

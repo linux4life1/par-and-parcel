@@ -42,6 +42,11 @@ var line_sig := -1
 var earned := 0.0               # green fees golfers have paid for this hole
 var payers := 0                 # how many times a golfer has finished it and been asked
 var plays := 0
+## Real shots that have come to rest on this hole, and how many of them
+## finished in trouble. The share is trouble over shots. Both zero means
+## there is no share yet, which is also how an older save loads.
+var shots_n := 0
+var trouble_n := 0
 var strokes_total := 0
 var best := 0
 var tally := {}                 # score against par -> how many times: "-2", "-1", "0", "1", "2", "3" (3 is three over or worse)
@@ -963,6 +968,7 @@ func to_dict() -> Dictionary:
 		"pin_due": pin_due,
 		"par": par, "length": length,
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
+		"shots": shots_n, "trouble": trouble_n,
 		"tally": tally, "aces": aces,
 		"name": name, "award": award, "themes": themes, "gap": gap, "comments": comments, "open": open,
 		"play_times": play_times,
@@ -1043,6 +1049,8 @@ static func from_dict(d: Dictionary) -> Hole:
 	hole.earned = float(d.get("earned", 0.0))
 	hole.payers = int(d.get("payers", 0))
 	hole.plays = int(d.get("plays", 0))
+	hole.shots_n = int(d.get("shots", 0))
+	hole.trouble_n = int(d.get("trouble", 0))
 	hole.strokes_total = int(d.get("strokes", 0))
 	hole.best = int(d.get("best", 0))
 	hole.fun = float(d.get("fun", 60.0))
