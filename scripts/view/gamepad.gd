@@ -484,6 +484,14 @@ func _click(down: bool) -> void:
 
 
 ## Buttons and sliders that can be used right now, in reading order.
+func targets(under: Node) -> Array[Control]:
+	return _targets(under)
+
+
+func pointer_visible() -> bool:
+	return _dot.visible
+
+
 func _targets(under: Node) -> Array[Control]:
 	var found: Array[Control] = []
 	var stack: Array[Node] = [under]

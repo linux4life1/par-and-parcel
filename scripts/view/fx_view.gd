@@ -74,6 +74,10 @@ func _struck_at(pos: Vector3) -> Array:
 	return [pos, Vector3.ZERO]
 
 
+func burst(kind: String, at: Vector3, toward: Vector3 = Vector3.ZERO) -> void:
+	_burst(kind, at, toward)
+
+
 func _burst(kind: String, at: Vector3, toward: Vector3 = Vector3.ZERO) -> void:
 	var pool: Array = _pools[kind]
 	var i := int(_next.get(kind, 0))

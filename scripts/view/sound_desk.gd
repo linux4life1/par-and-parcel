@@ -78,6 +78,18 @@ static func _bus(bus_name: String) -> int:
 	return i
 
 
+func forget(id: String) -> void:
+	_last.erase(id)
+
+
+func deck_playing() -> bool:
+	return _decks[_live].playing
+
+
+func list_id() -> String:
+	return _list
+
+
 func _ready() -> void:
 	desk = self
 	process_mode = Node.PROCESS_MODE_ALWAYS       # music and clicks carry on while the game is paused

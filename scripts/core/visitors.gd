@@ -537,6 +537,10 @@ func _slow_check(g: Golfer) -> void:
 
 ## A golfer at the end of their rope. A senior marshal nearby will walk them
 ## off quietly; otherwise something gets thrown.
+func tantrum(g: Golfer) -> void:
+	_tantrum(g)
+
+
 func _tantrum(g: Golfer) -> void:
 	g.tantrum = true
 	for m in sim.crew.members:

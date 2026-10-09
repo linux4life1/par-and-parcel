@@ -41,6 +41,11 @@ var _gust_seeded := false
 const GUST_GAIN := 0.55    # a full gust blows this much harder than the steady wind
 
 
+## Keep the weather from rolling on, for a held screenshot.
+func hold_off(seconds: float) -> void:
+	_next_change = seconds
+
+
 func step(dt: float, sim: Sim) -> void:
 	var month := sim.month()
 	_next_change -= dt

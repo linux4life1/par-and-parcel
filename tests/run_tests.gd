@@ -92,8 +92,274 @@ func _ready() -> void:
 	_test_practice_area()
 	_test_hole_target()
 	_test_thoughts_here()
+	_test_demo_driver()
 	print("%d checks, %d failed" % [checks, failures])
 	get_tree().quit(1 if failures > 0 else 0)
+
+
+## Main.new() builds the views, and each view builds its camera, controls and
+## meshes, but only parents them in _ready. A test that never adds Main to the
+## tree has to free those nodes itself, or their render ids leak at exit.
+func _release(node: Node) -> void:
+	var pending: Array[Node] = [node]
+	var seen := {}
+	while pending.size() > 0:
+		var next: Variant = pending.pop_back()
+		if not is_instance_valid(next) or not next is Node:
+			continue
+		var n := next as Node
+		var id := n.get_instance_id()
+		if seen.has(id):
+			continue
+		seen[id] = true
+		var extra: Array[Node] = []
+		for prop in n.get_property_list():
+			var usage := int(prop.get("usage", 0))
+			if usage & PROPERTY_USAGE_SCRIPT_VARIABLE == 0:
+				continue
+			var key := String(prop.get("name", ""))
+			_collect_nodes(n.get(key), extra)
+		for e in extra:
+			if is_instance_valid(e) and e != n and not seen.has(e.get_instance_id()):
+				pending.append(e)
+		n.free()
+
+
+func _collect_nodes(v: Variant, into: Array[Node]) -> void:
+	var kind := typeof(v)
+	if kind == TYPE_OBJECT:
+		if not is_instance_valid(v):
+			return
+		if v is Node:
+			into.append(v as Node)
+		return
+	if kind == TYPE_ARRAY:
+		for item in v as Array:
+			_collect_nodes(item, into)
+	elif kind == TYPE_DICTIONARY:
+		for item in (v as Dictionary).values():
+			_collect_nodes(item, into)
+
+
+func _demo_child(host: Main) -> DemoDriver:
+	for c in host.get_children():
+		if c is DemoDriver:
+			return c as DemoDriver
+	return null
+
+
+func _test_demo_driver() -> void:
+	print("-- the demo driver")
+	var saved_args: Dictionary = Game.args.duplicate()
+	var saved_sim := Game.sim
+	var saved_speed := Game.speed
+	var saved_paused := Game.paused
+	var src := FileAccess.get_file_as_string("res://scripts/view/main.gd")
+	var i0 := src.find("func _process")
+	var i1 := src.find("\nfunc ", i0 + 12)
+	var body := src.substr(i0, i1 - i0)
+	check(i0 >= 0 and not body.contains("fxtest") and not body.contains("posetest") and not body.contains("ragetest") and not body.contains("cheertest") and not body.contains("Game.args"), "with no driver, a frame of main reads no test switch")
+	Game.args = {}
+	var bare := Main.new()
+	bare._attach_driver()
+	check(_demo_child(bare) == null and bare.driver == null, "with no args, main has no DemoDriver child")
+	Game.args = {"clock": "15"}
+	var clocked := Main.new()
+	clocked._attach_driver()
+	check(_demo_child(clocked) == null, "a switch main still handles does not add the driver")
+	Game.args = {"demo": "paint"}
+	var shown := Main.new()
+	shown._attach_driver()
+	check(_demo_child(shown) != null and shown.driver.demo_name() == "paint", "a demo arg adds the driver and keeps the demo")
+	var sim := _sim("three_holes", 4)
+	Game.sim = sim
+	Game.args = {"lights": "1"}
+	var lights := DemoDriver.new()
+	var lamps := 0
+	for o in sim.course.objects:
+		if o == Defs.O.FLOODLIGHT:
+			lamps += 1
+	lights.apply()
+	var lamps_after := 0
+	for o in sim.course.objects:
+		if o == Defs.O.FLOODLIGHT:
+			lamps_after += 1
+	check(lamps_after > lamps, "lights floods the first hole (%d lamps)" % lamps_after)
+	Game.args = {"weeds": "all"}
+	var weeds := DemoDriver.new()
+	weeds.apply()
+	var lo := 1.0
+	var hi := 0.0
+	for i in sim.grounds.play_tiles:
+		lo = minf(lo, sim.course.weeds[i])
+		hi = maxf(hi, sim.course.weeds[i])
+	check(hi > lo + 0.5, "weeds lays a gradient across the course (%.2f to %.2f)" % [lo, hi])
+	Game.args = {"wind": "10"}
+	var windy := DemoDriver.new()
+	windy.apply()
+	check(is_equal_approx(sim.weather.wind_speed, 10.0 / 2.237), "wind holds the steady wind (%.2f m/s)" % sim.weather.wind_speed)
+	Game.args = {"day": "10"}
+	var dated := DemoDriver.new()
+	dated.apply()
+	check(is_equal_approx(sim.time, 10.0 * Defs.DAY_SECONDS), "day jumps the calendar")
+	var hired := sim.crew.members.size()
+	Game.args = {"staff": "2"}
+	var staff := DemoDriver.new()
+	staff.apply()
+	check(sim.crew.members.size() == hired + 4, "staff hires the greenkeepers, the exterminator and the marshal (%d)" % sim.crew.members.size())
+	var rig := CameraRig.new()
+	Game.args = {"zoom": "55"}
+	var zoomed := DemoDriver.new()
+	zoomed.rig = rig
+	zoomed.apply()
+	check(is_equal_approx(rig.target_dist, 55.0) and is_equal_approx(rig.dist, 55.0), "zoom sets the camera")
+	var fx := FxView.new()
+	add_child(fx)
+	fx.rig = rig
+	rig.dist = 40.0
+	Game.args = {"fxtest": "sand"}
+	var bursts := DemoDriver.new()
+	bursts.fx = fx
+	bursts.rig = rig
+	bursts.tests(0.2)
+	var puffs := 0
+	for c in fx.get_children():
+		if c is GPUParticles3D and (c as GPUParticles3D).emitting:
+			puffs += 1
+	check(puffs > 0, "fxtest fires the burst (%d)" % puffs)
+	var party := sim.visitors.add_group("public", 2, 0.5)
+	for g in party.members:
+		g.phase = Golfer.P.AIM
+		g.walking = false
+		g.swing_t = -1.0
+		g.hit_t = 0.0
+	Game.args = {"posetest": "1"}
+	var poses := DemoDriver.new()
+	poses.rig = rig
+	poses.tests(0.1)
+	check(party.members[0].sulk_t == 1.0 and party.members[1].cheer_t == 1.0, "posetest hangs a head and pumps a fist")
+	Game.args = {"ragetest": "toss"}
+	var rage := DemoDriver.new()
+	rage.rig = rig
+	var victim := party.members[0]
+	rage.tests(0.1)
+	check(victim.tantrum, "ragetest sends the golfer into a tantrum")
+	sim.tourney.gallery_hole = 0
+	var heard: Array[String] = []
+	sim.sound.connect(func(id: String, _at: Vector3, _power: float) -> void: heard.append(id))
+	Game.args = {"cheertest": "ovation"}
+	var cheer := DemoDriver.new()
+	cheer.tests(0.1)
+	check(heard.has("ovation"), "cheertest plays the gallery sound (%s)" % str(heard))
+	var drivers: Array[DemoDriver] = [lights, weeds, windy, dated, staff, zoomed, bursts, poses, rage, cheer]
+	for d in drivers:
+		d.free()
+	fx.free()
+	_release(rig)
+	_release(bare)
+	_release(clocked)
+	_release(shown)
+	_demo_switch_list()
+	_demo_groups(sim)
+	Game.args = saved_args
+	Game.sim = saved_sim
+	Game.speed = saved_speed
+	Game.paused = saved_paused
+
+
+## Every switch demo_driver.gd reads is either a reason to add the driver
+## or one of the modifiers that only changes a switch already present.
+func _demo_switch_list() -> void:
+	var src := FileAccess.get_file_as_string("res://scripts/view/demo_driver.gd")
+	var mods: Array[String] = ["crop", "frames", "perf", "tourney_in"]
+	var found := {}
+	var calls := RegEx.new()
+	calls.compile("(Game\\.args|\\ba)\\.(has|get)\\(\"([a-z0-9_]+)\"\\)")
+	for m in calls.search_all(src):
+		found[m.get_string(3)] = true
+	var dots := RegEx.new()
+	dots.compile("Game\\.args\\.([a-z_][a-z0-9_]*)")
+	for m in dots.search_all(src):
+		var dotted := m.get_string(1)
+		if dotted != "has" and dotted != "get":
+			found[dotted] = true
+	var stray := ""
+	for key in found:
+		var name := str(key)
+		if not DemoDriver.ARGS.has(name) and not mods.has(name):
+			stray += name + " "
+	check(stray == "", "every demo switch is in ARGS or the modifier list (%s)" % stray)
+	var blind := ""
+	for key in DemoDriver.ARGS:
+		var one := {}
+		one[key] = "1"
+		if not DemoDriver.wanted(one):
+			blind += key + " "
+	check(blind == "", "wanted() is true for every switch in ARGS (%s)" % blind)
+
+
+## One headless check for each switch group apply() still owns.
+func _demo_groups(sim: Sim) -> void:
+	print("-- demo switches")
+	var rig := CameraRig.new()
+	var world := WorldView.new()
+	var play := PlayMode.new()
+	var hud := Hud.new()
+	add_child(hud)
+	hud.bind(sim)
+	var shot := _switch({"shot": "out.png", "frames": "12"}, rig, hud, world, play)
+	check(shot._shot_frames == 12 and not Game.paused, "a screenshot counts down the frames it was given (%d)" % shot._shot_frames)
+	shot.free()
+	var aimed := _switch({"yaw": "270", "pitch": "18"}, rig, hud, world, play)
+	check(is_equal_approx(rig.yaw, deg_to_rad(270.0)) and is_equal_approx(rig.pitch_override, deg_to_rad(18.0)), "yaw and pitch aim the camera")
+	aimed.free()
+	var docked := _switch({"panel": "holes"}, rig, hud, world, play)
+	check(hud.dock_name == "holes" and hud.dock.visible, "panel opens that dock")
+	docked.free()
+	var hidden := _switch({"notrees": "1"}, rig, hud, world, play)
+	check(not world._obj_root.visible, "notrees hides the object root")
+	hidden.free()
+	var volc := Sim.new(db, DataDB.find(db.scenarios, "sandbox"), 2, gear, "volcanic")
+	volc.clock = 12.0
+	volc.clock_rate = 0.0
+	volc.stories.enabled = false
+	Game.sim = volc
+	var vrig := CameraRig.new()
+	var erupted := _switch({"volcano": "80", "erupt": "9", "weather": "4", "wind": "8", "winddir": "90", "speed": "4"}, vrig, hud, world, play)
+	check(not volc.course.volcanoes.is_empty() and is_equal_approx(vrig.dist, 80.0) and is_equal_approx(vrig.yaw, PI * 0.75) and volc.eruption.state == Eruption.S.RUMBLING and volc.weather.kind == Weather.K.STORM and is_equal_approx(volc.weather.wind_dir, deg_to_rad(90.0)) and Game.speed == 4, "a volcano is framed, the eruption starts, and the weather, wind and speed are held")
+	erupted.free()
+	_release(vrig)
+	Game.sim = sim
+	var hosted := _sim("three_holes", 4)
+	hosted.rating = 80.0
+	Game.sim = hosted
+	var hrig := CameraRig.new()
+	var tour := _switch({"tourney": "club", "tourney_in": "1", "crowd": "40"}, hrig, hud, world, play)
+	check(not hosted.tourney.active.is_empty() and hosted.tourney.size_override == 40, "tourney starts an event (%d spectators)" % hosted.tourney.gallery.size())
+	tour.free()
+	_release(hrig)
+	Game.sim = sim
+	var round := _switch({"play": "0"}, rig, hud, world, play)
+	check(sim.playing_round and play.active(), "play starts a round")
+	round.free()
+	var told := _switch({"stories": "1"}, rig, hud, world, play)
+	check(hud.dock_name == "feed" and hud.panels.feed_tab == "stories", "stories opens the feed on its stories tab")
+	told.free()
+	_release(rig)
+	_release(world)
+	_release(play)
+	_release(hud)
+
+
+func _switch(args: Dictionary, rig: CameraRig, hud: Hud, world: WorldView, play: PlayMode) -> DemoDriver:
+	Game.args = args
+	var d := DemoDriver.new()
+	d.rig = rig
+	d.hud = hud
+	d.world = world
+	d.play = play
+	d.apply()
+	return d
 
 
 ## A game for testing. The clock is stopped at noon so that tests about

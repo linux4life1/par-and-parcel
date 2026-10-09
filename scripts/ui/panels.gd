@@ -95,6 +95,10 @@ var _shop_cat := "woods"
 var feed_tab := "posts"         # the Feed panel shows posts or the long stories
 
 
+func choose_skill(id: String) -> void:
+	_skill_pick = id
+
+
 func _init(h: Hud) -> void:
 	hud = h
 

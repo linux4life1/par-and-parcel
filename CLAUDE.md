@@ -22,8 +22,8 @@ tools/stamp_version.sh 1.2.0                  # version into project and presets
 godot --path .  # play
 ```
 
-`shot.sh` switches are listed above `_apply_test_args` in
-`scripts/view/main.gd`. Screenshots are taken at 3 PM unless `--clock=hours`
+`shot.sh` switches are listed above `apply` in
+`scripts/view/demo_driver.gd`. Screenshots are taken at 3 PM unless `--clock=hours`
 says otherwise; `--lights=N` floodlights the first N holes.
 `--demo=paint|hole|play|panels|start|saveload|biomes|camera|sound|gamepad`
 (most want `--scenario=three_holes`, which has a course to work on)

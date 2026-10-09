@@ -87,6 +87,11 @@ const OVERLAY_TIPS: Array[String] = [
 ]
 
 
+## The toolbar button for a panel id.
+func tool_button(id: String) -> Button:
+	return _tool_buttons[id] as Button
+
+
 func _ready() -> void:
 	layer = 5
 	root.set_anchors_preset(Control.PRESET_FULL_RECT)
