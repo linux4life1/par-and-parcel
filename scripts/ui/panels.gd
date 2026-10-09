@@ -16,6 +16,16 @@ const OBJECT_TIPS := {
 	Defs.O.BAR: "Drinkers tip well and forgive a lot, but they play slowly, spray the ball and lose their tempers faster. A gamble, and the house takes $14 a round.",
 }
 
+## What the Finances panel says under a closed month when golfers gave up
+## on a full range. Empty when nobody did.
+static func range_skip_line(n: int) -> String:
+	if n <= 0:
+		return ""
+	if n == 1:
+		return "1 golfer skipped a full range"
+	return "%d golfers skipped a full range" % n
+
+
 var hud: Hud
 var _skill_branch := "manager"
 var _skill_pick := ""
@@ -120,7 +130,7 @@ func _build(body: VBoxContainer) -> Callable:
 		["Lighting", [Defs.O.FLOODLIGHT, Defs.O.LAMP],
 			"Golfers play on after dark, but on an unlit hole they see poorly, enjoy it less and pay less, and few new golfers turn up at night. Light a hole from tee to green and it plays as well as by day. A floodlight lights a wide circle, shown as you place it. Lamp posts light paths and odd corners. Holes shows how much of each hole is lit."],
 		["Club facilities", [Defs.O.PUTTING_GREEN, Defs.O.DRIVING_RANGE, Defs.O.CART_BARN, Defs.O.HOME_SITE],
-			"A putting green is a green with no hole, and visitors putt there for free. A driving range has bays. The short grass in front of them is drawn on the range's own tile and claims no ground, and a bucket is a small fee. A member who plays keeps a little of either, so regulars get longer and better on the greens the more they come. A cart barn rents carts that fly along cart paths. Home sites are lots that Silver members and above will buy: they are worth more with a view and less in the line of fire."],
+			"A putting green is green beside the building that is not part of a hole, and visitors putt there for free before their first tee. A driving range opens when the fairway painted in front of it, running toward -y, is long enough; a hole's route or an object stops that stretch. A bucket is a small fee, and a golfer who finds the bays full waits before skipping. A member who plays keeps a little of either, so regulars get longer and better on the greens the more they come. A cart barn rents carts that fly along cart paths. Home sites are lots that Silver members and above will buy: they are worth more with a view and less in the line of fire."],
 		["Resort", [Defs.O.TENNIS, Defs.O.MARINA, Defs.O.HOTEL, Defs.O.AIRSTRIP],
 			"Big investments that lift the whole club. Tennis courts put every arrival in a good mood. A marina raises home values and draws celebrities. A hotel brings more golfers and keeps them fresh. An airstrip brings the kind who pay more for every hole."],
 	]
@@ -1057,6 +1067,9 @@ func _money(body: VBoxContainer) -> Callable:
 			var r: Dictionary = e.history[i]
 			var net := float(r.net)
 			hist.add_child(UIKit.row(str(r.label), Defs.money(net), UIKit.GOOD if net >= 0.0 else UIKit.BAD))
+			var skipped := range_skip_line(int(r.get("range_skips", 0)))
+			if skipped != "":
+				hist.add_child(UIKit.label(skipped, 13, UIKit.MUTED))
 
 
 # ------------------------------------------------------------- tournaments

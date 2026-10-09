@@ -707,7 +707,7 @@ static func _built(kind: String) -> Array:
 			for k in 3:
 				parts.append([_box(1.5, 0.06, 1.7), Vector3(-2.7 + k * 2.7, 0.23, 0.7), Surfaces.material("grass_ground", 0.6, Color(1.0, 2.2, 1.1))])
 				parts.append([_cyl(0.3, 0.26, 0.4, 10), Vector3(-3.4 + k * 2.7, 0.4, 1.8), paint(Color(0.2, 0.45, 0.25), 0.5)])
-			# Drawn on this object's own tile. It claims no ground.
+			# Decoration on this tile only. The field is painted fairway running toward -y.
 			var lawn := Surfaces.material("grass_ground", 0.4, Color(1.2, 2.55, 1.15))
 			parts.append([_box(4.4, 0.08, 1.6), Vector3(0, 0.04, -1.55), lawn])
 			parts.append([_cyl(0.28, 0.28, 0.03, 12), Vector3(-0.7, 0.09, -1.15), paint(Color(0.95, 0.95, 0.92))])

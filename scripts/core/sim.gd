@@ -437,6 +437,9 @@ func _end_month(d: int) -> void:
 	var label := "%s, Year %d" % [Defs.MONTH_NAMES[prev.month], prev.year]
 	var net := economy.net()
 	economy.close_month(label, rating, visitors.average_satisfaction() if not visitors.recent.is_empty() else -1.0)
+	if not economy.history.is_empty():
+		economy.history[economy.history.size() - 1]["range_skips"] = visitors.range_skips
+	visitors.range_skips = 0
 	toast.emit("%s closed: %s%s." % [Defs.MONTH_NAMES[prev.month], "profit of " if net >= 0.0 else "loss of ", Defs.money(absf(net))], "good" if net >= 0.0 else "bad")
 	month_ended.emit(label)
 
@@ -1827,7 +1830,7 @@ func to_dict() -> Dictionary:
 		"members": members.to_list(), "clubhouse": clubhouse_level, "homes": homes, "gifts": gifts,
 		"feats": feats.done, "rivals": rivals, "best_rank": best_rank, "land_credits": land_credits, "debt_years": debt_years,
 		"difficulty": difficulty, "rng_seed": str(rng.seed), "rng_state": str(rng.state),
-		"album": album,
+		"album": album, "range_skips": visitors.range_skips,
 	}
 	d["stories"] = stories.to_dict()
 	if undo != null:
@@ -1864,6 +1867,7 @@ static func from_dict(data: DataDB, d: Dictionary, shared_gear: Gear = null) -> 
 	sim.debt_years = int(d.get("debt_years", 0))
 	sim.course_name = str(d.get("name", sim.course_name))
 	sim.time = float(d.get("time", 0.0))
+	sim.visitors.range_skips = int(d.get("range_skips", 0))
 	sim.clock = float(d.get("clock", 8.0))
 	sim._day = sim.day()
 	sim.economy.money = float(d.get("money", 0.0))
