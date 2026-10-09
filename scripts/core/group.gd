@@ -20,6 +20,12 @@ var has_cart := false      # rented a golf cart: quick on cart paths, easy on th
 var stop := {}             # a facility to visit on the way to the next tee
 var story := {}            # what brought these people out together
 var hole_time := 0.0       # sim seconds on the current hole, waiting included
+var warm_set := false      # the first tee of the round has started its warm-up
+var warm_left := 0.0       # sim seconds of that warm-up still to stand
+var waiting_bay := false   # the range is open and this party still wants a bay
+var bay_left := 0.0        # sim seconds they will wait for one
+var bay_need := 0          # members still without a bay
+var bay_timed := false     # the bucket's minutes are already on the warm-up
 
 const LINE_FIRST := 8.0    # metres behind the tee where the next party waits
 const LINE_GAP := 6.0      # and between parties further back
@@ -92,6 +98,17 @@ func _to_tee(dt: float, sim: Sim) -> void:
 					sim.visitors.serve(self, str(stop.kind))
 				stop = {}
 		return
+	# Warm up on the first tee of this round, whichever hole that is. A full
+	# range keeps them in the line until a bay frees or they give it up, and
+	# the pace clock is already running once they have joined.
+	if not warm_set:
+		warm_set = true
+		sim.visitors.begin_warmup(self)
+	if waiting_bay or warm_left > 0.0:
+		hole.line_index(self, hole_i)
+		sim.visitors.tick_warmup(self, dt)
+		if waiting_bay or warm_left > 0.0:
+			return
 	# Join the line for the tee and walk to our place in it. The party at
 	# the front walks straight on to the tee when it is free.
 	var k := hole.line_index(self, hole_i)

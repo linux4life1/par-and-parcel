@@ -1,10 +1,17 @@
 {
-	"_about": "The practice green and the driving range. green_cost and range_cost are what they cost to build, and green_upkeep and range_upkeep are the monthly bills. A visitor who putts on the practice green pays nothing; green_mood is how much satisfaction rises, before personality and the difficulty slider. A bucket on the range costs bucket, charged once on arrival and booked as range income, and range_mood is the satisfaction rise. The short grass in front of the bays is drawn on the range's own tile and claims no ground.",
+	"_about": "The practice green and the driving range. green_cost and range_cost are what they cost to build, and green_upkeep and range_upkeep are the monthly bills. A visitor who putts on the practice green pays nothing; green_mood is how much satisfaction rises, before personality and the difficulty slider. A bucket on the range costs bucket, charged when a bay is claimed and booked as range income, and range_mood is the satisfaction rise. The field is fairway painted from the bays toward -y. field_min is how many metres of that short grass must be clear before the range opens: a tile on a hole's route, or with an object on it, stops the measure. bays is how many golfers can hit at once, for bucket_minutes each. A golfer who finds every bay taken waits up to bay_wait minutes, and that wait is part of the warm-up the first tee of the round sees. skip_mood is the satisfaction change if the wait runs out with no bay. The practice green is green tiles joined to the building that are not part of any hole's green, measured from the design pin. green_min is how many those tiles must be, and green_minutes is the putt before that first tee.",
 	"green_cost": 900,
 	"green_upkeep": 30,
 	"green_mood": 1.5,
 	"range_cost": 2000,
 	"range_upkeep": 70,
 	"range_mood": 1.5,
-	"bucket": 4.0
+	"bucket": 4.0,
+	"bays": 4,
+	"bucket_minutes": 8,
+	"green_minutes": 6,
+	"field_min": 40,
+	"skip_mood": -2,
+	"green_min": 4,
+	"bay_wait": 12
 }
