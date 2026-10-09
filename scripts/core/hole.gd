@@ -37,6 +37,10 @@ var open := true
 ## Where the expert test golfers' tee shots came to rest, the last time the
 ## hole was rated. Only drawn while the hole is still a draft.
 var spots := PackedVector2Array()
+## The Test button's balls: where each first landed, where it stopped, and
+## what it finished in. Not saved. Cleared when the ground under the hole
+## changes, or when the marks are dismissed.
+var test_marks: Array[Dictionary] = []
 ## Fingerprint of the ground the line was measured on. -1 until then.
 var line_sig := -1
 var earned := 0.0               # green fees golfers have paid for this hole

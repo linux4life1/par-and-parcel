@@ -416,6 +416,7 @@ func paint(cx: int, cy: int, radius: int, t: int) -> int:
 	if n > 0:
 		var rect := Rect2i(cx - radius - 1, cy - radius - 1, radius * 2 + 3, radius * 2 + 3)
 		tiles_changed.emit(rect)
+		_drop_test_marks(rect)
 		if t == Defs.T.WATER:
 			heights_changed.emit(rect)
 			for hole in holes:
@@ -680,7 +681,34 @@ func _heights_edited(cvx: int, cvy: int, r: int) -> void:
 	revision += 1
 	for hole in holes:
 		hole.snap_to_ground(self)
-	heights_changed.emit(Rect2i(cvx - r - 1, cvy - r - 1, r * 2 + 3, r * 2 + 3))
+	var rect := Rect2i(cvx - r - 1, cvy - r - 1, r * 2 + 3, r * 2 + 3)
+	heights_changed.emit(rect)
+	_drop_test_marks(rect)
+
+
+## Painting or sculpting under a hole clears its test marks. The box is the
+## same ground the lab signature covers, from the tee to the design pin.
+func _drop_test_marks(rect: Rect2i) -> void:
+	var dropped := false
+	for hole in holes:
+		if hole.test_marks.is_empty():
+			continue
+		if _mark_box(hole).intersects(rect):
+			hole.test_marks.clear()
+			dropped = true
+	if dropped:
+		holes_changed.emit()
+
+
+func _mark_box(hole: Hole) -> Rect2i:
+	var end := hole.design_pin()
+	var a := tile_of(hole.tee.x, hole.tee.z)
+	var b := tile_of(end.x, end.z)
+	var x0: int = mini(a.x, b.x) - 9
+	var y0: int = mini(a.y, b.y) - 9
+	var x1: int = maxi(a.x, b.x) + 9
+	var y1: int = maxi(a.y, b.y) + 9
+	return Rect2i(x0, y0, x1 - x0 + 1, y1 - y0 + 1)
 
 
 # ------------------------------------------------------------------ holes

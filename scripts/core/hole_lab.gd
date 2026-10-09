@@ -221,3 +221,123 @@ func _finish() -> void:
 	hole.lab_ready = true
 	_job = {}
 	rated.emit(hole)
+
+
+## Hit the Test button's balls from the back tee and mark each one. This is
+## not a rating: the hole's type, expected scores and expert spots stay as
+## they were. The same ground, via the lab signature, always draws the same
+## marks. The game's own random numbers are put back afterwards.
+func test_shots(hole: Hole) -> void:
+	if not sim.course.holes.has(hole):
+		return
+	var book: Dictionary = sim.db.test_hole
+	var balls: int = int(book.get("balls", 0))
+	var labels: Array = book.get("classes", [])
+	var saved_seed := sim.rng.seed
+	var saved_state := sim.rng.state
+	var sig := _signature(hole)
+	var seed_n := sig
+	if seed_n == 0:
+		seed_n = 1
+	sim.rng.seed = seed_n
+	var marks: Array[Dictionary] = []
+	var n_cls := labels.size()
+	if n_cls > 0 and balls > 0:
+		var base: int = int(balls / n_cls)
+		var extra: int = balls % n_cls
+		for ci in n_cls:
+			var count := base
+			if ci < extra:
+				count += 1
+			var row := _class_named(str(labels[ci]))
+			for shot_i in count:
+				marks.append(_one_test_shot(hole, row))
+	sim.rng.seed = saved_seed
+	sim.rng.state = saved_state
+	hole.test_marks = marks
+	sim.course.holes_changed.emit()
+
+
+func _class_named(label: String) -> Array:
+	for row in CLASSES:
+		var item: Array = row
+		if str(item[0]) == label:
+			return item
+	var first: Array = CLASSES[0]
+	return first
+
+
+## One tee shot, recorded where it first landed and where it stopped, before
+## any drop or a return to the tee. Water and out of bounds keep the point
+## where the ball went in or crossed.
+func _one_test_shot(hole: Hole, row: Array) -> Dictionary:
+	var g := _test_golfer(row)
+	g.begin_hole()
+	g.ball.place(sim.course.on_ground(hole.tee.x, hole.tee.z))
+	ShotAI.calm = true
+	g.plan = ShotAI.plan(sim, g, hole)
+	ShotAI.strike(sim, g)
+	ShotAI.calm = false
+	var b := g.ball
+	b.air_seed = -1.0
+	var n := 0
+	while b.moving() and n < 2400:
+		b.step(1.0 / 60.0, sim.course, Vector3.ZERO, hole.design_pin(), true)
+		n += 1
+	return {
+		"land": Vector2(b.carry.x, b.carry.z),
+		"rest": Vector2(b.pos.x, b.pos.z),
+		"outcome": _test_outcome(b),
+	}
+
+
+## What the ball finished in. A clip through a tree that stops on the
+## fairway is fairway. Ground the card has no name for is called rough, so
+## the summary still has a word, and it is not trouble unless listed.
+func _test_outcome(b: Ball) -> String:
+	var course := sim.course
+	if b.state == Ball.S.WATER:
+		return "water"
+	if b.state == Ball.S.OOB:
+		return "oob"
+	var ti := course.index_at(b.pos.x, b.pos.z)
+	if ti < 0 or course.locked[ti] != 0:
+		return "oob"
+	if Defs.is_tree(int(course.objects[ti])) or b.tree_tile == ti:
+		return "trees"
+	if b.state == Ball.S.HOLED or Defs.is_green(int(course.terrain[ti])):
+		return "green"
+	var ground: int = int(course.terrain[ti])
+	if Defs.is_fairway(ground):
+		return "fairway"
+	if ground == Defs.T.ROUGH:
+		return "rough"
+	if ground == Defs.T.DEEP_ROUGH:
+		return "deep_rough"
+	if ground == Defs.T.BUNKER:
+		return "bunker"
+	if ground == Defs.T.WASTE:
+		return "waste"
+	return "rough"
+
+
+## The hole card's line. Counts follow a fixed order and skip zeroes.
+## Trouble is how many balls finished in the data's trouble list.
+static func test_summary(hole: Hole, book: Dictionary) -> String:
+	if hole.test_marks.is_empty():
+		return ""
+	var order: Array[String] = ["fairway", "green", "rough", "deep_rough", "bunker", "waste", "water", "oob", "trees"]
+	var counts := {}
+	var trouble_n := 0
+	var trouble: Array = book.get("trouble", [])
+	for mark in hole.test_marks:
+		var outcome := str(mark.get("outcome", ""))
+		counts[outcome] = int(counts.get(outcome, 0)) + 1
+		if trouble.has(outcome):
+			trouble_n += 1
+	var parts: PackedStringArray = PackedStringArray()
+	for name in order:
+		var c: int = int(counts.get(name, 0))
+		if c > 0:
+			parts.append("%d %s" % [c, name.replace("_", " ")])
+	return "%d test balls: %s. %d found trouble." % [hole.test_marks.size(), ", ".join(parts), trouble_n]
