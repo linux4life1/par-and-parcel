@@ -301,6 +301,7 @@ func _new_character(spec: Dictionary) -> Dictionary:
 	sim.tag_eddy(g)
 	g.kind = "public"
 	g.course = sim.course
+	g.sim = sim
 	g.roll_stats(float(spec.get("skill", 0.4)), rng, sim.members.progress)
 	g.wealth = float(spec.get("wealth", g.wealth))
 	var first := sim.db.pick("first", rng)

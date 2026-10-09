@@ -233,6 +233,7 @@ func make_golfer(kind: String, base_skill: float) -> Golfer:
 	sim.tag_eddy(g)
 	g.kind = kind
 	g.course = sim.course
+	g.sim = sim
 	g.ball.lava = sim.is_lava()
 	g.roll_stats(base_skill, rng, sim.members.progress)
 	var first := sim.db.pick("pro_first" if kind == "pro" else "first", rng)

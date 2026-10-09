@@ -56,6 +56,7 @@ var pace := 0.5
 var satisfaction := 60.0
 var thoughts: Array[Dictionary] = []
 var course: Course = null      # set when the golfer joins a game, so a feeling can mark the ground
+var sim: Sim = null             # the same game, so a remark can be kept on the hole
 var gripes := {}                # tag -> summed mood change, for reviews
 var pos := Vector3.ZERO
 var prev := Vector3.ZERO
@@ -273,9 +274,27 @@ func feel(delta: float, text: String = "", tag: String = "") -> void:
 	thoughts.append({"text": text, "delta": delta, "pos": pos, "hole": hole_i})
 	if thoughts.size() > 12:
 		thoughts.pop_front()
+	_note_here(text)
 	bubble = text
 	bubble_t = 3.5
 	bubble_mood = 1 if delta > 0.0 else (-1 if delta < 0.0 else 0)
+
+
+## A public remark on the hole this golfer is playing. Lab remarks and the
+## owner's play-mode remarks are left out. The hole keeps the words, the
+## name, the day and the tile.
+func _note_here(text: String) -> void:
+	if kind == "lab" or kind == "player":
+		return
+	if sim == null or course == null or group == null:
+		return
+	var hi := group.hole_i
+	if hi < 0 or hi >= course.holes.size():
+		return
+	if course.index_at(pos.x, pos.z) < 0:
+		return
+	var keep := int(sim.db.thoughts_here.get("keep", 1))
+	course.holes[hi].note_thought(text, name, sim.day(), course.tile_of(pos.x, pos.z), keep)
 
 
 func top_tag(positive: bool) -> String:

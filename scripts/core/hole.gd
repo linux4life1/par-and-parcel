@@ -58,6 +58,10 @@ var aces := 0
 var fun := 60.0                 # running golfer opinion of this hole, 0..100
 var name := ""
 var comments := {}              # mood tag -> summed effect on golfers here
+## Remarks made on this hole, newest last. Each is the words, the golfer's
+## name, the day, and the tile they stood on. Empty is how an older save
+## loads. A longer list is cut to keep in the database on load.
+var thoughts_here: Array[Dictionary] = []
 var award := ""                 # "", "top100" or "top18"
 ## Themed awards this hole holds ("par3", "water", "night"). One hole
 ## per theme. Taken back when the hole no longer deserves it.
@@ -974,7 +978,8 @@ func to_dict() -> Dictionary:
 		"earned": earned, "payers": payers, "plays": plays, "strokes": strokes_total, "best": best, "fun": fun,
 		"target": target_rounds.duplicate(true),
 		"tally": tally, "aces": aces,
-		"name": name, "award": award, "themes": themes, "gap": gap, "comments": comments, "open": open,
+		"name": name, "award": award, "themes": themes, "gap": gap, "comments": comments,
+		"here": thoughts_here.duplicate(true), "open": open,
 		"play_times": play_times,
 	}
 	if not turns.is_empty():
@@ -1037,6 +1042,29 @@ func trim_target(window: int) -> void:
 		target_rounds.pop_front()
 
 
+## Remember one remark. The newest stays at the end. keep comes from the
+## database. A keep under 1 holds one.
+func note_thought(text: String, who: String, day_n: int, tile: Vector2i, keep: int) -> void:
+	if text == "":
+		return
+	thoughts_here.append({
+		"text": text,
+		"golfer": who,
+		"day": day_n,
+		"tile": [tile.x, tile.y],
+	})
+	trim_thoughts(keep)
+
+
+## Keep the newest remarks. The same number a new remark is trimmed with.
+func trim_thoughts(keep: int) -> void:
+	var n := keep
+	if n < 1:
+		n = 1
+	while thoughts_here.size() > n:
+		thoughts_here.pop_front()
+
+
 ## Theme ids from data/awards.json, read once. A load walks every hole.
 static func _theme_ids() -> Dictionary:
 	if _known_themes_read:
@@ -1084,6 +1112,19 @@ static func from_dict(d: Dictionary) -> Hole:
 			hole.target_rounds.append({
 				"shots": int(round_rec.get("shots", 0)),
 				"trouble": int(round_rec.get("trouble", 0)),
+			})
+	var saved_here: Array = d.get("here", [])
+	for here_row in saved_here:
+		if here_row is Dictionary:
+			var here_rec: Dictionary = here_row
+			var tile_at: Array = here_rec.get("tile", [])
+			if tile_at.size() < 2:
+				continue
+			hole.thoughts_here.append({
+				"text": str(here_rec.get("text", "")),
+				"golfer": str(here_rec.get("golfer", "")),
+				"day": int(here_rec.get("day", 0)),
+				"tile": [int(tile_at[0]), int(tile_at[1])],
 			})
 	hole.strokes_total = int(d.get("strokes", 0))
 	hole.best = int(d.get("best", 0))
