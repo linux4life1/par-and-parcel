@@ -2909,12 +2909,13 @@ func _test_mood_map() -> void:
 	var th: Dictionary = g.thoughts[g.thoughts.size() - 1]
 	var at: Vector3 = th.pos
 	check(at.distance_to(g.pos) < 0.1, "the thought remembers where it happened")
+	var before: float = sim.course.mood[i]
 	g.pos = sim.course.tile_center(48, 40)
 	g.feel(-6.0, "What a lie.", "lie")
 	var sour_tile := sim.course.tile_of(g.pos.x, g.pos.z)
 	var sour_i := sour_tile.y * sim.course.w + sour_tile.x
 	check(sour_i != i and sim.course.mood[sour_i] < -1.0, "an annoyed golfer lowers the tile they are standing on (%.1f)" % sim.course.mood[sour_i])
-	check(sim.course.mood[i] > 1.0, "the pleased tile is left alone")
+	check(is_equal_approx(sim.course.mood[i], before), "the pleased tile is unchanged (%.1f, was %.1f)" % [sim.course.mood[i], before])
 	sim.visitors.golfers.append(g)
 	var mood_hud := Hud.new()
 	add_child(mood_hud)
@@ -2941,7 +2942,6 @@ func _test_mood_map() -> void:
 	mood_hud.free()
 	remove_child(mood_rig)
 	mood_rig.free()
-	var before: float = sim.course.mood[i]
 	for n in 160:
 		sim.grounds.step(0.25)
 	check(sim.course.mood[i] < before * 0.55 and sim.course.mood[i] > 0.2, "the colour fades over a couple of days (%.1f to %.1f)" % [before, sim.course.mood[i]])
